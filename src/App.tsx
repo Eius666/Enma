@@ -29,42 +29,75 @@ type Transaction = {
   date: Date;
 };
 
+// Контекст для темы
+interface ThemeContextType {
+  theme: 'light' | 'dark';
+  toggleTheme: () => void;
+}
+
+const ThemeContext = React.createContext<ThemeContextType>({
+  theme: 'light',
+  toggleTheme: () => {}
+});
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'calendar' | 'notes' | 'finance'>('calendar');
-  
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  // Функция переключения темы
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    document.documentElement.setAttribute('data-theme', newTheme);
+  };
+
+  // Устанавливаем тему при загрузке
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>My Personal Organizer</h1>
-      </header>
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      <div className="app" data-theme={theme}>
+        <header className="app-header">
+          <h1>My Personal Organizer</h1>
+          <button 
+            className="theme-toggle"
+            onClick={toggleTheme}
+            aria-label="Toggle theme"
+          >
+            {theme === 'light' ? '🌙' : '☀️'}
+          </button>
+        </header>
 
-      <nav className="tabs">
-        <button 
-          onClick={() => setActiveTab('calendar')}
-          className={activeTab === 'calendar' ? 'active' : ''}
-        >
-          <FaCalendarAlt className="icon" /> Calendar
-        </button>
-        <button
-          onClick={() => setActiveTab('notes')}
-          className={activeTab === 'notes' ? 'active' : ''}
-        >
-          <FaStickyNote className="icon" /> Notes
-        </button>
-        <button
-          onClick={() => setActiveTab('finance')}
-          className={activeTab === 'finance' ? 'active' : ''}
-        >
-          <FaWallet className="icon" /> Finance
-        </button>
-      </nav>
+        <nav className="tabs">
+          <button 
+            onClick={() => setActiveTab('calendar')}
+            className={activeTab === 'calendar' ? 'active' : ''}
+          >
+            Calendar
+          </button>
+          <button
+            onClick={() => setActiveTab('notes')}
+            className={activeTab === 'notes' ? 'active' : ''}
+          >
+            Notes
+          </button>
+          <button
+            onClick={() => setActiveTab('finance')}
+            className={activeTab === 'finance' ? 'active' : ''}
+          >
+            Finance
+          </button>
+        </nav>
 
-      <main className="content">
-        {activeTab === 'calendar' && <CalendarTaskManager />}
-        {activeTab === 'notes' && <NotesManager />}
-        {activeTab === 'finance' && <FinanceManager />}
-      </main>
-    </div>
+        <main className="content">
+          {activeTab === 'calendar' && <CalendarTaskManager />}
+          {activeTab === 'notes' && <NotesManager />}
+          {activeTab === 'finance' && <FinanceManager />}
+        </main>
+      </div>
+    </ThemeContext.Provider>
   );
 };
 
