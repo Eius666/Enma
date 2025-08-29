@@ -60,7 +60,7 @@ const App: React.FC = () => {
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
       <div className="app" data-theme={theme}>
         <header className="app-header">
-          <h1>My Personal Organizer</h1>
+          <h1>My Personal Organizer TEST</h1>
           <button 
             className="theme-toggle"
             onClick={toggleTheme}
