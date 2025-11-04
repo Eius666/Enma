@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/Enma/static/css/main.fe98741a.css",
-    "main.js": "/Enma/static/js/main.89c9771a.js",
+    "main.css": "/Enma/static/css/main.17b5f33f.css",
+    "main.js": "/Enma/static/js/main.fd1f20db.js",
     "static/js/453.3a9e0794.chunk.js": "/Enma/static/js/453.3a9e0794.chunk.js",
     "index.html": "/Enma/index.html",
-    "main.fe98741a.css.map": "/Enma/static/css/main.fe98741a.css.map",
-    "main.89c9771a.js.map": "/Enma/static/js/main.89c9771a.js.map",
+    "main.17b5f33f.css.map": "/Enma/static/css/main.17b5f33f.css.map",
+    "main.fd1f20db.js.map": "/Enma/static/js/main.fd1f20db.js.map",
     "453.3a9e0794.chunk.js.map": "/Enma/static/js/453.3a9e0794.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.fe98741a.css",
-    "static/js/main.89c9771a.js"
+    "static/css/main.17b5f33f.css",
+    "static/js/main.fd1f20db.js"
   ]
 }
