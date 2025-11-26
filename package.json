@@ -1,5 +1,4 @@
 {
-  "homepage": "https://Eius666.github.io/Enma",
   "name": "enma",
   "version": "0.1.0",
   "private": true,
@@ -26,7 +25,7 @@
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "predeploy": "npm run build",
+    "predeploy": "cross-env PUBLIC_URL=https://Eius666.github.io/Enma npm run build",
     "deploy": "gh-pages -d build"
   },
   "eslintConfig": {
@@ -48,6 +47,7 @@
     ]
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "gh-pages": "^6.3.0"
   },
   "engines": {
