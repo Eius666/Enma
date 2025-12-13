@@ -1,15 +1,15 @@
 {
   "files": {
     "main.css": "https://Eius666.github.io/Enma/static/css/main.90bff052.css",
-    "main.js": "https://Eius666.github.io/Enma/static/js/main.bbabf13c.js",
+    "main.js": "https://Eius666.github.io/Enma/static/js/main.4a547619.js",
     "static/js/453.3a9e0794.chunk.js": "https://Eius666.github.io/Enma/static/js/453.3a9e0794.chunk.js",
     "index.html": "https://Eius666.github.io/Enma/index.html",
     "main.90bff052.css.map": "https://Eius666.github.io/Enma/static/css/main.90bff052.css.map",
-    "main.bbabf13c.js.map": "https://Eius666.github.io/Enma/static/js/main.bbabf13c.js.map",
+    "main.4a547619.js.map": "https://Eius666.github.io/Enma/static/js/main.4a547619.js.map",
     "453.3a9e0794.chunk.js.map": "https://Eius666.github.io/Enma/static/js/453.3a9e0794.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.90bff052.css",
-    "static/js/main.bbabf13c.js"
+    "static/js/main.4a547619.js"
   ]
 }
