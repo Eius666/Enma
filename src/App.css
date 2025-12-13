@@ -145,12 +145,46 @@ body.theme-light {
   opacity: 0.8;
 }
 
+.hero-email {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-top: 4px;
+}
+
 .hero-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+}
+
+.hero-actions-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sign-out-button {
+  border: 1px solid var(--icon-border);
+  background: transparent;
+  color: var(--text-primary);
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border var(--transition-base), background var(--transition-base);
+}
+
+.sign-out-button:hover {
+  border-color: rgba(124, 92, 255, 0.5);
+  background: rgba(124, 92, 255, 0.15);
 }
 
 .primary-button {
@@ -559,6 +593,35 @@ body.theme-light {
   gap: 24px;
 }
 
+.card-reminders {
+  gap: 20px;
+}
+
+.reminder-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.reminder-preview-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.reminder-preview-item input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+}
+
+.reminder-note {
+  display: block;
+}
+
 .preset-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -952,6 +1015,69 @@ body.theme-light .calendar-date {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.reminder-card .add-reminder-btn {
+  padding: 0.65rem;
+  border-radius: 12px;
+  background: rgba(124, 92, 255, 0.2);
+  color: var(--text-primary);
+}
+
+.reminder-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.reminder-form-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.reminder-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0;
+}
+
+.reminder-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.reminder-item.is-done .reminder-title {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+
+.reminder-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.reminder-title {
+  font-weight: 600;
+}
+
+.reminder-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.reminder-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .color-palette {

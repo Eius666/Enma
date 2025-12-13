@@ -18,7 +18,6 @@ import {
 import {
   FaArrowLeft,
   FaArrowRight,
-  FaArrowRight as FaArrowRightIcon,
   FaMoon,
   FaSun,
   FaPlus,
@@ -89,6 +88,15 @@ type UserProfile = {
   displayName: string;
 };
 
+type Reminder = {
+  id: string;
+  title: string;
+  date: string;
+  time: string;
+  notes?: string;
+  done: boolean;
+};
+
 const DEFAULT_CATEGORIES: Category[] = [
   { id: 'cat-salary', name: 'Salary', type: 'income' },
   { id: 'cat-freelance', name: 'Freelance', type: 'income' },
@@ -101,7 +109,8 @@ const STORAGE_KEYS = {
   notes: 'notes',
   categories: 'finance.categories',
   transactions: 'finance.transactions',
-  habits: 'habits'
+  habits: 'habits',
+  reminders: 'reminders'
 };
 
 const PROFILE_STORAGE_PREFIX = 'profile';
@@ -149,6 +158,7 @@ const App: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
 
   useEffect(() => {
     document.body.classList.remove('theme-dark', 'theme-light');
@@ -209,6 +219,7 @@ const App: React.FC = () => {
       setCategories([]);
       setTransactions([]);
       setHabits([]);
+      setReminders([]);
       setProfile(null);
       setActiveTab('day-flow');
       return;
@@ -256,6 +267,7 @@ const App: React.FC = () => {
     setCategories(storedCategories.length ? storedCategories : DEFAULT_CATEGORIES);
     setTransactions(read<Transaction[]>(STORAGE_KEYS.transactions, [] as Transaction[]));
     setHabits(read<Habit[]>(STORAGE_KEYS.habits, [] as Habit[]));
+    setReminders(read<Reminder[]>(STORAGE_KEYS.reminders, [] as Reminder[]));
     setProfile(loadProfile(user.uid));
     setActiveTab('day-flow');
   }, [user]);
@@ -300,6 +312,14 @@ const App: React.FC = () => {
       JSON.stringify(habits)
     );
   }, [user, habits]);
+
+  useEffect(() => {
+    if (!user) return;
+    localStorage.setItem(
+      storageKey(user.uid, STORAGE_KEYS.reminders),
+      JSON.stringify(reminders)
+    );
+  }, [user, reminders]);
 
   const upcomingTasks = useMemo(() => {
     const today = new Date();
@@ -360,6 +380,40 @@ const App: React.FC = () => {
     );
   };
 
+  const addReminder = (date: Date, title: string, time: string, notes?: string) => {
+    if (!title.trim()) return;
+    const reminder: Reminder = {
+      id: createId(),
+      title: title.trim(),
+      date: date.toISOString(),
+      time,
+      notes: notes?.trim() || undefined,
+      done: false
+    };
+    setReminders(prev => [...prev, reminder]);
+  };
+
+  const toggleReminder = (id: string) => {
+    setReminders(prev =>
+      prev.map(reminder =>
+        reminder.id === id
+          ? { ...reminder, done: !reminder.done }
+          : reminder
+      )
+    );
+  };
+
+  const deleteReminder = (id: string) => {
+    setReminders(prev => prev.filter(reminder => reminder.id !== id));
+  };
+
+  const upcomingReminders = useMemo(() => {
+    return [...reminders]
+      .filter(reminder => !reminder.done && compareAsc(new Date(reminder.date), new Date()) >= 0)
+      .sort((a, b) => compareAsc(new Date(a.date + 'T' + a.time), new Date(b.date + 'T' + b.time)))
+      .slice(0, 4);
+  }, [reminders]);
+
   const telegramName =
     telegram?.initDataUnsafe?.user &&
     ([telegram.initDataUnsafe.user.first_name, telegram.initDataUnsafe.user.last_name]
@@ -369,6 +423,8 @@ const App: React.FC = () => {
 
   const userDisplayName =
     profile?.displayName || telegramName || user?.email?.split('@')[0] || 'there';
+  const userEmail =
+    user?.email || telegram?.initDataUnsafe?.user?.username || '—';
 
   const handleSignOut = async () => {
     try {
@@ -417,15 +473,14 @@ const App: React.FC = () => {
           >
             Production build refreshed: {format(referenceDate, 'MMM dd, yyyy p')}
           </a>
+          <span className="hero-email">{userEmail}</span>
         </div>
         <div className="hero-actions">
-          <button className="primary-button">
-            Jump into the new board <FaArrowRightIcon />
-          </button>
-          <span className="user-chip">{user.email ?? 'Signed in'}</span>
-          <button className="ghost-button" onClick={handleSignOut}>
-            Sign out
-          </button>
+          <div className="hero-actions-left">
+            <button className="sign-out-button" onClick={handleSignOut}>
+              Sign out
+            </button>
+          </div>
           <button
             className="theme-toggle"
             onClick={toggleTheme}
@@ -454,13 +509,22 @@ const App: React.FC = () => {
             upcomingTasks={upcomingTasks}
             financeSummary={financeSummary}
             latestNote={latestNote}
+            reminders={upcomingReminders}
+            onToggleReminder={toggleReminder}
             habits={habits}
             onAddHabit={addHabit}
             onToggleHabitDay={toggleHabitDay}
           />
         )}
         {activeTab === 'calendar' && (
-          <CalendarWorkspace tasks={tasks} onTasksChange={setTasks} />
+          <CalendarWorkspace
+            tasks={tasks}
+            reminders={reminders}
+            onTasksChange={setTasks}
+            onAddReminder={addReminder}
+            onToggleReminder={toggleReminder}
+            onDeleteReminder={deleteReminder}
+          />
         )}
         {activeTab === 'notes' && (
           <NotesWorkspace notes={notes} onNotesChange={setNotes} />
@@ -482,6 +546,8 @@ type DayFlowOverviewProps = {
   upcomingTasks: CalendarTask[];
   financeSummary: { income: number; expenses: number; balance: number };
   latestNote?: NotePage;
+  reminders: Reminder[];
+  onToggleReminder: (id: string) => void;
   habits: Habit[];
   onAddHabit: (name: string) => void;
   onToggleHabitDay: (habitId: string, dateKey: string) => void;
@@ -618,6 +684,8 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
   upcomingTasks,
   financeSummary,
   latestNote,
+  reminders,
+  onToggleReminder,
   habits,
   onAddHabit,
   onToggleHabitDay
@@ -631,6 +699,7 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }).map((_, index) => addDays(weekStart, index));
   const dayKeys = weekDays.map(day => format(day, 'yyyy-MM-dd'));
+  const reminderPreview = useMemo(() => reminders.slice(0, 4), [reminders]);
 
   return (
     <section className="panel">
@@ -746,6 +815,39 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
           )}
         </article>
 
+        <article className="card card-reminders">
+          <div className="card-heading">
+            <div>
+              <span className="card-badge muted">Reminders</span>
+              <h3>Stay ahead of time-sensitive items</h3>
+            </div>
+          </div>
+          {reminderPreview.length === 0 ? (
+            <p className="card-row__meta">Add reminders from the calendar tab to see them here.</p>
+          ) : (
+            <div className="reminder-preview">
+              {reminderPreview.map(reminder => (
+                <div key={reminder.id} className="reminder-preview-item">
+                  <div>
+                    <p className="card-row__title">{reminder.title}</p>
+                    <span className="card-row__meta">
+                      {format(parseISO(reminder.date), 'MMM d')} · {reminder.time}
+                    </span>
+                    {reminder.notes && (
+                      <span className="card-row__meta reminder-note">{reminder.notes}</span>
+                    )}
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={reminder.done}
+                    onChange={() => onToggleReminder(reminder.id)}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </article>
+
         <article className="card habit-card">
           <div className="card-heading">
             <div>
@@ -816,22 +918,44 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
 
 type CalendarWorkspaceProps = {
   tasks: CalendarTask[];
+  reminders: Reminder[];
   onTasksChange: (tasks: CalendarTask[]) => void;
+  onAddReminder: (date: Date, title: string, time: string, notes?: string) => void;
+  onToggleReminder: (id: string) => void;
+  onDeleteReminder: (id: string) => void;
 };
 
-const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({ tasks, onTasksChange }) => {
+const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
+  tasks,
+  reminders,
+  onTasksChange,
+  onAddReminder,
+  onToggleReminder,
+  onDeleteReminder
+}) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [draftTitle, setDraftTitle] = useState('');
   const [draftNotes, setDraftNotes] = useState('');
   const [selectedColor, setSelectedColor] = useState(taskColorPalette[0]);
   const [draftTime, setDraftTime] = useState('09:00');
+  const [reminderTitle, setReminderTitle] = useState('');
+  const [reminderTime, setReminderTime] = useState('09:00');
+  const [reminderNotes, setReminderNotes] = useState('');
 
   const tasksForSelectedDay = useMemo(() => {
     return tasks
       .filter(task => isSameDay(parseISO(task.date), selectedDate))
       .sort((a, b) => compareAsc(parseISO(a.date), parseISO(b.date)));
   }, [tasks, selectedDate]);
+
+  const remindersForSelectedDay = useMemo(
+    () =>
+      reminders.filter(reminder =>
+        isSameDay(parseISO(reminder.date), selectedDate)
+      ),
+    [reminders, selectedDate]
+  );
 
   const addTask = () => {
     if (!draftTitle.trim()) return;
@@ -851,6 +975,13 @@ const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({ tasks, onTasksCha
     setDraftTitle('');
     setDraftNotes('');
     setDraftTime('09:00');
+  };
+
+  const handleAddReminder = () => {
+    if (!reminderTitle.trim()) return;
+    onAddReminder(selectedDate, reminderTitle, reminderTime, reminderNotes);
+    setReminderTitle('');
+    setReminderNotes('');
   };
 
   const deleteTask = (id: string) => {
@@ -1001,6 +1132,76 @@ const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({ tasks, onTasksCha
                     >
                       <FaTrash />
                     </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="sidebar-card reminder-card">
+            <h4>Reminders</h4>
+            <div className="reminder-form">
+              <label className="floating-label">
+                <span>Reminder</span>
+                <input
+                  value={reminderTitle}
+                  onChange={event => setReminderTitle(event.target.value)}
+                  placeholder="Add reminder topic"
+                />
+              </label>
+              <div className="reminder-form-row">
+                <label className="floating-label">
+                  <span>Time</span>
+                  <input
+                    type="time"
+                    value={reminderTime}
+                    onChange={event => setReminderTime(event.target.value)}
+                  />
+                </label>
+                <button className="primary-button add-reminder-btn" onClick={handleAddReminder}>
+                  <FaPlus />
+                </button>
+              </div>
+              <label className="floating-label">
+                <span>Notes</span>
+                <textarea
+                  rows={2}
+                  value={reminderNotes}
+                  onChange={event => setReminderNotes(event.target.value)}
+                  placeholder="Optional notes"
+                />
+              </label>
+            </div>
+            {remindersForSelectedDay.length === 0 ? (
+              <p className="empty-hint">No reminders scheduled for this day.</p>
+            ) : (
+              <ul className="reminder-list">
+                {remindersForSelectedDay.map(reminder => (
+                  <li key={reminder.id} className={`reminder-item ${reminder.done ? 'is-done' : ''}`}>
+                    <div className="reminder-info">
+                      <span className="reminder-title">{reminder.title}</span>
+                      <span className="reminder-meta">
+                        {format(parseISO(reminder.date), 'MMM d')} · {reminder.time}
+                      </span>
+                      {reminder.notes && (
+                        <span className="reminder-meta">{reminder.notes}</span>
+                      )}
+                    </div>
+                    <div className="reminder-actions">
+                      <input
+                        type="checkbox"
+                        checked={reminder.done}
+                        onChange={() => onToggleReminder(reminder.id)}
+                        aria-label="Toggle reminder"
+                      />
+                      <button
+                        className="icon-button"
+                        onClick={() => onDeleteReminder(reminder.id)}
+                        aria-label="Delete reminder"
+                      >
+                        <FaTrash />
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
