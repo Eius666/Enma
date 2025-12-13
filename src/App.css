@@ -4,6 +4,10 @@
   --tg-viewport-height: 100vh;
 }
 
+html {
+  font-size: 16px;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -19,6 +23,7 @@ body,
 body {
   font-family: var(--font-body);
   transition: background var(--transition-base), color var(--transition-base);
+  font-size: 0.95rem;
 }
 
 body.theme-dark {
@@ -1451,11 +1456,43 @@ body.theme-light .calendar-date {
 }
 
 @media (max-width: 1120px) {
+  html {
+    font-size: 15px;
+  }
+
+  .app-shell {
+    padding: 40px 16px 48px;
+  }
+
+  .hero-card {
+    width: 100%;
+    padding: 32px;
+  }
+
+  .main-content {
+    width: 100%;
+    padding: 0 4px;
+  }
+
+  .top-tabs {
+    width: 100%;
+  }
+
+  .overview-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+
   .calendar-content {
     grid-template-columns: 1fr;
   }
 
-  .finance-header {
+  .notes-shell {
+    grid-template-columns: 280px 1fr;
+    gap: 16px;
+  }
+
+  .finance-header,
+  .finance-body {
     grid-template-columns: 1fr;
   }
 
@@ -1465,52 +1502,91 @@ body.theme-light .calendar-date {
 }
 
 @media (max-width: 900px) {
+  html {
+    font-size: 14.5px;
+  }
+
   .hero-card,
   .panel,
   .placeholder-panel {
-    padding: 28px;
+    padding: 24px;
   }
 
-  .panel-header,
   .hero-card {
     flex-direction: column;
     align-items: flex-start;
+    gap: 20px;
   }
 
   .hero-actions {
-    align-self: stretch;
-  }
-
-  .hero-actions {
-    justify-content: space-between;
     width: 100%;
+    justify-content: flex-start;
+    gap: 12px;
+  }
+
+  .panel-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
   }
 
   .panel-controls {
     width: 100%;
     justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
   }
 
-  .panel-header {
-    gap: 16px;
+  .top-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .notes-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .notes-sidebar {
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .finance-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .habit-days {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 640px) {
+  html {
+    font-size: 13.5px;
+  }
+
   .app-shell {
     padding: 32px 16px 48px;
   }
 
   .hero-card {
-    gap: 24px;
+    padding: 22px;
+    gap: 18px;
+  }
+
+  .hero-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .top-tabs {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
   }
 
   .panel {
     gap: 20px;
+    padding: 20px;
   }
 
   .timeline-item {
@@ -1548,24 +1624,36 @@ body.theme-light .calendar-date {
     min-height: 90px;
   }
 
-  .notes-shell {
+  .overview-grid,
+  .finance-summary {
     grid-template-columns: 1fr;
-  }
-
-  .notes-sidebar {
-    border-right: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
 
   .finance-body {
     grid-template-columns: 1fr;
   }
+
+  .notes-editor {
+    padding: 24px;
+  }
+
+  .habit-days {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 480px) {
+  html {
+    font-size: 12.5px;
+  }
+
   .hero-card {
     padding: 24px;
     align-items: flex-start;
+  }
+
+  .hero-actions {
+    gap: 8px;
   }
 
   .top-tabs {
@@ -1583,7 +1671,7 @@ body.theme-light .calendar-date {
   }
 
   .habit-days {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .notes-editor {
@@ -1591,6 +1679,28 @@ body.theme-light .calendar-date {
   }
 
   .calendar-content {
+    grid-template-columns: 1fr;
+  }
+
+  .calendar-header {
+    align-items: flex-start;
+  }
+
+  .panel-controls {
+    gap: 8px;
+  }
+
+  .task-list-item,
+  .transaction-row {
+    grid-template-columns: 1fr;
+  }
+
+  .transaction-meta {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .note-type-switch {
     grid-template-columns: 1fr;
   }
 }
