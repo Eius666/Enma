@@ -66,18 +66,18 @@ body.theme-light {
 
 .app-shell {
   min-height: var(--tg-viewport-height);
-  width: 100%;
+  width: min(960px, 100%);
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 32px;
-  padding: 48px 24px 64px;
+  gap: 24px;
+  padding: 32px 20px 48px;
   transition: color var(--transition-base);
 }
 
 .hero-card {
-  width: min(960px, 100%);
-  padding: 40px 48px;
+  width: 100%;
+  padding: 32px;
   border-radius: 32px;
   background: var(--card-bg);
   box-shadow: var(--shadow-strong);
@@ -331,7 +331,7 @@ body.theme-light {
 }
 
 .top-tabs {
-  width: min(960px, 100%);
+  width: 100%;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
@@ -340,6 +340,7 @@ body.theme-light {
   padding: 8px;
   border: 1px solid var(--panel-border);
   backdrop-filter: blur(12px);
+  overflow-x: auto;
 }
 
 .top-tab {
@@ -362,13 +363,14 @@ body.theme-light {
 }
 
 .main-content {
-  width: min(960px, 100%);
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 24px;
 }
 
 .panel {
+  width: 100%;
   background: var(--card-bg);
   border-radius: 30px;
   padding: 32px;
@@ -696,15 +698,15 @@ body.theme-light .ghost-button:hover {
 
 .overview-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 20px;
   width: 100%;
 }
 
 @media (max-width: 720px) {
   .overview-grid {
     grid-template-columns: 1fr;
-    gap: 18px;
+    gap: 16px;
   }
 }
 
@@ -1595,49 +1597,22 @@ body.theme-light .calendar-date {
   }
 
   .app-shell {
-    padding: 40px 16px 48px;
+    padding: 32px 16px 40px;
+    width: min(820px, 100%);
   }
 
   .hero-card {
-    width: 100%;
-    padding: 32px;
-  }
-
-  .main-content {
-    width: 100%;
-    padding: 0 4px;
-  }
-
-  .top-tabs {
-    width: 100%;
-  }
-
-  .overview-grid {
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  }
-
-  .calendar-content {
-    grid-template-columns: 1fr;
+    padding: 28px;
   }
 
   .notes-shell {
-    grid-template-columns: 280px 1fr;
-    gap: 16px;
-  }
-
-  .finance-header,
-  .finance-body {
-    grid-template-columns: 1fr;
-  }
-
-  .finance-summary-grid {
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    grid-template-columns: 260px 1fr;
   }
 }
 
 @media (max-width: 900px) {
   html {
-    font-size: 14.5px;
+    font-size: 14px;
   }
 
   .hero-card,
@@ -1650,6 +1625,7 @@ body.theme-light .calendar-date {
     flex-direction: column;
     align-items: flex-start;
     gap: 20px;
+    border-radius: 24px;
   }
 
   .hero-actions {
@@ -1669,6 +1645,10 @@ body.theme-light .calendar-date {
     justify-content: flex-start;
     flex-wrap: wrap;
     gap: 10px;
+  }
+
+  .main-content {
+    width: 100%;
   }
 
   .top-tabs {
@@ -1692,15 +1672,20 @@ body.theme-light .calendar-date {
   .habit-days {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
+
+  .panel {
+    padding: 24px;
+  }
 }
 
 @media (max-width: 640px) {
   html {
-    font-size: 13.5px;
+    font-size: 13px;
   }
 
   .app-shell {
     padding: 32px 16px 48px;
+    width: 100%;
   }
 
   .hero-card {
@@ -1772,7 +1757,7 @@ body.theme-light .calendar-date {
   }
 
   .habit-days {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
