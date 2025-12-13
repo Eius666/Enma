@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "https://Eius666.github.io/Enma/static/css/main.90bff052.css",
-    "main.js": "https://Eius666.github.io/Enma/static/js/main.4a547619.js",
+    "main.css": "https://Eius666.github.io/Enma/static/css/main.78a6835b.css",
+    "main.js": "https://Eius666.github.io/Enma/static/js/main.1a0aaa4c.js",
     "static/js/453.3a9e0794.chunk.js": "https://Eius666.github.io/Enma/static/js/453.3a9e0794.chunk.js",
     "index.html": "https://Eius666.github.io/Enma/index.html",
-    "main.90bff052.css.map": "https://Eius666.github.io/Enma/static/css/main.90bff052.css.map",
-    "main.4a547619.js.map": "https://Eius666.github.io/Enma/static/js/main.4a547619.js.map",
+    "main.78a6835b.css.map": "https://Eius666.github.io/Enma/static/css/main.78a6835b.css.map",
+    "main.1a0aaa4c.js.map": "https://Eius666.github.io/Enma/static/js/main.1a0aaa4c.js.map",
     "453.3a9e0794.chunk.js.map": "https://Eius666.github.io/Enma/static/js/453.3a9e0794.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.90bff052.css",
-    "static/js/main.4a547619.js"
+    "static/css/main.78a6835b.css",
+    "static/js/main.1a0aaa4c.js"
   ]
 }
