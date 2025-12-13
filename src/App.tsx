@@ -126,9 +126,19 @@ const taskColorPalette = ['#7C5CFF', '#FF7EB6', '#6CFFB8', '#58A6FF', '#F7D060',
 
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
+const THEME_STORAGE_KEY = 'enma.theme';
+
 const App: React.FC = () => {
   const telegram = useTelegramWebApp();
-  const [theme, setTheme] = useState<Theme>('dark');
+
+  const readStoredTheme = (): Theme | null => {
+    if (typeof window === 'undefined') return null;
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    return stored === 'dark' || stored === 'light' ? stored : null;
+  };
+
+  const [theme, setTheme] = useState<Theme>(() => readStoredTheme() ?? 'dark');
+  const [hasManualTheme, setHasManualTheme] = useState<boolean>(() => readStoredTheme() !== null);
   const [activeTab, setActiveTab] = useState<PrimaryTab>('day-flow');
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -146,7 +156,16 @@ const App: React.FC = () => {
   }, [theme]);
 
   useEffect(() => {
-    if (!telegram) return;
+    if (!hasManualTheme) return;
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch (error) {
+      console.warn('Failed to persist theme preference', error);
+    }
+  }, [theme, hasManualTheme]);
+
+  useEffect(() => {
+    if (!telegram || hasManualTheme) return;
     const syncTheme = () => {
       const scheme = telegram.colorScheme === 'light' ? 'light' : 'dark';
       setTheme(scheme);
@@ -157,7 +176,7 @@ const App: React.FC = () => {
     return () => {
       telegram.offEvent?.('themeChanged', handleThemeChange);
     };
-  }, [telegram]);
+  }, [telegram, hasManualTheme]);
 
   useEffect(() => {
     if (!telegram) return;
@@ -311,6 +330,7 @@ const App: React.FC = () => {
   }, [transactions]);
 
   const toggleTheme = () => {
+    setHasManualTheme(true);
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
   };
 
