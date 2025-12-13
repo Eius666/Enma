@@ -95,6 +95,7 @@ type Reminder = {
   time: string;
   notes?: string;
   done: boolean;
+  notified?: boolean;
 };
 
 const DEFAULT_CATEGORIES: Category[] = [
@@ -136,6 +137,27 @@ const taskColorPalette = ['#7C5CFF', '#FF7EB6', '#6CFFB8', '#58A6FF', '#F7D060',
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 const THEME_STORAGE_KEY = 'enma.theme';
+const TELEGRAM_BOT_TOKEN = '8204403009:AAHEaGBlTOy4vFwG1OpHGaP3bUrGEUK0izA';
+
+const notifyTelegramReminder = async (chatId: number, reminder: Reminder) => {
+  try {
+    const text = `Reminder: ${reminder.title}\n${format(parseISO(reminder.date), 'MMM d, yyyy')} at ${reminder.time}${
+      reminder.notes ? `\n${reminder.notes}` : ''
+    }`;
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text
+      })
+    });
+  } catch (error) {
+    console.warn('Failed to send Telegram reminder', error);
+  }
+};
 
 const App: React.FC = () => {
   const telegram = useTelegramWebApp();
@@ -321,6 +343,33 @@ const App: React.FC = () => {
     );
   }, [user, reminders]);
 
+  useEffect(() => {
+    if (!telegram?.initDataUnsafe?.user?.id) return;
+    const chatId = telegram.initDataUnsafe.user.id;
+    const interval = setInterval(() => {
+      setReminders(prev => {
+        let changed = false;
+        const updated = prev.map(reminder => {
+          if (reminder.done || reminder.notified) return reminder;
+          const baseDate = parseISO(reminder.date);
+          const [hoursStr, minutesStr] = reminder.time.split(':');
+          const scheduled = setMinutes(
+            setHours(baseDate, Number(hoursStr) || 0),
+            Number(minutesStr) || 0
+          );
+          if (scheduled <= new Date()) {
+            notifyTelegramReminder(chatId, reminder);
+            changed = true;
+            return { ...reminder, notified: true };
+          }
+          return reminder;
+        });
+        return changed ? updated : prev;
+      });
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [telegram]);
+
   const upcomingTasks = useMemo(() => {
     const today = new Date();
     return [...tasks]
@@ -388,7 +437,8 @@ const App: React.FC = () => {
       date: date.toISOString(),
       time,
       notes: notes?.trim() || undefined,
-      done: false
+      done: false,
+      notified: false
     };
     setReminders(prev => [...prev, reminder]);
   };
@@ -397,7 +447,7 @@ const App: React.FC = () => {
     setReminders(prev =>
       prev.map(reminder =>
         reminder.id === id
-          ? { ...reminder, done: !reminder.done }
+          ? { ...reminder, done: !reminder.done, notified: reminder.done ? false : reminder.notified }
           : reminder
       )
     );
@@ -1517,7 +1567,7 @@ const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
 
   return (
     <section className="panel finance-panel">
-      <div className="finance-header">
+      <div className="finance-upper">
         <div className="finance-summary-grid">
           <div className="summary-card">
             <span className="tile-label">Balance</span>
@@ -1577,7 +1627,7 @@ const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
         </div>
       </div>
 
-      <div className="finance-body">
+      <div className="finance-lower">
         <div className="transaction-form-card">
           <h3>Log a transaction</h3>
           <div className="type-toggle">
