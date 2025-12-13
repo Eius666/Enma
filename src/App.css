@@ -1214,16 +1214,20 @@ body.theme-light .calendar-date {
 
 .notes-shell {
   display: grid;
-  grid-template-columns: 320px 1fr;
-  min-height: 560px;
-  border-radius: 30px;
+  grid-template-columns: 280px 1fr;
+  min-height: 520px;
+  border-radius: 28px;
   overflow: hidden;
+  border: 1px solid var(--panel-border);
 }
 
 .notes-sidebar {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.03);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 28px 24px;
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .sidebar-header {
@@ -1319,8 +1323,8 @@ body.theme-light .calendar-date {
 }
 
 .notes-editor {
-  padding: 36px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04));
+  padding: 32px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02));
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -1419,31 +1423,31 @@ body.theme-light .calendar-date {
   margin-top: 100px;
 }
 
-.finance-panel {
+ .finance-panel {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 24px;
 }
 
-.finance-header {
+.finance-upper {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
+  grid-template-columns: 1fr 1.1fr;
+  gap: 20px;
 }
 
 .finance-summary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 .summary-card {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 20px;
-  padding: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 18px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -1456,9 +1460,9 @@ body.theme-light .calendar-date {
 }
 
 .category-card {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 20px;
-  padding: 22px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 22px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -1489,16 +1493,16 @@ body.theme-light .calendar-date {
   align-items: end;
 }
 
-.finance-body {
+.finance-lower {
   display: grid;
-  grid-template-columns: 320px 1fr;
-  gap: 24px;
+  grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+  gap: 20px;
 }
 
 .transaction-form-card,
 .transactions-card {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 22px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   padding: 22px 24px;
   display: flex;
@@ -1608,6 +1612,18 @@ body.theme-light .calendar-date {
   .notes-shell {
     grid-template-columns: 260px 1fr;
   }
+
+  .finance-upper {
+    grid-template-columns: 1fr;
+  }
+
+  .finance-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .finance-lower {
+    grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 900px) {
@@ -1675,6 +1691,14 @@ body.theme-light .calendar-date {
 
   .panel {
     padding: 24px;
+  }
+
+  .finance-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .finance-lower {
+    grid-template-columns: 1fr;
   }
 }
 
