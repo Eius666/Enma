@@ -213,10 +213,11 @@ const translations = {
     remindersTitle: 'Stay ahead of time-sensitive items',
     remindersEmptyHint: 'Add reminders from the calendar tab to see them here.',
     habitBadge: 'Habit tracker',
-    habitTitle: 'Build routines with daily wins',
-    habitPlaceholder: 'New habit',
-    addHabit: 'Add',
-    habitEmptyHint: 'Start by adding a habit you want to keep up this week.',
+  habitTitle: 'Build routines with daily wins',
+  habitPlaceholder: 'New habit',
+  addHabit: 'Add',
+  deleteHabitAria: 'Delete habit {name}',
+  habitEmptyHint: 'Start by adding a habit you want to keep up this week.',
     calendarBadge: 'Calendar',
     todayButton: 'Today',
     weekdayMon: 'Mon',
@@ -353,10 +354,11 @@ const translations = {
     remindersTitle: 'Не пропускайте важные моменты',
     remindersEmptyHint: 'Добавьте напоминания в календаре, и они появятся здесь.',
     habitBadge: 'Трекер привычек',
-    habitTitle: 'Закрепляйте рутину ежедневными победами',
-    habitPlaceholder: 'Новая привычка',
-    addHabit: 'Добавить',
-    habitEmptyHint: 'Начните с привычки, которую хотите удерживать на этой неделе.',
+  habitTitle: 'Закрепляйте рутину ежедневными победами',
+  habitPlaceholder: 'Новая привычка',
+  addHabit: 'Добавить',
+  deleteHabitAria: 'Удалить привычку {name}',
+  habitEmptyHint: 'Начните с привычки, которую хотите удерживать на этой неделе.',
     calendarBadge: 'Календарь',
     todayButton: 'Сегодня',
     weekdayMon: 'Пн',
@@ -912,6 +914,10 @@ const App: React.FC = () => {
     );
   };
 
+  const deleteHabit = (habitId: string) => {
+    setHabits(prev => prev.filter(habit => habit.id !== habitId));
+  };
+
   const addReminder = (date: Date, title: string, time: string, notes?: string) => {
     if (!title.trim()) return;
     const reminder: Reminder = {
@@ -1066,6 +1072,7 @@ const App: React.FC = () => {
             habits={habits}
             onAddHabit={addHabit}
             onToggleHabitDay={toggleHabitDay}
+            onDeleteHabit={deleteHabit}
           />
         )}
         {activeTab === 'calendar' && (
@@ -1122,6 +1129,7 @@ type DayFlowOverviewProps = {
   habits: Habit[];
   onAddHabit: (name: string) => void;
   onToggleHabitDay: (habitId: string, dateKey: string) => void;
+  onDeleteHabit: (habitId: string) => void;
 };
 
 type AuthScreenProps = {
@@ -1270,7 +1278,8 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
   onToggleReminder,
   habits,
   onAddHabit,
-  onToggleHabitDay
+  onToggleHabitDay,
+  onDeleteHabit
 }) => {
   const t = (key: TranslationKey, params?: Record<string, string | number>) =>
     translate(language, key, params);
@@ -1466,8 +1475,20 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
                 return (
                   <div key={habit.id} className="habit-row">
                     <div className="habit-title">
-                      <strong>{habit.title}</strong>
-                      <span className="habit-progress-label">{progress}%</span>
+                      <div className="habit-title-row">
+                        <strong>{habit.title}</strong>
+                        <div className="habit-title-actions">
+                          <span className="habit-progress-label">{progress}%</span>
+                          <button
+                            type="button"
+                            className="habit-delete"
+                            onClick={() => onDeleteHabit(habit.id)}
+                            aria-label={t('deleteHabitAria', { name: habit.title })}
+                          >
+                            <FaTrash />
+                          </button>
+                        </div>
+                      </div>
                       <div className="habit-progress">
                         <span style={{ width: `${progress}%` }} />
                       </div>

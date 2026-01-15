@@ -947,6 +947,38 @@ body.theme-light .tile-value.negative {
   gap: 6px;
 }
 
+.habit-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.habit-title-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.habit-delete {
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--transition-base), color var(--transition-base);
+}
+
+.habit-delete:hover {
+  color: var(--text-primary);
+  background: rgba(124, 92, 255, 0.2);
+}
+
 .habit-progress {
   width: 100%;
   height: 6px;
