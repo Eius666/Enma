@@ -1939,6 +1939,11 @@ body.theme-light .tile-value.negative {
     padding: 18px;
   }
 
+  .card {
+    padding: var(--space-md);
+    gap: 12px;
+  }
+
   .timeline-item {
     grid-template-columns: 18px 1fr;
     grid-template-areas:
@@ -1998,6 +2003,16 @@ body.theme-light .tile-value.negative {
   .habit-add {
     width: 100%;
     justify-content: flex-start;
+    gap: 10px;
+  }
+
+  .habit-row {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .habit-card .card-heading h3 {
+    line-height: 1.2;
   }
 
   .theme-toggle {
