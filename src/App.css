@@ -2026,12 +2026,15 @@ body.theme-light .tile-value.negative {
 
   .habit-card .card-heading {
     flex-direction: column;
+    align-items: stretch;
   }
 
   .habit-add {
     width: 100%;
     justify-content: flex-start;
-    gap: 10px;
+    gap: 8px;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .habit-row {
@@ -2044,7 +2047,7 @@ body.theme-light .tile-value.negative {
   }
 
   .habit-card {
-    gap: 14px;
+    gap: 10px;
   }
 
   .habit-list {
@@ -2058,7 +2061,7 @@ body.theme-light .tile-value.negative {
   }
 
   .habit-add {
-    margin-top: -2px;
+    margin-top: 0;
   }
 
   .habit-add + .habit-list {
@@ -2071,7 +2074,7 @@ body.theme-light .tile-value.negative {
   }
 
   .habit-card .card-heading {
-    gap: 10px;
+    gap: 8px;
   }
 
   .habit-card .panel-subtitle,
@@ -2082,10 +2085,13 @@ body.theme-light .tile-value.negative {
   .habit-add input {
     padding: 8px 12px;
     min-height: 38px;
+    width: 100%;
   }
 
   .habit-add .ghost-button {
     padding: 10px 14px;
+    width: 100%;
+    justify-content: center;
   }
 
   .habit-progress-label {
