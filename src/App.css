@@ -2043,6 +2043,32 @@ body.theme-light .tile-value.negative {
     line-height: 1.2;
   }
 
+  .habit-card {
+    gap: 14px;
+  }
+
+  .habit-card .card-heading {
+    gap: 10px;
+  }
+
+  .habit-card .panel-subtitle,
+  .habit-card p {
+    font-size: 0.9rem;
+  }
+
+  .habit-add input {
+    padding: 8px 12px;
+    min-height: 38px;
+  }
+
+  .habit-add .ghost-button {
+    padding: 10px 14px;
+  }
+
+  .habit-progress-label {
+    font-size: 12px;
+  }
+
   .theme-toggle {
     width: 44px;
     height: 44px;
