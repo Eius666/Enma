@@ -1453,7 +1453,7 @@ body.theme-light .tile-value.negative {
 }
 
 .note-title-input {
-  font-size: clamp(28px, 5vw, 36px);
+  font-size: 1rem;
   font-weight: 700;
   background: transparent;
   border: none;
