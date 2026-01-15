@@ -2048,14 +2048,14 @@ body.theme-light .tile-value.negative {
   }
 
   .habit-list {
-    max-height: 220px;
+    max-height: 200px;
     overflow: auto;
     padding-right: 4px;
   }
 
   .habit-card {
-    max-height: 360px;
-    overflow: hidden;
+    max-height: none;
+    overflow: visible;
   }
 
   .habit-card .card-heading {
