@@ -1992,6 +1992,34 @@ body.theme-light .tile-value.negative {
     padding: 24px;
   }
 
+  .notes-shell {
+    border: none;
+    background: transparent;
+    min-height: auto;
+  }
+
+  .notes-sidebar {
+    background: transparent;
+    border: none;
+    padding: 0 0 16px;
+  }
+
+  .notes-editor {
+    background: transparent;
+    padding: 0;
+  }
+
+  .editor-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 16px;
+  }
+
+  .notes-list-item.is-active {
+    background: rgba(124, 92, 255, 0.12);
+  }
+
   .habit-days {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
