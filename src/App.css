@@ -2053,6 +2053,18 @@ body.theme-light .tile-value.negative {
     padding-right: 4px;
   }
 
+  .habit-card .card-heading {
+    margin-bottom: 0;
+  }
+
+  .habit-add {
+    margin-top: -2px;
+  }
+
+  .habit-add + .habit-list {
+    margin-top: 6px;
+  }
+
   .habit-card {
     max-height: none;
     overflow: visible;
