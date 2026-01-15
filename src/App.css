@@ -890,6 +890,11 @@ body.theme-light .tile-value.negative {
   gap: 20px;
 }
 
+.habit-card.is-empty {
+  min-height: 240px;
+  justify-content: center;
+}
+
 .habit-card .card-heading {
   flex-wrap: wrap;
   align-items: flex-start;
@@ -2083,6 +2088,10 @@ body.theme-light .tile-value.negative {
     gap: 6px;
     padding: 12px;
     border-radius: 16px;
+  }
+
+  .habit-card.is-empty {
+    min-height: 190px;
   }
 
   .habit-list {
