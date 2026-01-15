@@ -2027,6 +2027,7 @@ body.theme-light .tile-value.negative {
   .habit-card .card-heading {
     flex-direction: column;
     align-items: stretch;
+    justify-content: flex-start;
   }
 
   .habit-add {
@@ -2038,8 +2039,8 @@ body.theme-light .tile-value.negative {
   }
 
   .habit-row {
-    padding: 6px;
-    gap: 5px;
+    padding: 8px;
+    gap: 6px;
   }
 
   .habit-card .card-heading h3 {
@@ -2047,7 +2048,9 @@ body.theme-light .tile-value.negative {
   }
 
   .habit-card {
-    gap: 5px;
+    gap: 6px;
+    padding: 12px;
+    border-radius: 16px;
   }
 
   .habit-list {
@@ -2065,7 +2068,11 @@ body.theme-light .tile-value.negative {
   }
 
   .habit-add + .habit-list {
-    margin-top: 6px;
+    margin-top: 4px;
+  }
+
+  .habit-card .panel-subtitle {
+    margin-top: 2px;
   }
 
   .habit-card {
@@ -2074,39 +2081,39 @@ body.theme-light .tile-value.negative {
   }
 
   .habit-card .card-heading {
-    gap: 4px;
+    gap: 6px;
   }
 
   .habit-card .card-badge {
-    padding: 4px 8px;
-    font-size: 9px;
+    padding: 6px 12px;
+    font-size: 10px;
   }
 
   .habit-card h3 {
-    font-size: 0.9rem;
+    font-size: 1.05rem;
   }
 
   .habit-card .panel-subtitle,
   .habit-card p {
-    font-size: 0.75rem;
+    font-size: 0.9rem;
   }
 
   .habit-add input {
-    padding: 4px 6px;
-    min-height: 20px;
-    font-size: 0.7rem;
+    padding: 6px 10px;
+    min-height: 34px;
+    font-size: 0.9rem;
     width: 100%;
   }
 
   .habit-add .ghost-button {
-    padding: 5px 7px;
-    font-size: 0.7rem;
+    padding: 8px 12px;
+    font-size: 0.9rem;
     width: 100%;
     justify-content: center;
   }
 
   .habit-progress-label {
-    font-size: 9px;
+    font-size: 12px;
   }
 
   .theme-toggle {
