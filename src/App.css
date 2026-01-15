@@ -2038,8 +2038,8 @@ body.theme-light .tile-value.negative {
   }
 
   .habit-row {
-    padding: 10px;
-    gap: 8px;
+    padding: 6px;
+    gap: 5px;
   }
 
   .habit-card .card-heading h3 {
@@ -2047,7 +2047,7 @@ body.theme-light .tile-value.negative {
   }
 
   .habit-card {
-    gap: 8px;
+    gap: 5px;
   }
 
   .habit-list {
@@ -2074,39 +2074,39 @@ body.theme-light .tile-value.negative {
   }
 
   .habit-card .card-heading {
-    gap: 6px;
+    gap: 4px;
   }
 
   .habit-card .card-badge {
-    padding: 6px 12px;
-    font-size: 10px;
+    padding: 4px 8px;
+    font-size: 9px;
   }
 
   .habit-card h3 {
-    font-size: 1.05rem;
+    font-size: 0.9rem;
   }
 
   .habit-card .panel-subtitle,
   .habit-card p {
-    font-size: 0.9rem;
+    font-size: 0.75rem;
   }
 
   .habit-add input {
-    padding: 6px 10px;
-    min-height: 34px;
-    font-size: 0.9rem;
+    padding: 4px 6px;
+    min-height: 20px;
+    font-size: 0.7rem;
     width: 100%;
   }
 
   .habit-add .ghost-button {
-    padding: 8px 12px;
-    font-size: 0.9rem;
+    padding: 5px 7px;
+    font-size: 0.7rem;
     width: 100%;
     justify-content: center;
   }
 
   .habit-progress-label {
-    font-size: 12px;
+    font-size: 9px;
   }
 
   .theme-toggle {
