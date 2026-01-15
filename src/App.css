@@ -2047,6 +2047,17 @@ body.theme-light .tile-value.negative {
     gap: 14px;
   }
 
+  .habit-list {
+    max-height: 220px;
+    overflow: auto;
+    padding-right: 4px;
+  }
+
+  .habit-card {
+    max-height: 360px;
+    overflow: hidden;
+  }
+
   .habit-card .card-heading {
     gap: 10px;
   }
