@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   format,
   addMonths,
@@ -15,6 +15,7 @@ import {
   setHours,
   setMinutes
 } from 'date-fns';
+import { enUS, ru } from 'date-fns/locale';
 import {
   FaArrowLeft,
   FaArrowRight,
@@ -22,6 +23,7 @@ import {
   FaSun,
   FaPlus,
   FaTrash,
+  FaTimes,
   FaTag,
   FaStickyNote,
   FaTasks
@@ -38,7 +40,9 @@ import { auth } from './src/firebase';
 import { useTelegramWebApp } from './hooks/useTelegramWebApp';
 
 type Theme = 'dark' | 'light';
-type PrimaryTab = 'day-flow' | 'calendar' | 'notes' | 'finance';
+type Language = 'en' | 'ru';
+type Currency = 'USD' | 'EUR' | 'GBP' | 'RUB';
+type PrimaryTab = 'day-flow' | 'calendar' | 'notes' | 'finance' | 'settings';
 
 type CalendarTask = {
   id: string;
@@ -105,6 +109,18 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: 'cat-software', name: 'Software', type: 'expense' }
 ];
 
+const getDefaultCategories = (language: Language): Category[] => {
+  if (language === 'ru') {
+    return [
+      { id: 'cat-salary', name: 'Зарплата', type: 'income' },
+      { id: 'cat-freelance', name: 'Фриланс', type: 'income' },
+      { id: 'cat-food', name: 'Еда', type: 'expense' },
+      { id: 'cat-software', name: 'Софт', type: 'expense' }
+    ];
+  }
+  return DEFAULT_CATEGORIES;
+};
+
 const STORAGE_KEYS = {
   tasks: 'tasks',
   notes: 'notes',
@@ -137,13 +153,356 @@ const taskColorPalette = ['#7C5CFF', '#FF7EB6', '#6CFFB8', '#58A6FF', '#F7D060',
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 const THEME_STORAGE_KEY = 'enma.theme';
+const LANGUAGE_STORAGE_KEY = 'enma.language';
+const CURRENCY_STORAGE_KEY = 'enma.currency';
+const RATES_STORAGE_KEY = 'enma.exchangeRates';
+const RATES_TTL_MS = 60 * 60 * 1000;
+const BASE_CURRENCY: Currency = 'USD';
+const SUPPORTED_CURRENCIES: Currency[] = ['USD', 'EUR', 'GBP', 'RUB'];
 const TELEGRAM_BOT_TOKEN = '8204403009:AAHEaGBlTOy4vFwG1OpHGaP3bUrGEUK0izA';
 
-const notifyTelegramReminder = async (chatId: number, reminder: Reminder) => {
+const translations = {
+  en: {
+    authLoading: 'Checking credentials...',
+    authBadge: 'Welcome back',
+    authTitle: 'Access your organizer',
+    authSubtitle: 'Sign in with your email to start planning your day, notes, and finances.',
+    authNameLabel: 'Name',
+    authNamePlaceholder: 'How should we call you?',
+    authEmailLabel: 'Email',
+    authEmailPlaceholder: 'you@example.com',
+    authPasswordLabel: 'Password',
+    authPasswordPlaceholder: 'Your secret password',
+    authErrorNameRequired: 'Please share your name so we can greet you.',
+    authErrorDefault: 'Unable to authenticate. Please try again.',
+    authSubmitLoading: 'Please wait...',
+    authSubmitSignIn: 'Sign in',
+    authSubmitSignUp: 'Create account',
+    authSwitchPromptSignIn: "Don't have an account yet?",
+    authSwitchPromptSignUp: 'Already have an account?',
+    authSwitchCreate: 'Create one',
+    authSwitchSignIn: 'Sign in instead',
+    toggleThemeAria: 'Toggle color theme',
+    greeting: 'Hi, {name}',
+    greetingFallback: 'there',
+    heroSubtitle: 'The all-in-one stream for your schedule, notes, and cash flow forecast.',
+    productionRefreshed: 'Production build refreshed: {date}',
+    signOut: 'Sign out',
+    tabDayFlow: 'day flow',
+    tabCalendar: 'calendar',
+    tabNotes: 'notes',
+    tabFinance: 'finance',
+    tabSettings: 'settings',
+    dayFlowBadge: 'Time & Money Stream',
+    dayFlowTitle: "Today's overview",
+    dayFlowSubtitle: 'Keep an eye on the next commitments, fresh notes, and cash flow.',
+    upcomingFocus: 'Upcoming focus',
+    nextLabel: 'Next:',
+    caughtUp: "You're all caught up",
+    addTasksHint: 'Add tasks from the calendar tab to see them here.',
+    financialSnapshot: 'Financial snapshot',
+    balanceLine: 'Balance {balance} · {income} in / {expenses} out',
+    incomeLabel: 'Income',
+    expensesLabel: 'Expenses',
+    netFlowLabel: 'Net flow',
+    latestNoteBadge: 'Latest note',
+    latestNoteEmptyTitle: 'Create your first note to keep ideas on track',
+    latestNoteUpdated: 'Updated {date}',
+    latestNoteEmptyHint: 'Head to the notes tab to build your personal wiki with page blocks.',
+    remindersBadge: 'Reminders',
+    remindersTitle: 'Stay ahead of time-sensitive items',
+    remindersEmptyHint: 'Add reminders from the calendar tab to see them here.',
+    habitBadge: 'Habit tracker',
+    habitTitle: 'Build routines with daily wins',
+    habitPlaceholder: 'New habit',
+    addHabit: 'Add',
+    habitEmptyHint: 'Start by adding a habit you want to keep up this week.',
+    calendarBadge: 'Calendar',
+    todayButton: 'Today',
+    weekdayMon: 'Mon',
+    weekdayTue: 'Tue',
+    weekdayWed: 'Wed',
+    weekdayThu: 'Thu',
+    weekdayFri: 'Fri',
+    weekdaySat: 'Sat',
+    weekdaySun: 'Sun',
+    calendarMore: '+more',
+    taskTitleLabel: 'Task title',
+    taskTitlePlaceholder: 'Prep slides for sync',
+    notesLabel: 'Notes',
+    taskNotesPlaceholder: 'Context, links, or agenda',
+    timeLabel: 'Time',
+    addTask: 'Add task',
+    scheduleTitle: 'Schedule',
+    noTasksForDay: 'No tasks yet for this day.',
+    deleteTaskAria: 'Delete task',
+    reminderLabel: 'Reminder',
+    reminderPlaceholder: 'Add reminder topic',
+    reminderNotesPlaceholder: 'Optional notes',
+    noRemindersForDay: 'No reminders scheduled for this day.',
+    toggleReminderAria: 'Toggle reminder',
+    deleteReminderAria: 'Delete reminder',
+    notesWorkspaceTitle: 'Workspace',
+    newPage: 'New page',
+    noteTypeText: 'Text',
+    noteTypeChecklist: 'Checklist',
+    noTextNotes: 'No text notes yet.',
+    noChecklists: 'No checklists yet.',
+    untitled: 'Untitled',
+    noteTitlePlaceholder: 'Untitled page',
+    startWriting: 'Start writing...',
+    todoPlaceholder: 'Describe the task',
+    textPlaceholder: 'Write your thoughts...',
+    addItem: 'Add item',
+    addParagraph: 'Add paragraph',
+    noPageSelected: 'No page selected',
+    noPageSelectedHint: 'Create or choose a page from the left panel to start writing.',
+    financeBalance: 'Balance',
+    financeIncome: 'Income',
+    financeExpenses: 'Expenses',
+    categoriesBadge: 'Categories',
+    categoriesTitle: 'Group your cash flow',
+    categoryNameLabel: 'Name',
+    categoryNamePlaceholder: 'e.g. Subscriptions',
+    categoryTypeLabel: 'Type',
+    categoryTypeIncome: 'Income',
+    categoryTypeExpense: 'Expense',
+    addCategory: 'Add category',
+    deleteCategoryAria: 'Delete category {name}',
+    logTransactionTitle: 'Log a transaction',
+    transactionTypeIncome: 'income',
+    transactionTypeExpense: 'expense',
+    amountLabel: 'Amount',
+    descriptionLabel: 'Description',
+    descriptionPlaceholder: 'What is this for?',
+    categoryLabel: 'Category',
+    chooseCategory: 'Choose category',
+    saveTransaction: 'Save transaction',
+    recentActivity: 'Recent activity',
+    noTransactions: 'No transactions logged yet.',
+    deleteTransactionAria: 'Delete transaction',
+    uncategorized: 'Uncategorized',
+    settingsBadge: 'Settings',
+    settingsTitle: 'Language & preferences',
+    settingsSubtitle: 'Adjust how Enma speaks to you across the workspace.',
+    languageLabel: 'Language',
+    languageDescription: 'Pick the language for buttons, labels, and helper text.',
+    languageOptionEnglish: 'English',
+    languageOptionRussian: 'Russian',
+    currencyLabel: 'Currency',
+    currencyDescription: 'Choose the currency used for balances and totals.',
+    currencyOptionUSD: 'US Dollar',
+    currencyOptionEUR: 'Euro',
+    currencyOptionGBP: 'British Pound',
+    currencyOptionRUB: 'Russian Ruble',
+    ratesUpdated: 'Rates updated: {date}',
+    ratesUpdating: 'Updating exchange rates...',
+    ratesUnavailable: 'Exchange rates unavailable. Using cached data.',
+    refreshRates: 'Refresh rates',
+    changesApplyInstantly: 'Changes apply instantly.',
+    telegramReminderLine: 'Reminder: {title}\n{date} at {time}'
+  },
+  ru: {
+    authLoading: 'Проверяем доступ...',
+    authBadge: 'С возвращением',
+    authTitle: 'Доступ к органайзеру',
+    authSubtitle: 'Войдите по email, чтобы планировать день, заметки и финансы.',
+    authNameLabel: 'Имя',
+    authNamePlaceholder: 'Как к вам обращаться?',
+    authEmailLabel: 'Email',
+    authEmailPlaceholder: 'you@example.com',
+    authPasswordLabel: 'Пароль',
+    authPasswordPlaceholder: 'Ваш пароль',
+    authErrorNameRequired: 'Пожалуйста, укажите имя, чтобы мы могли приветствовать вас.',
+    authErrorDefault: 'Не удалось войти. Попробуйте еще раз.',
+    authSubmitLoading: 'Подождите...',
+    authSubmitSignIn: 'Войти',
+    authSubmitSignUp: 'Создать аккаунт',
+    authSwitchPromptSignIn: 'Еще нет аккаунта?',
+    authSwitchPromptSignUp: 'Уже есть аккаунт?',
+    authSwitchCreate: 'Создать',
+    authSwitchSignIn: 'Войти',
+    toggleThemeAria: 'Переключить тему',
+    greeting: 'Привет, {name}',
+    greetingFallback: 'друг',
+    heroSubtitle: 'Единый центр для расписания, заметок и прогноза денег.',
+    productionRefreshed: 'Продакшен обновлен: {date}',
+    signOut: 'Выйти',
+    tabDayFlow: 'день',
+    tabCalendar: 'календарь',
+    tabNotes: 'заметки',
+    tabFinance: 'финансы',
+    tabSettings: 'настройки',
+    dayFlowBadge: 'Поток времени и денег',
+    dayFlowTitle: 'Обзор на сегодня',
+    dayFlowSubtitle: 'Следите за ближайшими делами, свежими заметками и балансом.',
+    upcomingFocus: 'Ближайший фокус',
+    nextLabel: 'Далее:',
+    caughtUp: 'Все под контролем',
+    addTasksHint: 'Добавьте задачи в календаре, чтобы они появились здесь.',
+    financialSnapshot: 'Финансовый снимок',
+    balanceLine: 'Баланс {balance} · приход {income} / расход {expenses}',
+    incomeLabel: 'Доход',
+    expensesLabel: 'Расходы',
+    netFlowLabel: 'Итог',
+    latestNoteBadge: 'Свежая заметка',
+    latestNoteEmptyTitle: 'Создайте первую заметку, чтобы зафиксировать идеи',
+    latestNoteUpdated: 'Обновлено {date}',
+    latestNoteEmptyHint: 'Перейдите в заметки, чтобы собрать личную базу знаний.',
+    remindersBadge: 'Напоминания',
+    remindersTitle: 'Не пропускайте важные моменты',
+    remindersEmptyHint: 'Добавьте напоминания в календаре, и они появятся здесь.',
+    habitBadge: 'Трекер привычек',
+    habitTitle: 'Закрепляйте рутину ежедневными победами',
+    habitPlaceholder: 'Новая привычка',
+    addHabit: 'Добавить',
+    habitEmptyHint: 'Начните с привычки, которую хотите удерживать на этой неделе.',
+    calendarBadge: 'Календарь',
+    todayButton: 'Сегодня',
+    weekdayMon: 'Пн',
+    weekdayTue: 'Вт',
+    weekdayWed: 'Ср',
+    weekdayThu: 'Чт',
+    weekdayFri: 'Пт',
+    weekdaySat: 'Сб',
+    weekdaySun: 'Вс',
+    calendarMore: '+еще',
+    taskTitleLabel: 'Название задачи',
+    taskTitlePlaceholder: 'Подготовить слайды',
+    notesLabel: 'Заметки',
+    taskNotesPlaceholder: 'Контекст, ссылки или повестка',
+    timeLabel: 'Время',
+    addTask: 'Добавить задачу',
+    scheduleTitle: 'Расписание',
+    noTasksForDay: 'На этот день задач нет.',
+    deleteTaskAria: 'Удалить задачу',
+    reminderLabel: 'Напоминание',
+    reminderPlaceholder: 'О чем напомнить?',
+    reminderNotesPlaceholder: 'Доп. заметки',
+    noRemindersForDay: 'На этот день напоминаний нет.',
+    toggleReminderAria: 'Отметить напоминание',
+    deleteReminderAria: 'Удалить напоминание',
+    notesWorkspaceTitle: 'Рабочее пространство',
+    newPage: 'Новая страница',
+    noteTypeText: 'Текст',
+    noteTypeChecklist: 'Чек-лист',
+    noTextNotes: 'Текстовых заметок пока нет.',
+    noChecklists: 'Чек-листов пока нет.',
+    untitled: 'Без названия',
+    noteTitlePlaceholder: 'Страница без названия',
+    startWriting: 'Начните писать...',
+    todoPlaceholder: 'Опишите задачу',
+    textPlaceholder: 'Запишите мысли...',
+    addItem: 'Добавить пункт',
+    addParagraph: 'Добавить абзац',
+    noPageSelected: 'Страница не выбрана',
+    noPageSelectedHint: 'Создайте или выберите страницу слева, чтобы начать работу.',
+    financeBalance: 'Баланс',
+    financeIncome: 'Доход',
+    financeExpenses: 'Расходы',
+    categoriesBadge: 'Категории',
+    categoriesTitle: 'Сгруппируйте денежный поток',
+    categoryNameLabel: 'Название',
+    categoryNamePlaceholder: 'например, Подписки',
+    categoryTypeLabel: 'Тип',
+    categoryTypeIncome: 'Доход',
+    categoryTypeExpense: 'Расход',
+    addCategory: 'Добавить категорию',
+    deleteCategoryAria: 'Удалить категорию {name}',
+    logTransactionTitle: 'Записать транзакцию',
+    transactionTypeIncome: 'доход',
+    transactionTypeExpense: 'расход',
+    amountLabel: 'Сумма',
+    descriptionLabel: 'Описание',
+    descriptionPlaceholder: 'На что это?',
+    categoryLabel: 'Категория',
+    chooseCategory: 'Выберите категорию',
+    saveTransaction: 'Сохранить транзакцию',
+    recentActivity: 'Последние операции',
+    noTransactions: 'Транзакций пока нет.',
+    deleteTransactionAria: 'Удалить транзакцию',
+    uncategorized: 'Без категории',
+    settingsBadge: 'Настройки',
+    settingsTitle: 'Язык и предпочтения',
+    settingsSubtitle: 'Настройте стиль общения Enma в рабочем пространстве.',
+    languageLabel: 'Язык',
+    languageDescription: 'Выберите язык интерфейса для кнопок и подсказок.',
+    languageOptionEnglish: 'Английский',
+    languageOptionRussian: 'Русский',
+    currencyLabel: 'Валюта',
+    currencyDescription: 'Выберите валюту для отображения баланса и итогов.',
+    currencyOptionUSD: 'Доллар США',
+    currencyOptionEUR: 'Евро',
+    currencyOptionGBP: 'Британский фунт',
+    currencyOptionRUB: 'Российский рубль',
+    ratesUpdated: 'Курсы обновлены: {date}',
+    ratesUpdating: 'Обновляем курсы...',
+    ratesUnavailable: 'Курсы недоступны. Используем кеш.',
+    refreshRates: 'Обновить курсы',
+    changesApplyInstantly: 'Изменения применяются сразу.',
+    telegramReminderLine: 'Напоминание: {title}\n{date} в {time}'
+  }
+} as const;
+
+type TranslationKey = keyof typeof translations.en;
+
+const translate = (
+  language: Language,
+  key: TranslationKey,
+  params?: Record<string, string | number>
+) => {
+  const template = translations[language][key] ?? translations.en[key] ?? key;
+  if (!params) return template;
+  return template.replace(/\{(\w+)\}/g, (_, token) => String(params[token] ?? `{${token}}`));
+};
+
+const getDateLocale = (language: Language) => (language === 'ru' ? ru : enUS);
+
+const formatDate = (language: Language, date: Date, pattern: string) =>
+  format(date, pattern, { locale: getDateLocale(language) });
+
+const getNumberLocale = (language: Language) => (language === 'ru' ? 'ru-RU' : 'en-US');
+
+const readRatesCache = () => {
+  if (typeof window === 'undefined') return null;
   try {
-    const text = `Reminder: ${reminder.title}\n${format(parseISO(reminder.date), 'MMM d, yyyy')} at ${reminder.time}${
-      reminder.notes ? `\n${reminder.notes}` : ''
-    }`;
+    const raw = localStorage.getItem(RATES_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as {
+      base: Currency;
+      rates: Record<string, number>;
+      fetchedAt: string;
+    };
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const writeRatesCache = (payload: {
+  base: Currency;
+  rates: Record<string, number>;
+  fetchedAt: string;
+}) => {
+  try {
+    localStorage.setItem(RATES_STORAGE_KEY, JSON.stringify(payload));
+  } catch (error) {
+    console.warn('Failed to persist exchange rates', error);
+  }
+};
+
+const notifyTelegramReminder = async (
+  chatId: number,
+  reminder: Reminder,
+  language: Language
+) => {
+  try {
+    const dateLabel = formatDate(language, parseISO(reminder.date), 'MMM d, yyyy');
+    const text = `${translate(language, 'telegramReminderLine', {
+      title: reminder.title,
+      date: dateLabel,
+      time: reminder.time
+    })}${reminder.notes ? `\n${reminder.notes}` : ''}`;
     await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: {
@@ -168,11 +527,44 @@ const App: React.FC = () => {
     return stored === 'dark' || stored === 'light' ? stored : null;
   };
 
+  const readStoredLanguage = (): Language | null => {
+    if (typeof window === 'undefined') return null;
+    const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    return stored === 'ru' || stored === 'en' ? stored : null;
+  };
+
+  const readStoredCurrency = (): Currency | null => {
+    if (typeof window === 'undefined') return null;
+    const stored = window.localStorage.getItem(CURRENCY_STORAGE_KEY);
+    return SUPPORTED_CURRENCIES.includes(stored as Currency) ? (stored as Currency) : null;
+  };
+
+  const detectInitialLanguage = () => {
+    const stored = readStoredLanguage();
+    if (stored) return stored;
+    if (typeof navigator !== 'undefined') {
+      const browser = navigator.language?.toLowerCase();
+      if (browser?.startsWith('ru')) return 'ru';
+    }
+    return 'en';
+  };
+
   const [theme, setTheme] = useState<Theme>(() => readStoredTheme() ?? 'dark');
   const [hasManualTheme, setHasManualTheme] = useState<boolean>(() => readStoredTheme() !== null);
+  const [language, setLanguage] = useState<Language>(() => detectInitialLanguage());
+  const [hasManualLanguage, setHasManualLanguage] = useState<boolean>(
+    () => readStoredLanguage() !== null
+  );
+  const [currency, setCurrency] = useState<Currency>(
+    () => readStoredCurrency() ?? BASE_CURRENCY
+  );
+  const [rates, setRates] = useState<Record<string, number>>({ [BASE_CURRENCY]: 1 });
+  const [ratesUpdatedAt, setRatesUpdatedAt] = useState<string | null>(null);
+  const [ratesStatus, setRatesStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [activeTab, setActiveTab] = useState<PrimaryTab>('day-flow');
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const prevUserId = useRef<string | null>(null);
 
   const [tasks, setTasks] = useState<CalendarTask[]>([]);
   const [notes, setNotes] = useState<NotePage[]>([]);
@@ -181,6 +573,9 @@ const App: React.FC = () => {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [reminders, setReminders] = useState<Reminder[]>([]);
+
+  const t = (key: TranslationKey, params?: Record<string, string | number>) =>
+    translate(language, key, params);
 
   useEffect(() => {
     document.body.classList.remove('theme-dark', 'theme-light');
@@ -197,6 +592,23 @@ const App: React.FC = () => {
   }, [theme, hasManualTheme]);
 
   useEffect(() => {
+    if (!hasManualLanguage) return;
+    try {
+      localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+    } catch (error) {
+      console.warn('Failed to persist language preference', error);
+    }
+  }, [language, hasManualLanguage]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CURRENCY_STORAGE_KEY, currency);
+    } catch (error) {
+      console.warn('Failed to persist currency preference', error);
+    }
+  }, [currency]);
+
+  useEffect(() => {
     if (!telegram || hasManualTheme) return;
     const syncTheme = () => {
       const scheme = telegram.colorScheme === 'light' ? 'light' : 'dark';
@@ -209,6 +621,24 @@ const App: React.FC = () => {
       telegram.offEvent?.('themeChanged', handleThemeChange);
     };
   }, [telegram, hasManualTheme]);
+
+  useEffect(() => {
+    if (!telegram || hasManualLanguage) return;
+    const tgLanguage = telegram.initDataUnsafe?.user?.language_code?.toLowerCase() ?? '';
+    if (tgLanguage.startsWith('ru')) {
+      setLanguage('ru');
+      return;
+    }
+    if (tgLanguage) {
+      setLanguage('en');
+    }
+  }, [telegram, hasManualLanguage]);
+
+  useEffect(() => {
+    if (!SUPPORTED_CURRENCIES.includes(currency)) {
+      setCurrency(BASE_CURRENCY);
+    }
+  }, [currency]);
 
   useEffect(() => {
     if (!telegram) return;
@@ -244,8 +674,14 @@ const App: React.FC = () => {
       setReminders([]);
       setProfile(null);
       setActiveTab('day-flow');
+      prevUserId.current = null;
       return;
     }
+
+    if (prevUserId.current === user.uid) {
+      return;
+    }
+    prevUserId.current = user.uid;
 
     const read = <T,>(key: string, fallback: T): T => {
       try {
@@ -286,13 +722,13 @@ const App: React.FC = () => {
       })
     );
     const storedCategories = read<Category[]>(STORAGE_KEYS.categories, [] as Category[]);
-    setCategories(storedCategories.length ? storedCategories : DEFAULT_CATEGORIES);
+    setCategories(storedCategories.length ? storedCategories : getDefaultCategories(language));
     setTransactions(read<Transaction[]>(STORAGE_KEYS.transactions, [] as Transaction[]));
     setHabits(read<Habit[]>(STORAGE_KEYS.habits, [] as Habit[]));
     setReminders(read<Reminder[]>(STORAGE_KEYS.reminders, [] as Reminder[]));
     setProfile(loadProfile(user.uid));
     setActiveTab('day-flow');
-  }, [user]);
+  }, [user, language]);
 
   useEffect(() => {
     if (!user || !telegram?.initDataUnsafe?.user) return;
@@ -358,7 +794,7 @@ const App: React.FC = () => {
             Number(minutesStr) || 0
           );
           if (scheduled <= new Date()) {
-            notifyTelegramReminder(chatId, reminder);
+            notifyTelegramReminder(chatId, reminder, language);
             changed = true;
             return { ...reminder, notified: true };
           }
@@ -368,7 +804,7 @@ const App: React.FC = () => {
       });
     }, 30000);
     return () => clearInterval(interval);
-  }, [telegram]);
+  }, [telegram, language]);
 
   const upcomingTasks = useMemo(() => {
     const today = new Date();
@@ -402,6 +838,53 @@ const App: React.FC = () => {
     setHasManualTheme(true);
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
   };
+
+  const updateLanguage = (next: Language) => {
+    setHasManualLanguage(true);
+    setLanguage(next);
+  };
+
+  const updateCurrency = (next: Currency) => {
+    if (next === currency) return;
+    setCurrency(next);
+  };
+
+  const loadExchangeRates = useCallback(async (force = false) => {
+    const cached = readRatesCache();
+    if (cached) {
+      const isFresh =
+        cached.base === BASE_CURRENCY &&
+        Date.now() - new Date(cached.fetchedAt).getTime() < RATES_TTL_MS;
+      if (!force && isFresh) {
+        setRates(cached.rates);
+        setRatesUpdatedAt(cached.fetchedAt);
+        setRatesStatus('idle');
+        return;
+      }
+      setRates(cached.rates);
+      setRatesUpdatedAt(cached.fetchedAt);
+    }
+
+    setRatesStatus('loading');
+    try {
+      const response = await fetch(`https://api.exchangerate-api.com/v4/latest/${BASE_CURRENCY}`);
+      if (!response.ok) throw new Error('Failed to load exchange rates');
+      const data = (await response.json()) as { rates: Record<string, number> };
+      const filteredRates = SUPPORTED_CURRENCIES.reduce<Record<string, number>>((acc, code) => {
+        const rate = code === BASE_CURRENCY ? 1 : data.rates?.[code];
+        if (rate) acc[code] = rate;
+        return acc;
+      }, { [BASE_CURRENCY]: 1 });
+      const fetchedAt = new Date().toISOString();
+      setRates(filteredRates);
+      setRatesUpdatedAt(fetchedAt);
+      writeRatesCache({ base: BASE_CURRENCY, rates: filteredRates, fetchedAt });
+      setRatesStatus('idle');
+    } catch (error) {
+      console.warn('Failed to fetch exchange rates', error);
+      setRatesStatus('error');
+    }
+  }, []);
 
   const addHabit = (title: string) => {
     if (!title.trim()) return;
@@ -457,12 +940,19 @@ const App: React.FC = () => {
     setReminders(prev => prev.filter(reminder => reminder.id !== id));
   };
 
+  useEffect(() => {
+    loadExchangeRates();
+  }, [loadExchangeRates]);
+
   const upcomingReminders = useMemo(() => {
     return [...reminders]
       .filter(reminder => !reminder.done && compareAsc(new Date(reminder.date), new Date()) >= 0)
       .sort((a, b) => compareAsc(new Date(a.date + 'T' + a.time), new Date(b.date + 'T' + b.time)))
       .slice(0, 4);
   }, [reminders]);
+
+  const convertAmount = (amount: number) => amount * (rates[currency] ?? 1);
+  const convertToBase = (amount: number) => amount / (rates[currency] ?? 1);
 
   const telegramName =
     telegram?.initDataUnsafe?.user &&
@@ -472,7 +962,7 @@ const App: React.FC = () => {
       telegram.initDataUnsafe.user.username);
 
   const userDisplayName =
-    profile?.displayName || telegramName || user?.email?.split('@')[0] || 'there';
+    profile?.displayName || telegramName || user?.email?.split('@')[0] || t('greetingFallback');
   const userEmail =
     user?.email || telegram?.initDataUnsafe?.user?.username || '—';
 
@@ -488,7 +978,7 @@ const App: React.FC = () => {
     return (
       <div className={`auth-screen theme-${theme}`}>
         <div className="auth-card loading-card">
-          <span className="auth-loading">Checking credentials...</span>
+          <span className="auth-loading">{t('authLoading')}</span>
         </div>
       </div>
     );
@@ -500,6 +990,7 @@ const App: React.FC = () => {
         theme={theme}
         onToggleTheme={toggleTheme}
         initialName={telegramName}
+        language={language}
       />
     );
   }
@@ -512,29 +1003,31 @@ const App: React.FC = () => {
         <div className="hero-intro">
           <span className="app-mark">Enma</span>
           <h1>
-            Hi, {userDisplayName}
+            {t('greeting', { name: userDisplayName })}
           </h1>
-          <p>The all-in-one stream for your schedule, notes, and cash flow forecast.</p>
+          <p>{t('heroSubtitle')}</p>
           <a
             className="refresh-link"
             href="https://eius666.github.io/Enma/"
             target="_blank"
             rel="noreferrer"
           >
-            Production build refreshed: {format(referenceDate, 'MMM dd, yyyy p')}
+            {t('productionRefreshed', {
+              date: formatDate(language, referenceDate, 'MMM dd, yyyy p')
+            })}
           </a>
           <span className="hero-email">{userEmail}</span>
         </div>
         <div className="hero-actions">
           <div className="hero-actions-left">
             <button className="sign-out-button" onClick={handleSignOut}>
-              Sign out
+              {t('signOut')}
             </button>
           </div>
           <button
             className="theme-toggle"
             onClick={toggleTheme}
-            aria-label="Toggle color theme"
+            aria-label={t('toggleThemeAria')}
           >
             {theme === 'dark' ? <FaSun /> : <FaMoon />}
           </button>
@@ -542,13 +1035,19 @@ const App: React.FC = () => {
       </header>
 
       <nav className="top-tabs" aria-label="Primary navigation">
-        {(['day-flow', 'calendar', 'notes', 'finance'] as const).map(tab => (
+        {([
+          { id: 'day-flow', label: t('tabDayFlow') },
+          { id: 'calendar', label: t('tabCalendar') },
+          { id: 'notes', label: t('tabNotes') },
+          { id: 'finance', label: t('tabFinance') },
+          { id: 'settings', label: t('tabSettings') }
+        ] as const).map(tab => (
           <button
-            key={tab}
-            className={`top-tab ${activeTab === tab ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab)}
+            key={tab.id}
+            className={`top-tab ${activeTab === tab.id ? 'active' : ''}`}
+            onClick={() => setActiveTab(tab.id)}
           >
-            {tab.replace('-', ' ')}
+            {tab.label}
           </button>
         ))}
       </nav>
@@ -556,6 +1055,9 @@ const App: React.FC = () => {
       <main className="main-content">
         {activeTab === 'day-flow' && (
           <DayFlowOverview
+            language={language}
+            currency={currency}
+            convertAmount={convertAmount}
             upcomingTasks={upcomingTasks}
             financeSummary={financeSummary}
             latestNote={latestNote}
@@ -568,6 +1070,7 @@ const App: React.FC = () => {
         )}
         {activeTab === 'calendar' && (
           <CalendarWorkspace
+            language={language}
             tasks={tasks}
             reminders={reminders}
             onTasksChange={setTasks}
@@ -577,14 +1080,29 @@ const App: React.FC = () => {
           />
         )}
         {activeTab === 'notes' && (
-          <NotesWorkspace notes={notes} onNotesChange={setNotes} />
+          <NotesWorkspace language={language} notes={notes} onNotesChange={setNotes} />
         )}
         {activeTab === 'finance' && (
           <FinanceWorkspace
+            language={language}
+            currency={currency}
+            convertAmount={convertAmount}
+            convertToBase={convertToBase}
             categories={categories}
             onCategoriesChange={setCategories}
             transactions={transactions}
             onTransactionsChange={setTransactions}
+          />
+        )}
+        {activeTab === 'settings' && (
+          <SettingsPanel
+            language={language}
+            onLanguageChange={updateLanguage}
+            currency={currency}
+            onCurrencyChange={updateCurrency}
+            ratesUpdatedAt={ratesUpdatedAt}
+            ratesStatus={ratesStatus}
+            onRefreshRates={() => loadExchangeRates(true)}
           />
         )}
       </main>
@@ -593,6 +1111,9 @@ const App: React.FC = () => {
 };
 
 type DayFlowOverviewProps = {
+  language: Language;
+  currency: Currency;
+  convertAmount: (amount: number) => number;
   upcomingTasks: CalendarTask[];
   financeSummary: { income: number; expenses: number; balance: number };
   latestNote?: NotePage;
@@ -607,9 +1128,17 @@ type AuthScreenProps = {
   theme: Theme;
   onToggleTheme: () => void;
   initialName?: string | null;
+  language: Language;
 };
 
-const AuthScreen: React.FC<AuthScreenProps> = ({ theme, onToggleTheme, initialName }) => {
+const AuthScreen: React.FC<AuthScreenProps> = ({
+  theme,
+  onToggleTheme,
+  initialName,
+  language
+}) => {
+  const t = (key: TranslationKey, params?: Record<string, string | number>) =>
+    translate(language, key, params);
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -629,7 +1158,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ theme, onToggleTheme, initialNa
     setError('');
     try {
       if (mode === 'sign-up' && !displayName.trim()) {
-        throw new Error('Please share your name so we can greet you.');
+        throw new Error(t('authErrorNameRequired'));
       }
       if (mode === 'sign-in') {
         await signInWithEmailAndPassword(auth, email, password);
@@ -642,7 +1171,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ theme, onToggleTheme, initialNa
       setDisplayName('');
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Unable to authenticate. Please try again.';
+        err instanceof Error ? err.message : t('authErrorDefault');
       setError(message);
     } finally {
       setSubmitting(false);
@@ -659,15 +1188,15 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ theme, onToggleTheme, initialNa
     <div className={`auth-screen theme-${theme}`}>
       <div className="auth-card">
         <header className="auth-header">
-          <span className="badge badge-live">Welcome back</span>
-          <h1>Access your organizer</h1>
-          <p>Sign in with your email to start planning your day, notes, and finances.</p>
+          <span className="badge badge-live">{t('authBadge')}</span>
+          <h1>{t('authTitle')}</h1>
+          <p>{t('authSubtitle')}</p>
         </header>
 
         <button
           className="theme-toggle auth-toggle"
           onClick={onToggleTheme}
-          aria-label="Toggle color theme"
+          aria-label={t('toggleThemeAria')}
         >
           {theme === 'dark' ? <FaSun /> : <FaMoon />}
         </button>
@@ -675,35 +1204,35 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ theme, onToggleTheme, initialNa
         <form className="auth-form" onSubmit={handleSubmit}>
           {mode === 'sign-up' && (
             <label className="floating-label">
-              <span>Name</span>
+              <span>{t('authNameLabel')}</span>
               <input
                 type="text"
                 value={displayName}
                 onChange={event => setDisplayName(event.target.value)}
-                placeholder="How should we call you?"
+                placeholder={t('authNamePlaceholder')}
                 required
                 autoComplete="name"
               />
             </label>
           )}
           <label className="floating-label">
-            <span>Email</span>
+            <span>{t('authEmailLabel')}</span>
             <input
               type="email"
               value={email}
               onChange={event => setEmail(event.target.value)}
-              placeholder="you@example.com"
+              placeholder={t('authEmailPlaceholder')}
               required
               autoComplete="email"
             />
           </label>
           <label className="floating-label">
-            <span>Password</span>
+            <span>{t('authPasswordLabel')}</span>
             <input
               type="password"
               value={password}
               onChange={event => setPassword(event.target.value)}
-              placeholder="Your secret password"
+              placeholder={t('authPasswordPlaceholder')}
               required
               minLength={6}
               autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
@@ -712,17 +1241,17 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ theme, onToggleTheme, initialNa
           {error && <p className="auth-error">{error}</p>}
           <button className="primary-button auth-submit" type="submit" disabled={submitting}>
             {submitting
-              ? 'Please wait...'
+              ? t('authSubmitLoading')
               : mode === 'sign-in'
-              ? 'Sign in'
-              : 'Create account'}
+              ? t('authSubmitSignIn')
+              : t('authSubmitSignUp')}
           </button>
         </form>
 
         <p className="auth-switch">
-          {mode === 'sign-in' ? "Don't have an account yet?" : 'Already have an account?'}{' '}
+          {mode === 'sign-in' ? t('authSwitchPromptSignIn') : t('authSwitchPromptSignUp')}{' '}
           <button type="button" onClick={toggleMode}>
-            {mode === 'sign-in' ? 'Create one' : 'Sign in instead'}
+            {mode === 'sign-in' ? t('authSwitchCreate') : t('authSwitchSignIn')}
           </button>
         </p>
       </div>
@@ -731,6 +1260,9 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ theme, onToggleTheme, initialNa
 };
 
 const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
+  language,
+  currency,
+  convertAmount,
   upcomingTasks,
   financeSummary,
   latestNote,
@@ -740,11 +1272,13 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
   onAddHabit,
   onToggleHabitDay
 }) => {
+  const t = (key: TranslationKey, params?: Record<string, string | number>) =>
+    translate(language, key, params);
   const [habitDraft, setHabitDraft] = useState('');
   const formatCurrency = (amount: number) =>
-    amount.toLocaleString('en-US', {
+    convertAmount(amount).toLocaleString(getNumberLocale(language), {
       style: 'currency',
-      currency: 'USD'
+      currency
     });
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }).map((_, index) => addDays(weekStart, index));
@@ -755,11 +1289,9 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
     <section className="panel">
       <header className="panel-header">
         <div className="panel-header__titles">
-          <span className="panel-badge">Time &amp; Money Stream</span>
-          <h2>Today&apos;s overview</h2>
-          <p className="panel-subtitle">
-            Keep an eye on the next commitments, fresh notes, and cash flow.
-          </p>
+          <span className="panel-badge">{t('dayFlowBadge')}</span>
+          <h2>{t('dayFlowTitle')}</h2>
+          <p className="panel-subtitle">{t('dayFlowSubtitle')}</p>
         </div>
       </header>
 
@@ -767,22 +1299,22 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
         <article className="card card-forecast">
           <div className="card-heading">
             <div>
-              <span className="card-badge muted">Upcoming focus</span>
+              <span className="card-badge muted">{t('upcomingFocus')}</span>
               {upcomingTasks.length > 0 ? (
                 <h3>
-                  Next: {upcomingTasks[0].title}{' '}
+                  {t('nextLabel')} {upcomingTasks[0].title}{' '}
                   <span className="accent">
-                    {format(parseISO(upcomingTasks[0].date), 'MMM d • h:mm a')}
+                    {formatDate(language, parseISO(upcomingTasks[0].date), 'MMM d • h:mm a')}
                   </span>
                 </h3>
               ) : (
-                <h3>You&apos;re all caught up</h3>
+                <h3>{t('caughtUp')}</h3>
               )}
             </div>
           </div>
           <div className="card-row upcoming-list">
             {upcomingTasks.length === 0 && (
-              <p className="card-row__meta">Add tasks from the calendar tab to see them here.</p>
+              <p className="card-row__meta">{t('addTasksHint')}</p>
             )}
             {upcomingTasks.map(task => (
               <div key={task.id} className="upcoming-item">
@@ -793,7 +1325,7 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
                 <div className="upcoming-info">
                   <p className="card-row__title">{task.title}</p>
                   <span className="card-row__meta">
-                    {format(parseISO(task.date), 'EEEE, MMM d · h:mm a')}
+                    {formatDate(language, parseISO(task.date), 'EEEE, MMM d · h:mm a')}
                   </span>
                 </div>
               </div>
@@ -804,32 +1336,31 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
         <article className="card card-timeline">
           <header className="card-heading">
             <div>
-              <span className="card-badge muted">Financial snapshot</span>
+              <span className="card-badge muted">{t('financialSnapshot')}</span>
               <h3>
-                Balance {formatCurrency(financeSummary.balance)}
-                <span className="card-row__meta">
-                  {' '}
-                  · {formatCurrency(financeSummary.income)} in /{' '}
-                  {formatCurrency(financeSummary.expenses)} out
-                </span>
+                {t('balanceLine', {
+                  balance: formatCurrency(financeSummary.balance),
+                  income: formatCurrency(financeSummary.income),
+                  expenses: formatCurrency(financeSummary.expenses)
+                })}
               </h3>
             </div>
           </header>
           <div className="finance-glance">
             <div className="glance-tile">
-              <span className="tile-label">Income</span>
+              <span className="tile-label">{t('incomeLabel')}</span>
               <span className="tile-value positive">
                 {formatCurrency(financeSummary.income)}
               </span>
             </div>
             <div className="glance-tile">
-              <span className="tile-label">Expenses</span>
+              <span className="tile-label">{t('expensesLabel')}</span>
               <span className="tile-value negative">
                 -{formatCurrency(financeSummary.expenses)}
               </span>
             </div>
             <div className="glance-tile">
-              <span className="tile-label">Net flow</span>
+              <span className="tile-label">{t('netFlowLabel')}</span>
               <span className="tile-value">{formatCurrency(financeSummary.balance)}</span>
             </div>
           </div>
@@ -838,11 +1369,11 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
         <article className="card card-presets">
           <div className="card-heading">
             <div>
-              <span className="card-badge muted">Latest note</span>
+              <span className="card-badge muted">{t('latestNoteBadge')}</span>
               {latestNote ? (
                 <h3>{latestNote.title}</h3>
               ) : (
-                <h3>Create your first note to keep ideas on track</h3>
+                <h3>{t('latestNoteEmptyTitle')}</h3>
               )}
             </div>
           </div>
@@ -855,12 +1386,14 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
                 </p>
               ))}
               <span className="card-row__meta">
-                Updated {format(parseISO(latestNote.updatedAt), 'MMM d, h:mm a')}
+                {t('latestNoteUpdated', {
+                  date: formatDate(language, parseISO(latestNote.updatedAt), 'MMM d, h:mm a')
+                })}
               </span>
             </div>
           ) : (
             <p className="card-row__meta">
-              Head to the notes tab to build your personal wiki with page blocks.
+              {t('latestNoteEmptyHint')}
             </p>
           )}
         </article>
@@ -868,12 +1401,12 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
         <article className="card card-reminders">
           <div className="card-heading">
             <div>
-              <span className="card-badge muted">Reminders</span>
-              <h3>Stay ahead of time-sensitive items</h3>
+              <span className="card-badge muted">{t('remindersBadge')}</span>
+              <h3>{t('remindersTitle')}</h3>
             </div>
           </div>
           {reminderPreview.length === 0 ? (
-            <p className="card-row__meta">Add reminders from the calendar tab to see them here.</p>
+            <p className="card-row__meta">{t('remindersEmptyHint')}</p>
           ) : (
             <div className="reminder-preview">
               {reminderPreview.map(reminder => (
@@ -881,7 +1414,7 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
                   <div>
                     <p className="card-row__title">{reminder.title}</p>
                     <span className="card-row__meta">
-                      {format(parseISO(reminder.date), 'MMM d')} · {reminder.time}
+                      {formatDate(language, parseISO(reminder.date), 'MMM d')} · {reminder.time}
                     </span>
                     {reminder.notes && (
                       <span className="card-row__meta reminder-note">{reminder.notes}</span>
@@ -901,13 +1434,13 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
         <article className="card habit-card">
           <div className="card-heading">
             <div>
-              <span className="card-badge muted">Habit tracker</span>
-              <h3>Build routines with daily wins</h3>
+              <span className="card-badge muted">{t('habitBadge')}</span>
+              <h3>{t('habitTitle')}</h3>
             </div>
             <div className="habit-add">
               <input
                 type="text"
-                placeholder="New habit"
+                placeholder={t('habitPlaceholder')}
                 value={habitDraft}
                 onChange={(event) => setHabitDraft(event.target.value)}
               />
@@ -919,12 +1452,12 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
                   setHabitDraft('');
                 }}
               >
-                <FaPlus /> Add
+                <FaPlus /> {t('addHabit')}
               </button>
             </div>
           </div>
           {habits.length === 0 ? (
-            <p className="card-row__meta">Start by adding a habit you want to keep up this week.</p>
+            <p className="card-row__meta">{t('habitEmptyHint')}</p>
           ) : (
             <div className="habit-list">
               {habits.map(habit => {
@@ -949,8 +1482,12 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
                             className={`habit-day ${isDone ? 'is-done' : ''}`}
                             onClick={() => onToggleHabitDay(habit.id, key)}
                           >
-                            <span className="habit-day-name">{format(day, 'EEE')[0]}</span>
-                            <span className="habit-day-date">{format(day, 'd')}</span>
+                            <span className="habit-day-name">
+                              {formatDate(language, day, 'EEE')[0]}
+                            </span>
+                            <span className="habit-day-date">
+                              {formatDate(language, day, 'd')}
+                            </span>
                           </button>
                         );
                       })}
@@ -967,6 +1504,7 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
 };
 
 type CalendarWorkspaceProps = {
+  language: Language;
   tasks: CalendarTask[];
   reminders: Reminder[];
   onTasksChange: (tasks: CalendarTask[]) => void;
@@ -976,6 +1514,7 @@ type CalendarWorkspaceProps = {
 };
 
 const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
+  language,
   tasks,
   reminders,
   onTasksChange,
@@ -983,6 +1522,8 @@ const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
   onToggleReminder,
   onDeleteReminder
 }) => {
+  const t = (key: TranslationKey, params?: Record<string, string | number>) =>
+    translate(language, key, params);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [draftTitle, setDraftTitle] = useState('');
@@ -1052,15 +1593,15 @@ const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
     <section className="panel calendar-panel">
       <header className="panel-header calendar-header">
         <div className="panel-header__titles">
-          <span className="panel-badge">Calendar</span>
-          <h2>{format(currentDate, 'MMMM yyyy')}</h2>
+          <span className="panel-badge">{t('calendarBadge')}</span>
+          <h2>{formatDate(language, currentDate, 'MMMM yyyy')}</h2>
         </div>
         <div className="panel-controls">
           <button className="pill-control" onClick={() => setCurrentDate(subMonths(currentDate, 1))}>
             <FaArrowLeft />
           </button>
           <button className="pill-control" onClick={() => setCurrentDate(new Date())}>
-            Today
+            {t('todayButton')}
           </button>
           <button className="pill-control" onClick={() => setCurrentDate(addMonths(currentDate, 1))}>
             <FaArrowRight />
@@ -1070,13 +1611,13 @@ const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
 
       <div className="calendar-content">
         <div className="calendar-grid">
-          <div className="calendar-weekday">Mon</div>
-          <div className="calendar-weekday">Tue</div>
-          <div className="calendar-weekday">Wed</div>
-          <div className="calendar-weekday">Thu</div>
-          <div className="calendar-weekday">Fri</div>
-          <div className="calendar-weekday">Sat</div>
-          <div className="calendar-weekday">Sun</div>
+          <div className="calendar-weekday">{t('weekdayMon')}</div>
+          <div className="calendar-weekday">{t('weekdayTue')}</div>
+          <div className="calendar-weekday">{t('weekdayWed')}</div>
+          <div className="calendar-weekday">{t('weekdayThu')}</div>
+          <div className="calendar-weekday">{t('weekdayFri')}</div>
+          <div className="calendar-weekday">{t('weekdaySat')}</div>
+          <div className="calendar-weekday">{t('weekdaySun')}</div>
           {calendarCells.map(cellDate => {
             const dayTasks = tasks
               .filter(task => isSameDay(parseISO(task.date), cellDate))
@@ -1092,7 +1633,7 @@ const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
                 ].join(' ')}
                 onClick={() => setSelectedDate(cellDate)}
               >
-                <span className="calendar-date">{format(cellDate, 'd')}</span>
+                <span className="calendar-date">{formatDate(language, cellDate, 'd')}</span>
                 <div className="calendar-badges">
                   {dayTasks.map(task => (
                     <span
@@ -1105,7 +1646,7 @@ const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
                     </span>
                   ))}
                   {dayTasks.length < tasks.filter(task => isSameDay(parseISO(task.date), cellDate)).length && (
-                    <span className="calendar-more">+more</span>
+                    <span className="calendar-more">{t('calendarMore')}</span>
                   )}
                 </div>
               </button>
@@ -1115,7 +1656,7 @@ const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
 
         <aside className="calendar-sidebar">
           <div className="sidebar-card">
-            <h3>{format(selectedDate, 'EEEE, MMMM d')}</h3>
+            <h3>{formatDate(language, selectedDate, 'EEEE, MMMM d')}</h3>
             <div className="color-palette">
               {taskColorPalette.map(color => (
                 <button
@@ -1127,24 +1668,24 @@ const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
               ))}
             </div>
             <label className="floating-label">
-              <span>Task title</span>
+              <span>{t('taskTitleLabel')}</span>
               <input
                 value={draftTitle}
                 onChange={event => setDraftTitle(event.target.value)}
-                placeholder="Prep slides for sync"
+                placeholder={t('taskTitlePlaceholder')}
               />
             </label>
             <label className="floating-label">
-              <span>Notes</span>
+              <span>{t('notesLabel')}</span>
               <textarea
                 rows={3}
                 value={draftNotes}
                 onChange={event => setDraftNotes(event.target.value)}
-                placeholder="Context, links, or agenda"
+                placeholder={t('taskNotesPlaceholder')}
               />
             </label>
             <label className="floating-label">
-              <span>Time</span>
+              <span>{t('timeLabel')}</span>
               <input
                 type="time"
                 value={draftTime}
@@ -1152,14 +1693,14 @@ const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
               />
             </label>
             <button className="primary-button add-task" onClick={addTask}>
-              <FaPlus /> Add task
+              <FaPlus /> {t('addTask')}
             </button>
           </div>
 
           <div className="sidebar-card task-list-card">
-            <h4>Schedule</h4>
+            <h4>{t('scheduleTitle')}</h4>
             {tasksForSelectedDay.length === 0 ? (
-              <p className="empty-hint">No tasks yet for this day.</p>
+              <p className="empty-hint">{t('noTasksForDay')}</p>
             ) : (
               <ul className="task-list">
                 {tasksForSelectedDay.map(task => (
@@ -1172,13 +1713,13 @@ const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
                       <span className="task-title">{task.title}</span>
                       {task.notes && <span className="task-note">{task.notes}</span>}
                       <span className="task-time">
-                        {format(parseISO(task.date), 'h:mm a')}
+                        {formatDate(language, parseISO(task.date), 'h:mm a')}
                       </span>
                     </div>
                     <button
                       className="icon-button"
                       onClick={() => deleteTask(task.id)}
-                      aria-label="Delete task"
+                      aria-label={t('deleteTaskAria')}
                     >
                       <FaTrash />
                     </button>
@@ -1189,19 +1730,19 @@ const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
           </div>
 
           <div className="sidebar-card reminder-card">
-            <h4>Reminders</h4>
+            <h4>{t('remindersBadge')}</h4>
             <div className="reminder-form">
               <label className="floating-label">
-                <span>Reminder</span>
+                <span>{t('reminderLabel')}</span>
                 <input
                   value={reminderTitle}
                   onChange={event => setReminderTitle(event.target.value)}
-                  placeholder="Add reminder topic"
+                  placeholder={t('reminderPlaceholder')}
                 />
               </label>
               <div className="reminder-form-row">
                 <label className="floating-label">
-                  <span>Time</span>
+                  <span>{t('timeLabel')}</span>
                   <input
                     type="time"
                     value={reminderTime}
@@ -1213,17 +1754,17 @@ const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
                 </button>
               </div>
               <label className="floating-label">
-                <span>Notes</span>
+                <span>{t('notesLabel')}</span>
                 <textarea
                   rows={2}
                   value={reminderNotes}
                   onChange={event => setReminderNotes(event.target.value)}
-                  placeholder="Optional notes"
+                  placeholder={t('reminderNotesPlaceholder')}
                 />
               </label>
             </div>
             {remindersForSelectedDay.length === 0 ? (
-              <p className="empty-hint">No reminders scheduled for this day.</p>
+              <p className="empty-hint">{t('noRemindersForDay')}</p>
             ) : (
               <ul className="reminder-list">
                 {remindersForSelectedDay.map(reminder => (
@@ -1231,7 +1772,7 @@ const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
                     <div className="reminder-info">
                       <span className="reminder-title">{reminder.title}</span>
                       <span className="reminder-meta">
-                        {format(parseISO(reminder.date), 'MMM d')} · {reminder.time}
+                        {formatDate(language, parseISO(reminder.date), 'MMM d')} · {reminder.time}
                       </span>
                       {reminder.notes && (
                         <span className="reminder-meta">{reminder.notes}</span>
@@ -1242,12 +1783,12 @@ const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
                         type="checkbox"
                         checked={reminder.done}
                         onChange={() => onToggleReminder(reminder.id)}
-                        aria-label="Toggle reminder"
+                        aria-label={t('toggleReminderAria')}
                       />
                       <button
                         className="icon-button"
                         onClick={() => onDeleteReminder(reminder.id)}
-                        aria-label="Delete reminder"
+                        aria-label={t('deleteReminderAria')}
                       >
                         <FaTrash />
                       </button>
@@ -1264,11 +1805,14 @@ const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
 };
 
 type NotesWorkspaceProps = {
+  language: Language;
   notes: NotePage[];
   onNotesChange: (notes: NotePage[]) => void;
 };
 
-const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ notes, onNotesChange }) => {
+const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ language, notes, onNotesChange }) => {
+  const t = (key: TranslationKey, params?: Record<string, string | number>) =>
+    translate(language, key, params);
   const [activeNoteType, setActiveNoteType] = useState<'text' | 'checklist'>('text');
   const [activeNoteId, setActiveNoteId] = useState('');
 
@@ -1294,10 +1838,10 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ notes, onNotesChange })
     const defaultBlock: NoteBlock =
       activeNoteType === 'checklist'
         ? { id: createId(), type: 'todo', content: '', checked: false }
-        : { id: createId(), type: 'paragraph', content: 'Start writing...' };
+        : { id: createId(), type: 'paragraph', content: t('startWriting') };
     const newNote: NotePage = {
       id: createId(),
-      title: 'Untitled page',
+      title: t('noteTitlePlaceholder'),
       updatedAt: new Date().toISOString(),
       blocks: [defaultBlock],
       noteType: activeNoteType
@@ -1355,9 +1899,9 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ notes, onNotesChange })
         <aside className="notes-sidebar">
           <div className="sidebar-card">
             <div className="sidebar-header">
-              <h3>Workspace</h3>
+              <h3>{t('notesWorkspaceTitle')}</h3>
               <button className="primary-button ghost" onClick={addNote}>
-                <FaPlus /> New page
+                <FaPlus /> {t('newPage')}
               </button>
             </div>
             <div className="note-type-switch">
@@ -1365,19 +1909,19 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ notes, onNotesChange })
                 className={activeNoteType === 'text' ? 'is-active' : ''}
                 onClick={() => setActiveNoteType('text')}
               >
-                <FaStickyNote /> Text
+                <FaStickyNote /> {t('noteTypeText')}
               </button>
               <button
                 className={activeNoteType === 'checklist' ? 'is-active' : ''}
                 onClick={() => setActiveNoteType('checklist')}
               >
-                <FaTasks /> Checklist
+                <FaTasks /> {t('noteTypeChecklist')}
               </button>
             </div>
             <ul className="notes-list">
               {filteredNotes.length === 0 ? (
                 <li className="notes-list-empty">
-                  No {activeNoteType === 'text' ? 'text notes' : 'checklists'} yet.
+                  {activeNoteType === 'text' ? t('noTextNotes') : t('noChecklists')}
                 </li>
               ) : (
                 filteredNotes.map(note => (
@@ -1387,10 +1931,10 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ notes, onNotesChange })
                   >
                     <button onClick={() => setActiveNoteId(note.id)}>
                       <span className="note-title">
-                        {note.title || 'Untitled'}
+                        {note.title || t('untitled')}
                       </span>
                       <span className="note-updated">
-                        {format(parseISO(note.updatedAt), 'MMM d · h:mm a')}
+                        {formatDate(language, parseISO(note.updatedAt), 'MMM d · h:mm a')}
                       </span>
                     </button>
                     <button className="icon-button" onClick={() => deleteNote(note.id)}>
@@ -1416,7 +1960,7 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ notes, onNotesChange })
                     updatedAt: new Date().toISOString()
                   }))
                 }
-                placeholder="Untitled page"
+                placeholder={t('noteTitlePlaceholder')}
               />
 
               <div className="blocks">
@@ -1435,7 +1979,7 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ notes, onNotesChange })
                           onChange={event =>
                             updateBlockContent(activeNote.id, block.id, event.target.value)
                           }
-                          placeholder="Describe the task"
+                          placeholder={t('todoPlaceholder')}
                         />
                       </label>
                     ) : (
@@ -1452,7 +1996,7 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ notes, onNotesChange })
                             addBlock(activeNote.id, index);
                           }
                         }}
-                        placeholder="Write your thoughts..."
+                        placeholder={t('textPlaceholder')}
                       />
                     )}
                   </div>
@@ -1461,14 +2005,14 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ notes, onNotesChange })
                   className="ghost-button add-block"
                   onClick={() => addBlock(activeNote.id, activeNote.blocks.length - 1)}
                 >
-                  <FaPlus /> Add {activeNote.noteType === 'checklist' ? 'item' : 'paragraph'}
+                  <FaPlus /> {activeNote.noteType === 'checklist' ? t('addItem') : t('addParagraph')}
                 </button>
               </div>
             </div>
           ) : (
             <div className="empty-note">
-              <h3>No page selected</h3>
-              <p>Create or choose a page from the left panel to start writing.</p>
+              <h3>{t('noPageSelected')}</h3>
+              <p>{t('noPageSelectedHint')}</p>
             </div>
           )}
         </div>
@@ -1478,6 +2022,10 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ notes, onNotesChange })
 };
 
 type FinanceWorkspaceProps = {
+  language: Language;
+  currency: Currency;
+  convertAmount: (amount: number) => number;
+  convertToBase: (amount: number) => number;
   categories: Category[];
   onCategoriesChange: (categories: Category[]) => void;
   transactions: Transaction[];
@@ -1485,11 +2033,17 @@ type FinanceWorkspaceProps = {
 };
 
 const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
+  language,
+  currency,
+  convertAmount,
+  convertToBase,
   categories,
   onCategoriesChange,
   transactions,
   onTransactionsChange
 }) => {
+  const t = (key: TranslationKey, params?: Record<string, string | number>) =>
+    translate(language, key, params);
   const [draft, setDraft] = useState({
     type: 'income' as 'income' | 'expense',
     amount: '',
@@ -1532,7 +2086,7 @@ const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
     const transaction: Transaction = {
       id: createId(),
       type: draft.type,
-      amount,
+      amount: convertToBase(amount),
       categoryId: draft.categoryId,
       description: draft.description.trim(),
       date: new Date().toISOString()
@@ -1552,61 +2106,75 @@ const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
     setCategoryDraft({ name: '', type: 'expense' });
   };
 
+  const deleteCategory = (categoryId: string) => {
+    onCategoriesChange(categories.filter(category => category.id !== categoryId));
+    setDraft(prev => (prev.categoryId === categoryId ? { ...prev, categoryId: '' } : prev));
+  };
+
   const deleteTransaction = (id: string) => {
     onTransactionsChange(transactions.filter(tx => tx.id !== id));
   };
 
   const formatCurrency = (amount: number) =>
-    amount.toLocaleString('en-US', {
+    convertAmount(amount).toLocaleString(getNumberLocale(language), {
       style: 'currency',
-      currency: 'USD'
+      currency
     });
 
   const resolveCategory = (categoryId: string) =>
-    categories.find(category => category.id === categoryId)?.name ?? 'Uncategorized';
+    categories.find(category => category.id === categoryId)?.name ?? t('uncategorized');
 
   return (
     <section className="panel finance-panel">
       <div className="finance-upper">
         <div className="finance-summary-grid">
           <div className="summary-card">
-            <span className="tile-label">Balance</span>
+            <span className="tile-label">{t('financeBalance')}</span>
             <span className="tile-value">{formatCurrency(totals.balance)}</span>
           </div>
           <div className="summary-card positive">
-            <span className="tile-label">Income</span>
+            <span className="tile-label">{t('financeIncome')}</span>
             <span className="tile-value">{formatCurrency(totals.income)}</span>
           </div>
           <div className="summary-card negative">
-            <span className="tile-label">Expenses</span>
+            <span className="tile-label">{t('financeExpenses')}</span>
             <span className="tile-value">-{formatCurrency(totals.expenses)}</span>
           </div>
         </div>
         <div className="category-card">
           <header>
-            <span className="card-badge muted">Categories</span>
-            <h3>Group your cash flow</h3>
+            <span className="card-badge muted">{t('categoriesBadge')}</span>
+            <h3>{t('categoriesTitle')}</h3>
           </header>
           <div className="category-quick-list">
             {categories.map(category => (
-              <span key={category.id} className="category-chip">
-                <FaTag /> {category.name}
-              </span>
+              <div key={category.id} className="category-chip">
+                <FaTag />
+                <span>{category.name}</span>
+                <button
+                  type="button"
+                  className="category-remove"
+                  onClick={() => deleteCategory(category.id)}
+                  aria-label={t('deleteCategoryAria', { name: category.name })}
+                >
+                  <FaTimes />
+                </button>
+              </div>
             ))}
           </div>
           <div className="category-form">
             <label className="floating-label">
-              <span>Name</span>
+              <span>{t('categoryNameLabel')}</span>
               <input
                 value={categoryDraft.name}
                 onChange={event =>
                   setCategoryDraft(prev => ({ ...prev, name: event.target.value }))
                 }
-                placeholder="e.g. Subscriptions"
+                placeholder={t('categoryNamePlaceholder')}
               />
             </label>
             <label className="floating-label">
-              <span>Type</span>
+              <span>{t('categoryTypeLabel')}</span>
               <select
                 value={categoryDraft.type}
                 onChange={event =>
@@ -1616,12 +2184,12 @@ const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
                   }))
                 }
               >
-                <option value="income">Income</option>
-                <option value="expense">Expense</option>
+                <option value="income">{t('categoryTypeIncome')}</option>
+                <option value="expense">{t('categoryTypeExpense')}</option>
               </select>
             </label>
             <button className="ghost-button" onClick={addCategory}>
-              <FaPlus /> Add category
+              <FaPlus /> {t('addCategory')}
             </button>
           </div>
         </div>
@@ -1629,7 +2197,7 @@ const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
 
       <div className="finance-lower">
         <div className="transaction-form-card">
-          <h3>Log a transaction</h3>
+          <h3>{t('logTransactionTitle')}</h3>
           <div className="type-toggle">
             {(['income', 'expense'] as const).map(type => (
               <button
@@ -1637,12 +2205,12 @@ const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
                 className={`type-pill ${draft.type === type ? 'is-active' : ''}`}
                 onClick={() => setDraft(prev => ({ ...prev, type, categoryId: '' }))}
               >
-                {type}
+                {type === 'income' ? t('transactionTypeIncome') : t('transactionTypeExpense')}
               </button>
             ))}
           </div>
           <label className="floating-label">
-            <span>Amount</span>
+            <span>{t('amountLabel')}</span>
             <input
               type="number"
               value={draft.amount}
@@ -1651,17 +2219,17 @@ const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
             />
           </label>
           <label className="floating-label">
-            <span>Description</span>
+            <span>{t('descriptionLabel')}</span>
             <input
               value={draft.description}
               onChange={event =>
                 setDraft(prev => ({ ...prev, description: event.target.value }))
               }
-              placeholder="What is this for?"
+              placeholder={t('descriptionPlaceholder')}
             />
           </label>
           <label className="floating-label">
-            <span>Category</span>
+            <span>{t('categoryLabel')}</span>
             <select
               value={draft.categoryId}
               onChange={event =>
@@ -1669,7 +2237,7 @@ const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
               }
             >
               <option value="" disabled>
-                Choose category
+                {t('chooseCategory')}
               </option>
               {relevantCategories.map(category => (
                 <option key={category.id} value={category.id}>
@@ -1679,14 +2247,14 @@ const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
             </select>
           </label>
           <button className="primary-button add-transaction" onClick={addTransaction}>
-            <FaPlus /> Save transaction
+            <FaPlus /> {t('saveTransaction')}
           </button>
         </div>
 
         <div className="transactions-card">
-          <h3>Recent activity</h3>
+          <h3>{t('recentActivity')}</h3>
           {transactions.length === 0 ? (
-            <p className="empty-hint">No transactions logged yet.</p>
+            <p className="empty-hint">{t('noTransactions')}</p>
           ) : (
             <ul className="transactions-list">
               {transactions.map(tx => (
@@ -1695,7 +2263,7 @@ const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
                     <span className="category-tag">{resolveCategory(tx.categoryId)}</span>
                     <p className="transaction-description">{tx.description}</p>
                     <span className="transaction-date">
-                      {format(parseISO(tx.date), 'MMM d, h:mm a')}
+                      {formatDate(language, parseISO(tx.date), 'MMM d, h:mm a')}
                     </span>
                   </div>
                   <div className="transaction-meta">
@@ -1706,7 +2274,7 @@ const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
                     <button
                       className="icon-button"
                       onClick={() => deleteTransaction(tx.id)}
-                      aria-label="Delete transaction"
+                      aria-label={t('deleteTransactionAria')}
                     >
                       <FaTrash />
                     </button>
@@ -1715,6 +2283,101 @@ const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
               ))}
             </ul>
           )}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+type SettingsPanelProps = {
+  language: Language;
+  onLanguageChange: (language: Language) => void;
+  currency: Currency;
+  onCurrencyChange: (currency: Currency) => void;
+  ratesUpdatedAt: string | null;
+  ratesStatus: 'idle' | 'loading' | 'error';
+  onRefreshRates: () => void;
+};
+
+const SettingsPanel: React.FC<SettingsPanelProps> = ({
+  language,
+  onLanguageChange,
+  currency,
+  onCurrencyChange,
+  ratesUpdatedAt,
+  ratesStatus,
+  onRefreshRates
+}) => {
+  const t = (key: TranslationKey, params?: Record<string, string | number>) =>
+    translate(language, key, params);
+  const languageSelectId = 'settings-language';
+  const currencySelectId = 'settings-currency';
+
+  const ratesLabel = () => {
+    if (ratesStatus === 'loading') return t('ratesUpdating');
+    if (ratesStatus === 'error') return t('ratesUnavailable');
+    if (!ratesUpdatedAt) return t('ratesUnavailable');
+    return t('ratesUpdated', {
+      date: formatDate(language, new Date(ratesUpdatedAt), 'MMM d, yyyy p')
+    });
+  };
+
+  return (
+    <section className="panel settings-panel">
+      <header className="panel-header">
+        <div className="panel-header__titles">
+          <span className="panel-badge">{t('settingsBadge')}</span>
+          <h2>{t('settingsTitle')}</h2>
+          <p className="panel-subtitle">{t('settingsSubtitle')}</p>
+        </div>
+      </header>
+      <div className="settings-grid">
+        <div className="settings-card">
+          <div className="settings-row">
+            <div>
+              <label className="settings-label" htmlFor={languageSelectId}>
+                {t('languageLabel')}
+              </label>
+              <p>{t('languageDescription')}</p>
+            </div>
+            <div className="settings-control">
+              <select
+                id={languageSelectId}
+                value={language}
+                onChange={event => onLanguageChange(event.target.value as Language)}
+              >
+                <option value="en">{t('languageOptionEnglish')}</option>
+                <option value="ru">{t('languageOptionRussian')}</option>
+              </select>
+              <span className="settings-hint">{t('changesApplyInstantly')}</span>
+            </div>
+          </div>
+          <div className="settings-row">
+            <div>
+              <label className="settings-label" htmlFor={currencySelectId}>
+                {t('currencyLabel')}
+              </label>
+              <p>{t('currencyDescription')}</p>
+            </div>
+            <div className="settings-control">
+              <select
+                id={currencySelectId}
+                value={currency}
+                onChange={event => onCurrencyChange(event.target.value as Currency)}
+              >
+                <option value="USD">{t('currencyOptionUSD')}</option>
+                <option value="EUR">{t('currencyOptionEUR')}</option>
+                <option value="GBP">{t('currencyOptionGBP')}</option>
+                <option value="RUB">{t('currencyOptionRUB')}</option>
+              </select>
+              <div className="settings-actions">
+                <span className="settings-hint">{ratesLabel()}</span>
+                <button className="ghost-button" onClick={onRefreshRates} type="button">
+                  {t('refreshRates')}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
