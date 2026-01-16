@@ -35,8 +35,10 @@ import {
   signInWithEmailAndPassword,
   signOut
 } from 'firebase/auth';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import './App.css';
-import { auth } from './src/firebase';
+import { auth, db, functions } from './src/firebase';
 import { useTelegramWebApp } from './hooks/useTelegramWebApp';
 
 type Theme = 'dark' | 'light';
@@ -300,6 +302,16 @@ const translations = {
     ratesUpdating: 'Updating exchange rates...',
     ratesUnavailable: 'Exchange rates unavailable. Using cached data.',
     refreshRates: 'Refresh rates',
+    adminPanelTitle: 'Admin broadcast',
+    adminPanelSubtitle: 'Send an update to everyone who opened the web app.',
+    broadcastLabel: 'Update message',
+    broadcastPlaceholder: 'We just shipped new updates. Open the app to see them.',
+    broadcastSend: 'Send update',
+    broadcastSending: 'Sending...',
+    broadcastSuccess: 'Update sent to {count} users.',
+    broadcastError: 'Failed to send the update.',
+    broadcastEmpty: 'Please write a message first.',
+    adminUnauthorized: 'You do not have access to admin tools.',
     changesApplyInstantly: 'Changes apply instantly.',
     telegramReminderLine: 'Reminder: {title}\n{date} at {time}'
   },
@@ -441,6 +453,16 @@ const translations = {
     ratesUpdating: 'Обновляем курсы...',
     ratesUnavailable: 'Курсы недоступны. Используем кеш.',
     refreshRates: 'Обновить курсы',
+    adminPanelTitle: 'Админ рассылка',
+    adminPanelSubtitle: 'Отправьте обновление всем, кто открывал веб‑приложение.',
+    broadcastLabel: 'Текст обновления',
+    broadcastPlaceholder: 'Мы выкатили обновление. Откройте приложение.',
+    broadcastSend: 'Отправить',
+    broadcastSending: 'Отправляем...',
+    broadcastSuccess: 'Отправлено {count} пользователям.',
+    broadcastError: 'Не удалось отправить сообщение.',
+    broadcastEmpty: 'Сначала введите текст.',
+    adminUnauthorized: 'У вас нет доступа к админ‑инструментам.',
     changesApplyInstantly: 'Изменения применяются сразу.',
     telegramReminderLine: 'Напоминание: {title}\n{date} в {time}'
   }
@@ -566,6 +588,11 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<PrimaryTab>('day-flow');
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminLoading, setAdminLoading] = useState(true);
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [broadcastStatus, setBroadcastStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
+  const [broadcastCount, setBroadcastCount] = useState<number | null>(null);
   const prevUserId = useRef<string | null>(null);
 
   const [tasks, setTasks] = useState<CalendarTask[]>([]);
@@ -663,6 +690,20 @@ const App: React.FC = () => {
     });
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setIsAdmin(false);
+      setAdminLoading(false);
+      return;
+    }
+    setAdminLoading(true);
+    user
+      .getIdTokenResult()
+      .then(result => setIsAdmin(Boolean(result.claims.admin)))
+      .catch(() => setIsAdmin(false))
+      .finally(() => setAdminLoading(false));
+  }, [user]);
 
   const storageKey = (uid: string, key: string) => `enma.${uid}.${key}`;
 
@@ -808,6 +849,27 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [telegram, language]);
 
+  useEffect(() => {
+    if (!user || !telegram?.initDataUnsafe?.user?.id) return;
+    const tgUser = telegram.initDataUnsafe.user;
+    const docRef = doc(db, 'telegramUsers', `tg_${tgUser.id}`);
+    setDoc(
+      docRef,
+      {
+        chatId: tgUser.id,
+        username: tgUser.username ?? null,
+        firstName: tgUser.first_name ?? null,
+        lastName: tgUser.last_name ?? null,
+        languageCode: tgUser.language_code ?? null,
+        firebaseUid: user.uid,
+        updatedAt: serverTimestamp()
+      },
+      { merge: true }
+    ).catch(error => {
+      console.warn('Failed to sync Telegram user', error);
+    });
+  }, [user, telegram]);
+
   const upcomingTasks = useMemo(() => {
     const today = new Date();
     return [...tasks]
@@ -849,6 +911,33 @@ const App: React.FC = () => {
   const updateCurrency = (next: Currency) => {
     if (next === currency) return;
     setCurrency(next);
+  };
+
+  useEffect(() => {
+    if (broadcastStatus === 'success' || broadcastStatus === 'error') {
+      setBroadcastStatus('idle');
+      setBroadcastCount(null);
+    }
+  }, [broadcastMessage, broadcastStatus]);
+
+  const sendBroadcast = async () => {
+    const message = broadcastMessage.trim();
+    if (!message) {
+      setBroadcastStatus('error');
+      return;
+    }
+    setBroadcastStatus('sending');
+    setBroadcastCount(null);
+    try {
+      const callable = httpsCallable(functions, 'broadcastUpdate');
+      const result = await callable({ message });
+      const payload = result.data as { count?: number };
+      setBroadcastCount(typeof payload?.count === 'number' ? payload.count : null);
+      setBroadcastStatus('success');
+    } catch (error) {
+      console.warn('Failed to send broadcast', error);
+      setBroadcastStatus('error');
+    }
   };
 
   const loadExchangeRates = useCallback(async (force = false) => {
@@ -1110,6 +1199,13 @@ const App: React.FC = () => {
             ratesUpdatedAt={ratesUpdatedAt}
             ratesStatus={ratesStatus}
             onRefreshRates={() => loadExchangeRates(true)}
+            isAdmin={isAdmin}
+            adminLoading={adminLoading}
+            broadcastMessage={broadcastMessage}
+            onBroadcastChange={setBroadcastMessage}
+            onBroadcastSend={sendBroadcast}
+            broadcastStatus={broadcastStatus}
+            broadcastCount={broadcastCount}
           />
         )}
       </main>
@@ -2318,6 +2414,13 @@ type SettingsPanelProps = {
   ratesUpdatedAt: string | null;
   ratesStatus: 'idle' | 'loading' | 'error';
   onRefreshRates: () => void;
+  isAdmin: boolean;
+  adminLoading: boolean;
+  broadcastMessage: string;
+  onBroadcastChange: (value: string) => void;
+  onBroadcastSend: () => void;
+  broadcastStatus: 'idle' | 'sending' | 'success' | 'error';
+  broadcastCount: number | null;
 };
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
@@ -2327,7 +2430,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onCurrencyChange,
   ratesUpdatedAt,
   ratesStatus,
-  onRefreshRates
+  onRefreshRates,
+  isAdmin,
+  adminLoading,
+  broadcastMessage,
+  onBroadcastChange,
+  onBroadcastSend,
+  broadcastStatus,
+  broadcastCount
 }) => {
   const t = (key: TranslationKey, params?: Record<string, string | number>) =>
     translate(language, key, params);
@@ -2400,6 +2510,51 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             </div>
           </div>
         </div>
+        {!adminLoading && (
+          <div className="settings-card admin-card">
+            <header className="settings-admin-header">
+              <h3>{t('adminPanelTitle')}</h3>
+              <p>{t('adminPanelSubtitle')}</p>
+            </header>
+            {isAdmin ? (
+              <div className="settings-admin-body">
+                <label className="floating-label">
+                  <span>{t('broadcastLabel')}</span>
+                  <textarea
+                    rows={3}
+                    value={broadcastMessage}
+                    onChange={event => onBroadcastChange(event.target.value)}
+                    placeholder={t('broadcastPlaceholder')}
+                  />
+                </label>
+                <div className="settings-admin-actions">
+                  <button
+                    className="primary-button"
+                    type="button"
+                    onClick={onBroadcastSend}
+                    disabled={broadcastStatus === 'sending'}
+                  >
+                    {broadcastStatus === 'sending' ? t('broadcastSending') : t('broadcastSend')}
+                  </button>
+                  {broadcastStatus === 'success' && (
+                    <span className="settings-hint">
+                      {t('broadcastSuccess', { count: broadcastCount ?? 0 })}
+                    </span>
+                  )}
+                  {broadcastStatus === 'error' && (
+                    <span className="settings-hint settings-error">
+                      {broadcastMessage.trim()
+                        ? t('broadcastError')
+                        : t('broadcastEmpty')}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <span className="settings-hint">{t('adminUnauthorized')}</span>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );
