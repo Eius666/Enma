@@ -2005,7 +2005,7 @@ body.theme-light .tile-value.negative {
   }
 
   .app-shell {
-    padding: 32px 16px 48px;
+    padding: calc(32px + env(safe-area-inset-top)) 16px 48px;
     width: 100%;
   }
 
