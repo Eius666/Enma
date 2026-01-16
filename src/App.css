@@ -2014,6 +2014,11 @@ body.theme-light .tile-value.negative {
     gap: 18px;
   }
 
+  .hero-card .app-mark {
+    align-self: center;
+    text-align: center;
+  }
+
   .hero-actions {
     flex-direction: row;
     flex-wrap: wrap;
