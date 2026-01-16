@@ -896,6 +896,27 @@ body.theme-light .tile-value.negative {
   justify-content: center;
 }
 
+.habit-checkin .card-heading {
+  gap: 12px;
+}
+
+.habit-checkin .card-badge {
+  margin-top: -8px;
+}
+
+.habit-checkin .habit-subtitle {
+  margin-top: 2px;
+}
+
+.habit-checkin.is-empty {
+  min-height: 240px;
+}
+
+.habit-checkin.is-empty {
+  min-height: auto;
+  justify-content: flex-start;
+}
+
 .habit-card .card-heading {
   flex-wrap: wrap;
   align-items: flex-start;
@@ -960,15 +981,15 @@ body.theme-light .tile-value.negative {
 .habit-checkin-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .habit-checkin-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: 8px;
+  padding: 10px 12px;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -977,7 +998,7 @@ body.theme-light .tile-value.negative {
 .habit-checkin-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .habit-checkin-toggle {
@@ -2138,6 +2159,10 @@ body.theme-light .tile-value.negative {
 
   .habit-card.is-empty {
     min-height: 190px;
+  }
+
+  .habit-checkin.is-empty {
+    min-height: auto;
   }
 
   .habit-list {
