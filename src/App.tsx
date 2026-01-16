@@ -44,7 +44,7 @@ import { useTelegramWebApp } from './hooks/useTelegramWebApp';
 type Theme = 'dark' | 'light';
 type Language = 'en' | 'ru';
 type Currency = 'USD' | 'EUR' | 'GBP' | 'RUB';
-type PrimaryTab = 'day-flow' | 'calendar' | 'notes' | 'finance' | 'settings';
+type PrimaryTab = 'day-flow' | 'calendar' | 'notes' | 'finance' | 'habits' | 'settings';
 
 type CalendarTask = {
   id: string;
@@ -194,6 +194,7 @@ const translations = {
     tabCalendar: 'calendar',
     tabNotes: 'notes',
     tabFinance: 'finance',
+    tabHabits: 'habits',
     tabSettings: 'settings',
     dayFlowBadge: 'Time & Money Stream',
     dayFlowTitle: "Today's overview",
@@ -215,11 +216,16 @@ const translations = {
     remindersTitle: 'Stay ahead of time-sensitive items',
     remindersEmptyHint: 'Add reminders from the calendar tab to see them here.',
     habitBadge: 'Habit tracker',
-  habitTitle: 'Build routines with daily wins',
-  habitPlaceholder: 'New habit',
-  addHabit: 'Add',
-  deleteHabitAria: 'Delete habit {name}',
-  habitEmptyHint: 'Start by adding a habit you want to keep up this week.',
+    habitTitle: 'Build routines with daily wins',
+    habitCheckinTitle: 'Today’s check-in',
+    habitCheckinSubtitle: 'Tap each habit you complete today.',
+    habitPlaceholder: 'New habit',
+    addHabit: 'Add',
+    deleteHabitAria: 'Delete habit {name}',
+    habitEmptyHint: 'Start by adding a habit you want to keep up this week.',
+    habitCheckinEmpty: 'Add habits in the Habits tab to see daily check-ins.',
+    habitsWorkspaceTitle: 'Habit workspace',
+    habitsWorkspaceSubtitle: 'Create, edit, and review your weekly habits here.',
     calendarBadge: 'Calendar',
     todayButton: 'Today',
     weekdayMon: 'Mon',
@@ -335,6 +341,7 @@ const translations = {
     tabCalendar: 'календарь',
     tabNotes: 'заметки',
     tabFinance: 'финансы',
+    tabHabits: 'привычки',
     tabSettings: 'настройки',
     dayFlowBadge: 'Поток времени и денег',
     dayFlowTitle: 'Обзор на сегодня',
@@ -356,11 +363,16 @@ const translations = {
     remindersTitle: 'Не пропускайте важные моменты',
     remindersEmptyHint: 'Добавьте напоминания в календаре, и они появятся здесь.',
     habitBadge: 'Трекер привычек',
-  habitTitle: 'Закрепляйте рутину ежедневными победами',
-  habitPlaceholder: 'Новая привычка',
-  addHabit: 'Добавить',
-  deleteHabitAria: 'Удалить привычку {name}',
-  habitEmptyHint: 'Начните с привычки, которую хотите удерживать на этой неделе.',
+    habitTitle: 'Закрепляйте рутину ежедневными победами',
+    habitCheckinTitle: 'Отметки на сегодня',
+    habitCheckinSubtitle: 'Отмечайте привычки, которые выполнили сегодня.',
+    habitPlaceholder: 'Новая привычка',
+    addHabit: 'Добавить',
+    deleteHabitAria: 'Удалить привычку {name}',
+    habitEmptyHint: 'Начните с привычки, которую хотите удерживать на этой неделе.',
+    habitCheckinEmpty: 'Добавьте привычки во вкладке «Привычки», чтобы отмечать их.',
+    habitsWorkspaceTitle: 'Рабочее пространство привычек',
+    habitsWorkspaceSubtitle: 'Создавайте, редактируйте и отслеживайте привычки.',
     calendarBadge: 'Календарь',
     todayButton: 'Сегодня',
     weekdayMon: 'Пн',
@@ -1081,6 +1093,7 @@ const App: React.FC = () => {
           { id: 'calendar', label: t('tabCalendar') },
           { id: 'notes', label: t('tabNotes') },
           { id: 'finance', label: t('tabFinance') },
+          { id: 'habits', label: t('tabHabits') },
           { id: 'settings', label: t('tabSettings') }
         ] as const).map(tab => (
           <button
@@ -1105,9 +1118,7 @@ const App: React.FC = () => {
             reminders={upcomingReminders}
             onToggleReminder={toggleReminder}
             habits={habits}
-            onAddHabit={addHabit}
             onToggleHabitDay={toggleHabitDay}
-            onDeleteHabit={deleteHabit}
           />
         )}
         {activeTab === 'calendar' && (
@@ -1136,6 +1147,15 @@ const App: React.FC = () => {
             onTransactionsChange={setTransactions}
           />
         )}
+        {activeTab === 'habits' && (
+          <HabitsWorkspace
+            language={language}
+            habits={habits}
+            onAddHabit={addHabit}
+            onToggleHabitDay={toggleHabitDay}
+            onDeleteHabit={deleteHabit}
+          />
+        )}
         {activeTab === 'settings' && (
           <SettingsPanel
             language={language}
@@ -1162,9 +1182,7 @@ type DayFlowOverviewProps = {
   reminders: Reminder[];
   onToggleReminder: (id: string) => void;
   habits: Habit[];
-  onAddHabit: (name: string) => void;
   onToggleHabitDay: (habitId: string, dateKey: string) => void;
-  onDeleteHabit: (habitId: string) => void;
 };
 
 type AuthScreenProps = {
@@ -1312,22 +1330,18 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
   reminders,
   onToggleReminder,
   habits,
-  onAddHabit,
-  onToggleHabitDay,
-  onDeleteHabit
+  onToggleHabitDay
 }) => {
   const t = (key: TranslationKey, params?: Record<string, string | number>) =>
     translate(language, key, params);
-  const [habitDraft, setHabitDraft] = useState('');
   const formatCurrency = (amount: number) =>
     convertAmount(amount).toLocaleString(getNumberLocale(language), {
       style: 'currency',
       currency
     });
-  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-  const weekDays = Array.from({ length: 7 }).map((_, index) => addDays(weekStart, index));
-  const dayKeys = weekDays.map(day => format(day, 'yyyy-MM-dd'));
   const reminderPreview = useMemo(() => reminders.slice(0, 4), [reminders]);
+  const todayKey = format(new Date(), 'yyyy-MM-dd');
+  const todayLabel = formatDate(language, new Date(), 'EEEE, MMM d');
 
   return (
     <section className="panel">
@@ -1479,75 +1493,29 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
           <div className="card-heading">
             <div>
               <span className="card-badge muted">{t('habitBadge')}</span>
-              <h3>{t('habitTitle')}</h3>
-            </div>
-            <div className="habit-add">
-              <input
-                type="text"
-                placeholder={t('habitPlaceholder')}
-                value={habitDraft}
-                onChange={(event) => setHabitDraft(event.target.value)}
-              />
-              <button
-                className="ghost-button"
-                onClick={() => {
-                  if (!habitDraft.trim()) return;
-                  onAddHabit(habitDraft);
-                  setHabitDraft('');
-                }}
-              >
-                <FaPlus /> {t('addHabit')}
-              </button>
+              <h3>{t('habitCheckinTitle')}</h3>
+              <p className="card-row__meta habit-subtitle">{t('habitCheckinSubtitle')}</p>
             </div>
           </div>
           {habits.length === 0 ? (
-            <p className="card-row__meta">{t('habitEmptyHint')}</p>
+            <p className="card-row__meta">{t('habitCheckinEmpty')}</p>
           ) : (
-            <div className="habit-list">
+            <div className="habit-checkin-list">
               {habits.map(habit => {
-                const completedCount = dayKeys.filter(key => habit.history[key]).length;
-                const progress = Math.round((completedCount / dayKeys.length) * 100);
+                const isDone = habit.history[todayKey];
                 return (
-                  <div key={habit.id} className="habit-row">
-                    <div className="habit-title">
-                      <div className="habit-title-row">
-                        <strong>{habit.title}</strong>
-                        <div className="habit-title-actions">
-                          <span className="habit-progress-label">{progress}%</span>
-                          <button
-                            type="button"
-                            className="habit-delete"
-                            onClick={() => onDeleteHabit(habit.id)}
-                            aria-label={t('deleteHabitAria', { name: habit.title })}
-                          >
-                            <FaTrash />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="habit-progress">
-                        <span style={{ width: `${progress}%` }} />
-                      </div>
+                  <div key={habit.id} className="habit-checkin-row">
+                    <div className="habit-checkin-info">
+                      <strong>{habit.title}</strong>
+                      <span className="card-row__meta">{todayLabel}</span>
                     </div>
-                    <div className="habit-days">
-                      {weekDays.map((day, index) => {
-                        const key = dayKeys[index];
-                        const isDone = habit.history[key];
-                        return (
-                          <button
-                            key={key}
-                            className={`habit-day ${isDone ? 'is-done' : ''}`}
-                            onClick={() => onToggleHabitDay(habit.id, key)}
-                          >
-                            <span className="habit-day-name">
-                              {formatDate(language, day, 'EEE')[0]}
-                            </span>
-                            <span className="habit-day-date">
-                              {formatDate(language, day, 'd')}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <button
+                      className={`habit-checkin-toggle ${isDone ? 'is-done' : ''}`}
+                      onClick={() => onToggleHabitDay(habit.id, todayKey)}
+                      type="button"
+                    >
+                      {isDone ? '✓' : '○'}
+                    </button>
                   </div>
                 );
               })}
@@ -2072,6 +2040,122 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ language, notes, onNote
             </div>
           )}
         </div>
+      </div>
+    </section>
+  );
+};
+
+type HabitsWorkspaceProps = {
+  language: Language;
+  habits: Habit[];
+  onAddHabit: (name: string) => void;
+  onToggleHabitDay: (habitId: string, dateKey: string) => void;
+  onDeleteHabit: (habitId: string) => void;
+};
+
+const HabitsWorkspace: React.FC<HabitsWorkspaceProps> = ({
+  language,
+  habits,
+  onAddHabit,
+  onToggleHabitDay,
+  onDeleteHabit
+}) => {
+  const t = (key: TranslationKey, params?: Record<string, string | number>) =>
+    translate(language, key, params);
+  const [habitDraft, setHabitDraft] = useState('');
+  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const weekDays = Array.from({ length: 7 }).map((_, index) => addDays(weekStart, index));
+  const dayKeys = weekDays.map(day => format(day, 'yyyy-MM-dd'));
+
+  return (
+    <section className="panel habits-panel">
+      <header className="panel-header">
+        <div className="panel-header__titles">
+          <span className="panel-badge">{t('habitBadge')}</span>
+          <h2>{t('habitsWorkspaceTitle')}</h2>
+          <p className="panel-subtitle">{t('habitsWorkspaceSubtitle')}</p>
+        </div>
+      </header>
+      <div className="panel-body">
+        <article className="card habit-card">
+          <div className="card-heading">
+            <div>
+              <span className="card-badge muted">{t('habitBadge')}</span>
+              <h3>{t('habitTitle')}</h3>
+            </div>
+            <div className="habit-add">
+              <input
+                type="text"
+                placeholder={t('habitPlaceholder')}
+                value={habitDraft}
+                onChange={(event) => setHabitDraft(event.target.value)}
+              />
+              <button
+                className="ghost-button"
+                onClick={() => {
+                  if (!habitDraft.trim()) return;
+                  onAddHabit(habitDraft);
+                  setHabitDraft('');
+                }}
+              >
+                <FaPlus /> {t('addHabit')}
+              </button>
+            </div>
+          </div>
+          {habits.length === 0 ? (
+            <p className="card-row__meta">{t('habitEmptyHint')}</p>
+          ) : (
+            <div className="habit-list">
+              {habits.map(habit => {
+                const completedCount = dayKeys.filter(key => habit.history[key]).length;
+                const progress = Math.round((completedCount / dayKeys.length) * 100);
+                return (
+                  <div key={habit.id} className="habit-row">
+                    <div className="habit-title">
+                      <div className="habit-title-row">
+                        <strong>{habit.title}</strong>
+                        <div className="habit-title-actions">
+                          <span className="habit-progress-label">{progress}%</span>
+                          <button
+                            type="button"
+                            className="habit-delete"
+                            onClick={() => onDeleteHabit(habit.id)}
+                            aria-label={t('deleteHabitAria', { name: habit.title })}
+                          >
+                            <FaTrash />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="habit-progress">
+                        <span style={{ width: `${progress}%` }} />
+                      </div>
+                    </div>
+                    <div className="habit-days">
+                      {weekDays.map((day, index) => {
+                        const key = dayKeys[index];
+                        const isDone = habit.history[key];
+                        return (
+                          <button
+                            key={key}
+                            className={`habit-day ${isDone ? 'is-done' : ''}`}
+                            onClick={() => onToggleHabitDay(habit.id, key)}
+                          >
+                            <span className="habit-day-name">
+                              {formatDate(language, day, 'EEE')[0]}
+                            </span>
+                            <span className="habit-day-date">
+                              {formatDate(language, day, 'd')}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </article>
       </div>
     </section>
   );

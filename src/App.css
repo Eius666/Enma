@@ -953,6 +953,51 @@ body.theme-light .tile-value.negative {
   gap: 6px;
 }
 
+.habit-subtitle {
+  margin-top: 4px;
+}
+
+.habit-checkin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.habit-checkin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.habit-checkin-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.habit-checkin-toggle {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-base), border var(--transition-base);
+}
+
+.habit-checkin-toggle.is-done {
+  background: rgba(130, 247, 199, 0.2);
+  border-color: rgba(130, 247, 199, 0.6);
+}
+
 .habit-title-row {
   display: flex;
   align-items: center;
