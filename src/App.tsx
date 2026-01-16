@@ -32,6 +32,7 @@ import {
   User,
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  signInAnonymously,
   signInWithEmailAndPassword,
   signOut
 } from 'firebase/auth';
@@ -568,6 +569,7 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const prevUserId = useRef<string | null>(null);
+  const anonAttemptedRef = useRef(false);
 
   const [tasks, setTasks] = useState<CalendarTask[]>([]);
   const [notes, setNotes] = useState<NotePage[]>([]);
@@ -664,6 +666,15 @@ const App: React.FC = () => {
     });
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    if (authLoading || user || anonAttemptedRef.current) return;
+    if (!telegram?.initDataUnsafe?.user?.id) return;
+    anonAttemptedRef.current = true;
+    signInAnonymously(auth).catch(error => {
+      console.warn('Failed to sign in anonymously', error);
+    });
+  }, [authLoading, user, telegram]);
 
 
   const storageKey = (uid: string, key: string) => `enma.${uid}.${key}`;
