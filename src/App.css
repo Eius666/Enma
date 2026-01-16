@@ -535,33 +535,6 @@ body.theme-light {
   font-size: 12px;
 }
 
-.settings-error {
-  color: #f16f82;
-}
-
-.admin-card .settings-admin-header {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.admin-card .settings-admin-header p {
-  color: var(--text-secondary);
-}
-
-.settings-admin-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.settings-admin-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: flex-start;
-}
 
 .card-heading {
   display: flex;
