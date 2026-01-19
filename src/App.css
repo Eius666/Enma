@@ -6,6 +6,14 @@
   --container-max-width: 960px;
   --container-padding-inline: clamp(12px, 4vw, 20px);
   --container-padding-block: clamp(32px, 8vw, 48px);
+  /* Responsive control sizing for mobile WebApp screens. */
+  --control-padding-y: clamp(8px, 2.4vw, 12px);
+  --control-padding-x: clamp(12px, 3.2vw, 18px);
+  --control-min-height: clamp(38px, 9vw, 44px);
+  --card-padding: clamp(18px, 4vw, 28px);
+  --card-padding-compact: clamp(14px, 3.2vw, 22px);
+  --chip-padding-y: clamp(6px, 2vw, 10px);
+  --chip-padding-x: clamp(10px, 3vw, 16px);
   --space-2xl: 32px;
   --space-xl: 28px;
   --space-lg: 24px;
@@ -103,7 +111,7 @@ body.theme-light {
 
 .hero-card {
   width: 100%;
-  padding: var(--space-2xl);
+  padding: var(--card-padding);
   border-radius: var(--radius-xl);
   background: var(--card-bg);
   box-shadow: var(--shadow-strong);
@@ -175,7 +183,7 @@ body.theme-light {
 .hero-email {
   display: inline-flex;
   align-items: center;
-  padding: 10px 16px;
+  padding: var(--control-padding-y) var(--control-padding-x); /* Responsive email pill */
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -203,7 +211,7 @@ body.theme-light {
   border: 1px solid var(--icon-border);
   background: transparent;
   color: var(--text-primary);
-  padding: 10px 16px;
+  padding: var(--control-padding-y) var(--control-padding-x); /* Responsive button padding */
   border-radius: 999px;
   font-weight: 600;
   cursor: pointer;
@@ -218,7 +226,7 @@ body.theme-light {
 }
 
 .primary-button {
-  padding: 13px 22px;
+  padding: var(--control-padding-y) calc(var(--control-padding-x) + 2px);
   border-radius: 999px;
   border: none;
   font-weight: 600;
@@ -246,7 +254,7 @@ body.theme-light {
 }
 
 .user-chip {
-  padding: 10px 16px;
+  padding: var(--control-padding-y) var(--control-padding-x);
   border-radius: 999px;
   background: var(--icon-bg);
   border: 1px solid var(--icon-border);
@@ -276,7 +284,7 @@ body.theme-light {
 }
 
 .hero-actions .ghost-button {
-  padding: 12px 18px;
+  padding: var(--control-padding-y) var(--control-padding-x);
 }
 
 .auth-screen {
@@ -284,7 +292,7 @@ body.theme-light {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 48px 16px;
+  padding: clamp(32px, 8vw, 48px) var(--container-padding-inline); /* Adaptive auth spacing */
 }
 
 .auth-card {
@@ -293,7 +301,7 @@ body.theme-light {
   border-radius: 28px;
   border: 1px solid var(--panel-border);
   box-shadow: var(--shadow-strong);
-  padding: 36px 32px;
+  padding: var(--card-padding); /* Responsive card padding */
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -378,7 +386,7 @@ body.theme-light {
   border: none;
   background: transparent;
   border-radius: 999px;
-  padding: 10px 12px;
+  padding: var(--chip-padding-y) var(--chip-padding-x);
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -404,7 +412,7 @@ body.theme-light {
   width: 100%;
   background: var(--card-bg);
   border-radius: var(--radius-lg);
-  padding: clamp(20px, 3vw, 32px);
+  padding: var(--card-padding);
   border: 1px solid var(--panel-border);
   box-shadow: var(--shadow-strong);
   backdrop-filter: blur(24px);
@@ -433,7 +441,7 @@ body.theme-light {
 
 .panel-badge {
   display: inline-flex;
-  padding: 8px 16px;
+  padding: var(--chip-padding-y) var(--chip-padding-x);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
   color: var(--accent);
@@ -451,7 +459,7 @@ body.theme-light {
 }
 
 .pill-control {
-  padding: 10px 18px;
+  padding: var(--control-padding-y) var(--control-padding-x);
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.04);
@@ -478,7 +486,7 @@ body.theme-light {
 }
 
 .card {
-  padding: var(--space-lg) var(--space-xl);
+  padding: var(--card-padding-compact);
   border-radius: var(--radius-md);
   background: var(--card-bg-soft);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -494,7 +502,7 @@ body.theme-light {
 }
 
 .settings-card {
-  padding: var(--space-lg) var(--space-xl);
+  padding: var(--card-padding-compact);
   border-radius: var(--radius-md);
   background: var(--card-bg-soft);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -566,9 +574,10 @@ body.theme-light {
 
 .card-badge {
   display: inline-flex;
-  padding: 6px 12px;
+  /* Use responsive chip padding for badges on mobile. */
+  padding: var(--chip-padding-y) var(--chip-padding-x);
   border-radius: 999px;
-  font-size: 11px;
+  font-size: clamp(10px, 2.6vw, 11px);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -603,13 +612,13 @@ body.theme-light {
   display: flex;
   align-items: center;
   gap: 18px;
-  padding: 18px;
+  padding: var(--card-padding-compact);
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.05);
 }
 
 .chip {
-  padding: 8px 14px;
+  padding: var(--chip-padding-y) var(--chip-padding-x);
   border-radius: 14px;
   background: var(--chip-bg);
   border: 1px solid var(--chip-border);
@@ -770,7 +779,7 @@ body.theme-light {
 
 .ghost-button {
   border-radius: 999px;
-  padding: 12px 20px;
+  padding: var(--control-padding-y) var(--control-padding-x);
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: transparent;
   color: var(--text-primary);
@@ -1124,7 +1133,7 @@ body.theme-light .tile-value.negative {
 }
 
 .calendar-panel {
-  gap: 28px;
+  gap: clamp(18px, 4vw, 28px); /* Responsive spacing between calendar sections */
 }
 
 .calendar-header {
@@ -1134,13 +1143,13 @@ body.theme-light .tile-value.negative {
 .calendar-content {
   display: grid;
   grid-template-columns: 2fr 1fr;
-  gap: 24px;
+  gap: clamp(16px, 4vw, 24px); /* Flexible column spacing */
 }
 
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 12px;
+  gap: clamp(8px, 2.6vw, 12px); /* Prevent cramped cells on mobile */
 }
 
 .calendar-weekday {
@@ -1156,12 +1165,12 @@ body.theme-light .tile-value.negative {
   border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.05);
-  padding: 12px;
+  padding: var(--card-padding-compact);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
-  min-height: 110px;
+  min-height: clamp(90px, 18vw, 120px); /* Adaptive cell height for mobile */
   cursor: pointer;
   transition: border var(--transition-base), transform var(--transition-base);
 }
@@ -1230,15 +1239,15 @@ body.theme-light .tile-value.negative {
   background: rgba(255, 255, 255, 0.04);
   border-radius: 24px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 20px 22px;
+  padding: var(--card-padding-compact);
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
 .reminder-card .add-reminder-btn {
-  width: 44px;
-  height: 44px;
+  width: clamp(42px, 12vw, 48px);
+  height: clamp(42px, 12vw, 48px);
   border-radius: 14px;
   background: rgba(124, 92, 255, 0.25);
   color: var(--text-primary);
@@ -1251,21 +1260,40 @@ body.theme-light .tile-value.negative {
 .reminder-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 20px; /* Увеличен вертикальный зазор для лучшей читаемости на мобильных */
+  padding: 16px; /* Добавлен внутренний отступ вокруг формы */
 }
 
 .reminder-form-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px;
-  align-items: end;
+  display: flex;
+  gap: 12px; /* Немного уменьшен зазор для более компактного вида */
+  align-items: center; /* Центрирование по вертикали */
+}
+
+/* Стиль для input и кнопки внутри строки */
+.reminder-form-row input[type='time'] {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+}
+
+.add-reminder-btn {
+  width: clamp(42px, 12vw, 48px);
+  height: clamp(42px, 12vw, 48px);
+  border-radius: 12px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
 }
 
 .reminder-list {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: clamp(8px, 2.6vw, 10px);
   padding: 0;
 }
 
@@ -1274,7 +1302,7 @@ body.theme-light .tile-value.negative {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
+  padding: var(--control-padding-y) var(--control-padding-x);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
 }
@@ -1328,7 +1356,7 @@ body.theme-light .tile-value.negative {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 13px;
+  font-size: clamp(11px, 2.8vw, 13px);
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1342,9 +1370,9 @@ body.theme-light .tile-value.negative {
   border-radius: var(--radius-sm);
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.06);
-  padding: 11px 14px;
-  min-height: 42px;
-  font-size: 15px;
+  padding: var(--control-padding-y) var(--control-padding-x);
+  min-height: var(--control-min-height);
+  font-size: clamp(14px, 3.4vw, 15px);
   color: var(--text-primary);
   font-family: var(--font-body);
   transition: border var(--transition-base), background var(--transition-base);
@@ -1360,7 +1388,7 @@ body.theme-light .tile-value.negative {
 
 .floating-label textarea {
   resize: vertical;
-  min-height: 80px;
+  min-height: clamp(72px, 16vw, 96px);
   line-height: 1.5;
 }
 
@@ -1377,7 +1405,7 @@ body.theme-light .tile-value.negative {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: clamp(8px, 2.6vw, 12px);
 }
 
 .task-list-item {
@@ -1466,7 +1494,7 @@ body.theme-light .tile-value.negative {
 .notes-sidebar {
   background: rgba(255, 255, 255, 0.03);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
-  padding: var(--space-md);
+  padding: var(--card-padding-compact);
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
@@ -1483,7 +1511,7 @@ body.theme-light .tile-value.negative {
 
 .primary-button.ghost {
   border-radius: 12px;
-  padding: 10px 16px;
+  padding: var(--control-padding-y) var(--control-padding-x);
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -1510,7 +1538,7 @@ body.theme-light .tile-value.negative {
 .notes-list-empty {
   font-size: 0.9rem;
   color: var(--text-secondary);
-  padding: 12px 0;
+  padding: var(--control-padding-y) 0;
 }
 
 .note-type-switch {
@@ -1523,7 +1551,7 @@ body.theme-light .tile-value.negative {
 .note-type-switch button {
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  padding: 10px;
+  padding: var(--control-padding-y);
   background: transparent;
   color: var(--text-secondary);
   font-weight: 600;
@@ -1546,7 +1574,7 @@ body.theme-light .tile-value.negative {
   justify-content: space-between;
   gap: 10px;
   border-radius: 14px;
-  padding: 10px 12px;
+  padding: var(--control-padding-y) var(--control-padding-x);
   transition: background var(--transition-base);
 }
 
@@ -1687,19 +1715,19 @@ body.theme-light .tile-value.negative {
 .finance-upper {
   display: grid;
   grid-template-columns: 1fr 1.1fr;
-  gap: 20px;
+  gap: clamp(14px, 3.6vw, 20px);
 }
 
 .finance-summary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: clamp(8px, 2.6vw, 12px);
 }
 
 .summary-card {
   background: rgba(255, 255, 255, 0.04);
   border-radius: 18px;
-  padding: 18px;
+  padding: var(--card-padding-compact);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1717,7 +1745,7 @@ body.theme-light .tile-value.negative {
 .category-card {
   background: rgba(255, 255, 255, 0.04);
   border-radius: 22px;
-  padding: 20px;
+  padding: var(--card-padding-compact);
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -1735,7 +1763,7 @@ body.theme-light .tile-value.negative {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px 8px 12px;
+  padding: var(--chip-padding-y) var(--chip-padding-x);
   border-radius: 12px;
   background: rgba(124, 92, 255, 0.18);
   border: 1px solid rgba(124, 92, 255, 0.4);
@@ -1817,16 +1845,16 @@ body.theme-light .tile-value.negative {
 .transactions-list {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: clamp(10px, 3vw, 14px);
   list-style: none;
 }
 
 .transaction-row {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 18px;
+  gap: clamp(12px, 3.6vw, 18px);
   align-items: center;
-  padding: 14px 16px;
+  padding: var(--control-padding-y) var(--control-padding-x);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.04);
 }
@@ -2334,6 +2362,24 @@ body.theme-light .tile-value.negative {
 
   .note-type-switch {
     grid-template-columns: 1fr;
+  }
+
+  /* Stack time input + add button on narrow screens. */
+  .reminder-form-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px; /* Более компактный вертикальный отступ */
+  }
+
+  /* Make "+" button full-width and centered on mobile. */
+  .add-reminder-btn {
+    width: 100%;
+    height: 44px;
+    border-radius: 10px;
+  }
+
+  .reminder-form-row input[type='time'] {
+    width: 100%; /* Инпут занимает всю ширину */
   }
 }
 
