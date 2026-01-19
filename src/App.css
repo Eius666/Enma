@@ -1311,7 +1311,7 @@ body.theme-light .tile-value.negative {
 }
 
 .reminder-time-row input[type='time'] {
-  width: min(100%, clamp(180px, 55vw, 240px));
+  width: min(100%, clamp(170px, 50vw, 220px));
   min-width: 0;
   max-width: 100%;
   border-radius: var(--radius-xs);
@@ -1338,7 +1338,7 @@ body.theme-light .tile-value.negative {
 }
 
 .calendar-time-field input[type='time'] {
-  width: min(100%, clamp(180px, 55vw, 240px));
+  width: min(100%, clamp(170px, 50vw, 220px));
   min-width: 0;
   max-width: 100%;
   border-radius: var(--radius-xs);
@@ -2422,20 +2422,21 @@ body.theme-light .tile-value.negative {
 
   /* Stack time input + add button on narrow screens. */
   .reminder-time-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: clamp(0.5rem, 2.6vw, 0.7rem);
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: clamp(0.6rem, 3vw, 0.8rem);
   }
 
   /* Make "+" button full-width and centered on mobile. */
   .add-reminder-btn {
-    width: 100%;
-    height: var(--control-min-height);
+    width: clamp(40px, 12vw, 44px);
+    height: clamp(40px, 12vw, 44px);
     border-radius: var(--radius-xs);
   }
 
   .reminder-time-row input[type='time'] {
-    width: 100%; /* Инпут занимает всю ширину */
+    width: min(100%, clamp(170px, 50vw, 220px));
   }
 }
 
