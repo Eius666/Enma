@@ -891,7 +891,7 @@ body.theme-light .tile-value.negative {
   gap: 20px;
 }
 
-.habit-card.is-empty {
+.habits-panel .habit-card.is-empty {
   min-height: 240px;
   justify-content: center;
 }
@@ -906,10 +906,6 @@ body.theme-light .tile-value.negative {
 
 .habit-checkin .habit-subtitle {
   margin-top: 2px;
-}
-
-.habit-checkin.is-empty {
-  min-height: 240px;
 }
 
 .habit-checkin.is-empty {
@@ -1411,6 +1407,20 @@ body.theme-light .tile-value.negative {
   background: rgba(124, 92, 255, 0.25);
   border-color: rgba(124, 92, 255, 0.45);
   box-shadow: 0 10px 24px rgba(120, 96, 255, 0.2);
+}
+
+/* Keep react-icons aligned and sized consistently across controls. */
+.primary-button svg,
+.ghost-button svg,
+.pill-control svg,
+.icon-button svg,
+.note-type-switch button svg,
+.category-chip svg,
+.category-remove svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: block;
 }
 
 .empty-hint {
@@ -2162,7 +2172,7 @@ body.theme-light .tile-value.negative {
     border-radius: 16px;
   }
 
-  .habit-card.is-empty {
+  .habits-panel .habit-card.is-empty {
     min-height: 190px;
   }
 
@@ -2298,5 +2308,72 @@ body.theme-light .tile-value.negative {
 
   .note-type-switch {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 420px) {
+  /* 375px tuning: tighten spacing and keep layout compact. */
+  .app-shell {
+    padding: calc(58px + env(safe-area-inset-top)) 12px 36px;
+    gap: 18px;
+  }
+
+  .hero-card {
+    padding: 18px;
+    border-radius: 20px;
+  }
+
+  .hero-card h1 {
+    font-size: clamp(28px, 7vw, 32px);
+  }
+
+  .hero-card p {
+    font-size: 14px;
+  }
+
+  .hero-actions {
+    gap: 8px;
+  }
+
+  .hero-email {
+    width: 100%;
+  }
+
+  .panel,
+  .card,
+  .category-card {
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  .top-tabs {
+    padding: 4px 6px;
+  }
+
+  .top-tab {
+    font-size: 10.5px;
+    padding: 7px 10px;
+  }
+
+  .primary-button,
+  .ghost-button {
+    padding: 10px 14px;
+    font-size: 13px;
+    gap: 8px;
+  }
+
+  .icon-button {
+    width: 30px;
+    height: 30px;
+  }
+
+  .category-chip {
+    padding: 6px 8px 6px 10px;
+    font-size: 12px;
+  }
+
+  .category-remove {
+    width: 20px;
+    height: 20px;
   }
 }
