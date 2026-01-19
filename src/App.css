@@ -1284,17 +1284,20 @@ body.theme-light .tile-value.negative {
   display: flex;
   align-items: stretch; /* Keep input and button aligned. */
   gap: clamp(0.6rem, 2.5vw, 0.9rem); /* Even spacing across widths. */
+  width: 100%;
 }
 
 /* Ensure the time field grows and doesn't overflow. */
 .reminder-time-row .floating-label {
   flex: 1;
   min-width: 0;
+  max-width: 100%;
 }
 
 .reminder-time-row input[type='time'] {
   width: 100%;
   min-width: 0;
+  max-width: 100%;
   border-radius: var(--radius-xs);
 }
 
@@ -1307,6 +1310,20 @@ body.theme-light .tile-value.negative {
   justify-content: center;
   align-items: center;
   padding: 0;
+  align-self: stretch;
+}
+
+/* Calendar time input should never overflow its card in Telegram. */
+.calendar-time-field {
+  width: 100%;
+  max-width: 100%;
+}
+
+.calendar-time-field input[type='time'] {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  border-radius: var(--radius-xs);
 }
 
 .reminder-list {

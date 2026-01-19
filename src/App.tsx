@@ -1708,7 +1708,7 @@ const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
                 placeholder={t('taskNotesPlaceholder')}
               />
             </label>
-            <label className="floating-label">
+            <label className="floating-label calendar-time-field">
               <span>{t('timeLabel')}</span>
               <input
                 type="time"
