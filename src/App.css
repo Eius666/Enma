@@ -1297,7 +1297,7 @@ body.theme-light .tile-value.negative {
 /* Layout container for time input + "+" button. */
 .reminder-time-row {
   display: flex;
-  align-items: stretch; /* Keep input and button aligned. */
+  align-items: flex-end; /* Align "+" with the input field baseline. */
   gap: clamp(0.6rem, 2.5vw, 0.9rem); /* Even spacing across widths. */
   width: 100%;
   justify-content: center; /* Center time input + button as a group. */
@@ -1326,7 +1326,7 @@ body.theme-light .tile-value.negative {
   justify-content: center;
   align-items: center;
   padding: 0;
-  align-self: stretch;
+  align-self: flex-end;
 }
 
 /* Calendar time input should never overflow its card in Telegram. */
