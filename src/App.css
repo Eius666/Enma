@@ -56,6 +56,21 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
+/* Telegram WebApp override for time inputs spacing. */
+body[data-platform='telegram'] .calendar-time-field input[type='time'],
+body[data-platform='telegram'] .reminder-time-row input[type='time'] {
+  padding: clamp(0.75rem, 3.2vw, 1rem) clamp(0.9rem, 3.4vw, 1.2rem);
+  min-height: clamp(2.75rem, 10vw, 3.2rem);
+}
+
+body[data-platform='telegram'] .reminder-time-row {
+  gap: clamp(0.8rem, 3.6vw, 1.1rem);
+}
+
+body[data-platform='telegram'] .calendar-time-field {
+  margin-top: clamp(0.35rem, 2vw, 0.6rem);
+}
+
 /* Prevent form controls from overflowing the WebApp viewport. */
 button,
 input,
