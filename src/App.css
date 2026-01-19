@@ -2,6 +2,11 @@
   --transition-base: 0.35s ease;
   --font-body: 'Inter', 'Segoe UI', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
   --tg-viewport-height: 100vh;
+  /* Safe-area defaults for Telegram WebApp (overridden by JS when available). */
+  --tg-safe-area-top: env(safe-area-inset-top);
+  --tg-safe-area-bottom: env(safe-area-inset-bottom);
+  --tg-safe-area-left: env(safe-area-inset-left);
+  --tg-safe-area-right: env(safe-area-inset-right);
   /* Adaptive container sizing for Telegram WebApp iframe. */
   --container-max-width: 960px;
   --container-padding-inline: clamp(12px, 4vw, 20px);
@@ -105,7 +110,9 @@ body.theme-light {
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);
-  padding: clamp(20px, 5vw, 32px) var(--container-padding-inline) var(--container-padding-block);
+  padding: calc(clamp(20px, 5vw, 32px) + var(--tg-safe-area-top, 0px))
+    var(--container-padding-inline)
+    calc(var(--container-padding-block) + var(--tg-safe-area-bottom, 0px));
   transition: color var(--transition-base);
 }
 
@@ -2081,8 +2088,9 @@ body.theme-light .tile-value.negative {
   }
 
   .app-shell {
-    padding: calc(clamp(48px, 12vw, 68px) + env(safe-area-inset-top)) clamp(12px, 4vw, 16px)
-      clamp(32px, 10vw, 48px);
+    padding: calc(clamp(48px, 12vw, 68px) + var(--tg-safe-area-top, 0px))
+      clamp(12px, 4vw, 16px)
+      calc(clamp(32px, 10vw, 48px) + var(--tg-safe-area-bottom, 0px));
     width: 100%;
   }
 
