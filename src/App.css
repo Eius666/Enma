@@ -1233,6 +1233,14 @@ body.theme-light .tile-value.negative {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  min-width: 0; /* Prevent time input from pushing outside sidebar */
+}
+
+/* Keep time input inside calendar sidebar aligned and full-width. */
+.calendar-sidebar input[type='time'] {
+  width: 100%;
+  min-width: 0;
+  border-radius: var(--radius-xs);
 }
 
 .sidebar-card {
@@ -1248,7 +1256,7 @@ body.theme-light .tile-value.negative {
 .reminder-card .add-reminder-btn {
   width: clamp(42px, 12vw, 48px);
   height: clamp(42px, 12vw, 48px);
-  border-radius: 14px;
+  border-radius: var(--radius-xs);
   background: rgba(124, 92, 255, 0.25);
   color: var(--text-primary);
   display: inline-flex;
@@ -1260,28 +1268,33 @@ body.theme-light .tile-value.negative {
 .reminder-form {
   display: flex;
   flex-direction: column;
-  gap: 20px; /* Увеличен вертикальный зазор для лучшей читаемости на мобильных */
-  padding: 16px; /* Добавлен внутренний отступ вокруг формы */
+  gap: clamp(0.9rem, 3vw, 1.25rem); /* Увеличен вертикальный зазор для лучшей читаемости на мобильных */
+  padding: var(--card-padding-compact); /* Добавлен внутренний отступ вокруг формы */
 }
 
-.reminder-form-row {
+/* Layout container for time input + "+" button. */
+.reminder-time-row {
   display: flex;
-  gap: 12px; /* Немного уменьшен зазор для более компактного вида */
-  align-items: center; /* Центрирование по вертикали */
+  align-items: stretch; /* Keep input and button aligned. */
+  gap: clamp(0.6rem, 2.5vw, 0.9rem); /* Even spacing across widths. */
 }
 
-/* Стиль для input и кнопки внутри строки */
-.reminder-form-row input[type='time'] {
+/* Ensure the time field grows and doesn't overflow. */
+.reminder-time-row .floating-label {
   flex: 1;
   min-width: 0;
-  padding: 10px 14px;
-  border-radius: 12px;
+}
+
+.reminder-time-row input[type='time'] {
+  width: 100%;
+  min-width: 0;
+  border-radius: var(--radius-xs);
 }
 
 .add-reminder-btn {
   width: clamp(42px, 12vw, 48px);
   height: clamp(42px, 12vw, 48px);
-  border-radius: 12px;
+  border-radius: var(--radius-xs);
   flex-shrink: 0;
   display: flex;
   justify-content: center;
@@ -2365,20 +2378,20 @@ body.theme-light .tile-value.negative {
   }
 
   /* Stack time input + add button on narrow screens. */
-  .reminder-form-row {
+  .reminder-time-row {
     flex-direction: column;
     align-items: stretch;
-    gap: 10px; /* Более компактный вертикальный отступ */
+    gap: clamp(0.5rem, 2.6vw, 0.7rem);
   }
 
   /* Make "+" button full-width and centered on mobile. */
   .add-reminder-btn {
     width: 100%;
-    height: 44px;
-    border-radius: 10px;
+    height: var(--control-min-height);
+    border-radius: var(--radius-xs);
   }
 
-  .reminder-form-row input[type='time'] {
+  .reminder-time-row input[type='time'] {
     width: 100%; /* Инпут занимает всю ширину */
   }
 }

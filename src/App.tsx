@@ -1764,7 +1764,7 @@ const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
                   placeholder={t('reminderPlaceholder')}
                 />
               </label>
-              <div className="reminder-form-row">
+              <div className="reminder-time-row">
                 <label className="floating-label">
                   <span>{t('timeLabel')}</span>
                   <input
