@@ -1300,6 +1300,7 @@ body.theme-light .tile-value.negative {
   align-items: stretch; /* Keep input and button aligned. */
   gap: clamp(0.6rem, 2.5vw, 0.9rem); /* Even spacing across widths. */
   width: 100%;
+  justify-content: center; /* Center time input + button as a group. */
 }
 
 /* Ensure the time field grows and doesn't overflow. */
@@ -1310,7 +1311,7 @@ body.theme-light .tile-value.negative {
 }
 
 .reminder-time-row input[type='time'] {
-  width: 100%;
+  width: min(100%, clamp(180px, 55vw, 240px));
   min-width: 0;
   max-width: 100%;
   border-radius: var(--radius-xs);
@@ -1332,10 +1333,12 @@ body.theme-light .tile-value.negative {
 .calendar-time-field {
   width: 100%;
   max-width: 100%;
+  display: flex;
+  justify-content: center; /* Center the time input in calendar. */
 }
 
 .calendar-time-field input[type='time'] {
-  width: 100%;
+  width: min(100%, clamp(180px, 55vw, 240px));
   min-width: 0;
   max-width: 100%;
   border-radius: var(--radius-xs);
