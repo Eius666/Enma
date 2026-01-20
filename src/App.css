@@ -860,6 +860,20 @@ body.theme-light .ghost-button:hover {
   width: 100%;
 }
 
+/* Hard unify Day Flow card headings/badges to the same typography. */
+.overview-grid .card .card-badge {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.overview-grid .card h3 {
+  margin-top: 10px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.25;
+}
+
 @media (max-width: 720px) {
   .overview-grid {
     grid-template-columns: 1fr;
