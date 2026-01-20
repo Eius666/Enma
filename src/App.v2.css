@@ -625,6 +625,7 @@ body.theme-light {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  width: fit-content;
 }
 
 .card-badge.muted {
