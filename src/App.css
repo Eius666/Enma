@@ -943,9 +943,15 @@ body.theme-light .tile-value.negative {
   gap: 12px; /* Tighter vertical rhythm inside habit card */
 }
 
+/* Hard reset for habit tracker spacing (remove empty vertical air). */
+.habits-panel .habit-card {
+  padding: 16px;
+  gap: 10px;
+}
+
 .habits-panel .habit-card.is-empty {
-  min-height: 200px; /* Reduce empty-state height */
-  justify-content: center;
+  min-height: auto;
+  justify-content: flex-start;
 }
 
 .habit-checkin .card-heading {
@@ -979,7 +985,7 @@ body.theme-light .tile-value.negative {
 .habit-add {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px; /* Bring input and button closer */
+  gap: 6px; /* Bring input and button closer */
   align-items: center;
   flex: 1 1 240px;
   justify-content: flex-end;
@@ -991,20 +997,21 @@ body.theme-light .tile-value.negative {
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(255, 255, 255, 0.04);
-  padding: 8px 12px; /* Compact input without losing readability */
+  padding: 6px 10px; /* Compact input without losing readability */
+  min-height: 34px;
   color: var(--text-primary);
   font-size: 0.95rem;
 }
 
 .habit-add .ghost-button {
   white-space: nowrap;
-  padding: 8px 12px; /* Match compact input height */
+  padding: 6px 10px; /* Match compact input height */
 }
 
 .habit-list {
   display: flex;
   flex-direction: column;
-  gap: 12px; /* Reduce list spacing to shrink card */
+  gap: 10px; /* Reduce list spacing to shrink card */
 }
 
 .habit-row {
@@ -2279,12 +2286,12 @@ body.theme-light .tile-value.negative {
 
   .habit-card {
     gap: 6px;
-    padding: 10px; /* Trim card padding for mobile */
+    padding: 8px; /* Trim card padding for mobile */
     border-radius: 16px;
   }
 
   .habits-panel .habit-card.is-empty {
-    min-height: 160px; /* Reduce empty card height on mobile */
+    min-height: auto; /* Remove forced height on mobile */
   }
 
   .habit-checkin.is-empty {
@@ -2338,13 +2345,13 @@ body.theme-light .tile-value.negative {
 
   .habit-add input {
     padding: 6px 10px;
-    min-height: 32px; /* Slightly shorter input */
+    min-height: 30px; /* Slightly shorter input */
     font-size: 0.9rem;
     width: 100%;
   }
 
   .habit-add .ghost-button {
-    padding: 6px 12px; /* Bring button closer to input */
+    padding: 6px 10px; /* Bring button closer to input */
     font-size: 0.9rem;
     width: 100%;
     justify-content: center;
