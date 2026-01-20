@@ -1840,6 +1840,10 @@ body.theme-light .tile-value.negative {
   gap: 10px;
 }
 
+.note-card-header .icon-button {
+  margin-left: auto;
+}
+
 .note-card-meta {
   display: inline-flex;
   align-items: center;

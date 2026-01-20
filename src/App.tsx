@@ -2197,13 +2197,6 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({
               <div className="note-group">
                 <div className="note-group-header">
                   <h4 className="note-group-title">{selectedSection.project.name}</h4>
-                  <button
-                    className="icon-button"
-                    onClick={() => deleteProject(selectedSection.project.id)}
-                    aria-label={t('deleteProjectAria', { name: selectedSection.project.name })}
-                  >
-                    <FaTimes />
-                  </button>
                 </div>
                 <div className="note-group-list">
                   {selectedSection.notes.map(note => (
