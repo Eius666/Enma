@@ -1714,10 +1714,10 @@ body.theme-light .tile-value.negative {
 }
 
 .notes-editor {
-  padding: clamp(20px, 4vw, 32px);
+  padding: clamp(16px, 4vw, 28px);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02));
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   justify-content: center;
   min-width: 0;
 }
@@ -1727,7 +1727,8 @@ body.theme-light .tile-value.negative {
   max-width: 720px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
+  min-height: 100%;
 }
 
 .note-title-input {
@@ -1741,6 +1742,79 @@ body.theme-light .tile-value.negative {
 
 .note-title-input:focus {
   outline: none;
+}
+
+/* Bubble-style note list (chat-like). */
+.notes-bubble-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 6px 2px 72px;
+  overflow-y: auto;
+  min-height: 220px;
+}
+
+.note-bubble {
+  align-self: flex-start;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  padding: 12px 14px;
+  box-shadow: 0 16px 32px rgba(6, 10, 40, 0.25);
+}
+
+.note-bubble--todo {
+  background: rgba(124, 92, 255, 0.14);
+  border-color: rgba(124, 92, 255, 0.3);
+}
+
+.note-bubble .block-textarea,
+.note-bubble .block-input {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font-size: 0.95rem;
+  width: 100%;
+}
+
+.todo-bubble {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.todo-bubble input[type='checkbox'] {
+  margin-top: 3px;
+}
+
+/* Fixed composer at the bottom of notes editor. */
+.note-composer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(12, 16, 38, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(12px);
+}
+
+.note-composer-input {
+  flex: 1;
+  min-width: 0;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 10px 12px;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  resize: none;
+}
+
+.note-composer-button {
+  white-space: nowrap;
 }
 
 .blocks {
@@ -2275,7 +2349,7 @@ body.theme-light .tile-value.negative {
   }
 
   .notes-editor {
-    padding: 24px;
+    padding: 18px;
   }
 
   .notes-shell {
@@ -2299,7 +2373,26 @@ body.theme-light .tile-value.negative {
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 20px;
-    padding: 16px;
+    padding: 14px;
+  }
+
+  .notes-bubble-list {
+    gap: 10px;
+    padding-bottom: 84px;
+  }
+
+  .note-bubble {
+    border-radius: 16px;
+    padding: 10px 12px;
+  }
+
+  .note-composer {
+    flex-direction: column;
+  }
+
+  .note-composer-button {
+    width: 100%;
+    justify-content: center;
   }
 
   .notes-list-item.is-active {

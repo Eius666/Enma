@@ -1839,6 +1839,7 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ language, notes, onNote
     translate(language, key, params);
   const [activeNoteType, setActiveNoteType] = useState<'text' | 'checklist'>('text');
   const [activeNoteId, setActiveNoteId] = useState('');
+  const [composerValue, setComposerValue] = useState('');
 
   useEffect(() => {
     const typedNotes = notes.filter(note => note.noteType === activeNoteType);
@@ -1917,6 +1918,22 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ language, notes, onNote
     });
   };
 
+  const addComposerBlock = () => {
+    if (!activeNote || !composerValue.trim()) return;
+    updateNote(activeNote.id, note => {
+      const nextBlock: NoteBlock =
+        note.noteType === 'checklist'
+          ? { id: createId(), type: 'todo', content: composerValue.trim(), checked: false }
+          : { id: createId(), type: 'paragraph', content: composerValue.trim() };
+      return {
+        ...note,
+        blocks: [...note.blocks, nextBlock],
+        updatedAt: new Date().toISOString()
+      };
+    });
+    setComposerValue('');
+  };
+
   return (
     <section className="panel notes-panel">
       <div className="notes-shell">
@@ -1987,11 +2004,11 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ language, notes, onNote
                 placeholder={t('noteTitlePlaceholder')}
               />
 
-              <div className="blocks">
-                {activeNote.blocks.map((block, index) => (
-                  <div key={block.id} className={`note-block note-block--${activeNote.noteType}`}>
+              <div className="notes-bubble-list">
+                {activeNote.blocks.map(block => (
+                  <div key={block.id} className={`note-bubble note-bubble--${block.type}`}>
                     {activeNote.noteType === 'checklist' ? (
-                      <label className="todo-block">
+                      <label className="todo-bubble">
                         <input
                           type="checkbox"
                           checked={Boolean(block.checked)}
@@ -2014,21 +2031,42 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ language, notes, onNote
                         onChange={event =>
                           updateBlockContent(activeNote.id, block.id, event.target.value)
                         }
-                        onKeyDown={event => {
-                          if (event.key === 'Enter' && !event.shiftKey) {
-                            event.preventDefault();
-                            addBlock(activeNote.id, index);
-                          }
-                        }}
                         placeholder={t('textPlaceholder')}
                       />
                     )}
                   </div>
                 ))}
-                <button
-                  className="ghost-button add-block"
-                  onClick={() => addBlock(activeNote.id, activeNote.blocks.length - 1)}
-                >
+              </div>
+              <div className="note-composer">
+                {activeNote.noteType === 'checklist' ? (
+                  <input
+                    className="note-composer-input"
+                    value={composerValue}
+                    onChange={event => setComposerValue(event.target.value)}
+                    onKeyDown={event => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        addComposerBlock();
+                      }
+                    }}
+                    placeholder={t('addItem')}
+                  />
+                ) : (
+                  <textarea
+                    rows={2}
+                    className="note-composer-input"
+                    value={composerValue}
+                    onChange={event => setComposerValue(event.target.value)}
+                    onKeyDown={event => {
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        addComposerBlock();
+                      }
+                    }}
+                    placeholder={t('addParagraph')}
+                  />
+                )}
+                <button className="primary-button note-composer-button" onClick={addComposerBlock}>
                   <FaPlus /> {activeNote.noteType === 'checklist' ? t('addItem') : t('addParagraph')}
                 </button>
               </div>
