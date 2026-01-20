@@ -2224,9 +2224,6 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({
                           <FaTrash />
                         </button>
                       </div>
-                      <p className="note-card-preview">
-                        {note.blocks[0]?.content || t('startWriting')}
-                      </p>
                     </article>
                   ))}
                 </div>
