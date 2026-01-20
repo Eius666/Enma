@@ -1941,6 +1941,10 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({
     [noteProjects, sortedNotes]
   );
 
+  const selectedSection = projectSections.find(
+    section => section.project.id === selectedProjectId
+  );
+
   const activeNote = activeNoteId ? notes.find(note => note.id === activeNoteId) ?? null : null;
 
   const addProject = () => {
@@ -2189,20 +2193,20 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({
           </div>
         ) : (
           <div className="notes-stream">
-            {projectSections.map(section => (
-              <div key={section.project.id} className="note-group">
+            {selectedSection ? (
+              <div className="note-group">
                 <div className="note-group-header">
-                  <h4 className="note-group-title">{section.project.name}</h4>
+                  <h4 className="note-group-title">{selectedSection.project.name}</h4>
                   <button
                     className="icon-button"
-                    onClick={() => deleteProject(section.project.id)}
-                    aria-label={t('deleteProjectAria', { name: section.project.name })}
+                    onClick={() => deleteProject(selectedSection.project.id)}
+                    aria-label={t('deleteProjectAria', { name: selectedSection.project.name })}
                   >
                     <FaTimes />
                   </button>
                 </div>
                 <div className="note-group-list">
-                  {section.notes.map(note => (
+                  {selectedSection.notes.map(note => (
                     <article
                       key={note.id}
                       className={`note-card note-card--${note.noteType}`}
@@ -2234,8 +2238,7 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({
                   ))}
                 </div>
               </div>
-            ))}
-            {sortedNotes.length === 0 && (
+            ) : (
               <p className="notes-empty">
                 {activeNoteType === 'text' ? t('noTextNotes') : t('noChecklists')}
               </p>
