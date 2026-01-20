@@ -867,6 +867,12 @@ body.theme-light .ghost-button:hover {
   padding: 16px;
 }
 
+/* Make Day Flow cards equal height so reminders and habits align. */
+.overview-grid > .card {
+  height: 100%;
+  min-height: 220px;
+}
+
 .overview-grid .card-row {
   padding: 12px;
   gap: 12px;
