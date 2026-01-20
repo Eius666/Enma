@@ -980,6 +980,14 @@ body.theme-light .tile-value.negative {
   margin-top: 2px;
 }
 
+.habit-checkin .habit-card-header {
+  gap: 6px;
+}
+
+.habit-checkin .habit-card-header .card-badge {
+  margin-top: 0;
+}
+
 .habit-checkin.is-empty {
   min-height: auto;
   justify-content: flex-start;

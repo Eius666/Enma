@@ -1552,13 +1552,15 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
           )}
         </article>
 
-        <article className={`card habit-card habit-checkin ${habits.length === 0 ? 'is-empty' : ''}`}>
-          <div className="card-heading">
-            <div>
-              <span className="card-badge muted">{t('habitBadge')}</span>
-              <h3>{t('habitCheckinTitle')}</h3>
-              <p className="card-row__meta habit-subtitle">{t('habitCheckinSubtitle')}</p>
-            </div>
+        <article
+          className={`card habit-card habit-card--compact habit-checkin ${
+            habits.length === 0 ? 'is-empty' : ''
+          }`}
+        >
+          <div className="habit-card-header">
+            <span className="card-badge muted">{t('habitBadge')}</span>
+            <h3>{t('habitCheckinTitle')}</h3>
+            <p className="card-row__meta habit-subtitle">{t('habitCheckinSubtitle')}</p>
           </div>
           {habits.length === 0 ? (
             <p className="card-row__meta">{t('habitCheckinEmpty')}</p>
