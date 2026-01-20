@@ -988,19 +988,13 @@ body.theme-light .tile-value.negative {
   margin-top: 0;
 }
 
-.habit-checkin .habit-card-header h3 {
-  margin-top: 10px;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
 /* Force day-flow habit header typography to match other cards. */
-.habit-checkin h3 {
-  margin-top: 10px;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-primary);
+.habit-checkin .habit-card-header h3 {
+  margin-top: 10px !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  color: var(--text-primary) !important;
+  line-height: 1.25 !important;
 }
 
 .habit-checkin.is-empty {
