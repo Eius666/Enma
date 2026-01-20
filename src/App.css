@@ -995,6 +995,14 @@ body.theme-light .tile-value.negative {
   color: var(--text-primary);
 }
 
+/* Force day-flow habit header typography to match other cards. */
+.habit-checkin h3 {
+  margin-top: 10px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
 .habit-checkin.is-empty {
   min-height: auto;
   justify-content: flex-start;
