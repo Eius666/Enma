@@ -13,9 +13,7 @@ import {
   parseISO,
   compareAsc,
   setHours,
-  setMinutes,
-  startOfDay,
-  differenceInCalendarDays
+  setMinutes
 } from 'date-fns';
 import { enUS, ru } from 'date-fns/locale';
 import {
@@ -69,6 +67,12 @@ type NotePage = {
   blocks: NoteBlock[];
   updatedAt: string;
   noteType: 'text' | 'checklist';
+  projectId?: string;
+};
+
+type NoteProject = {
+  id: string;
+  name: string;
 };
 
 type Category = {
@@ -125,9 +129,17 @@ const getDefaultCategories = (language: Language): Category[] => {
   return DEFAULT_CATEGORIES;
 };
 
+const getDefaultNoteProjects = (language: Language): NoteProject[] => [
+  {
+    id: 'project-default',
+    name: language === 'ru' ? 'Общее' : 'General'
+  }
+];
+
 const STORAGE_KEYS = {
   tasks: 'tasks',
   notes: 'notes',
+  noteProjects: 'notes.projects',
   categories: 'finance.categories',
   transactions: 'finance.transactions',
   habits: 'habits',
@@ -266,6 +278,11 @@ const translations = {
     notesComposerTitle: 'Note title',
     notesComposerBody: 'Write a quick thought...',
     addNote: 'Add note',
+    notesProjectLabel: 'Project',
+    notesProjectPlaceholder: 'New project name',
+    addProject: 'Add project',
+    deleteProjectAria: 'Delete project {name}',
+    notesBack: 'Back to list',
     untitled: 'Untitled',
     noteTitlePlaceholder: 'Untitled page',
     startWriting: 'Start writing...',
@@ -420,6 +437,11 @@ const translations = {
     notesComposerTitle: 'Название заметки',
     notesComposerBody: 'Короткая заметка...',
     addNote: 'Добавить заметку',
+    notesProjectLabel: 'Проект',
+    notesProjectPlaceholder: 'Новый проект',
+    addProject: 'Добавить проект',
+    deleteProjectAria: 'Удалить проект {name}',
+    notesBack: 'Назад к списку',
     untitled: 'Без названия',
     noteTitlePlaceholder: 'Страница без названия',
     startWriting: 'Начните писать...',
@@ -601,6 +623,7 @@ const App: React.FC = () => {
 
   const [tasks, setTasks] = useState<CalendarTask[]>([]);
   const [notes, setNotes] = useState<NotePage[]>([]);
+  const [noteProjects, setNoteProjects] = useState<NoteProject[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -711,6 +734,7 @@ const App: React.FC = () => {
     if (!user) {
       setTasks([]);
       setNotes([]);
+      setNoteProjects([]);
       setCategories([]);
       setTransactions([]);
       setHabits([]);
@@ -737,6 +761,16 @@ const App: React.FC = () => {
     };
 
     setTasks(read<CalendarTask[]>(STORAGE_KEYS.tasks, [] as CalendarTask[]));
+    const storedProjects = read<NoteProject[]>(
+      STORAGE_KEYS.noteProjects,
+      getDefaultNoteProjects(language)
+    );
+    const normalizedProjects = storedProjects.length
+      ? storedProjects
+      : getDefaultNoteProjects(language);
+    setNoteProjects(normalizedProjects);
+
+    const defaultProjectId = normalizedProjects[0]?.id ?? 'project-default';
     const storedNotes = read<NotePage[]>(STORAGE_KEYS.notes, [] as NotePage[]);
     setNotes(
       storedNotes.map(note => {
@@ -760,6 +794,7 @@ const App: React.FC = () => {
         return {
           ...note,
           noteType: inferredType,
+          projectId: note.projectId ?? defaultProjectId,
           blocks: normalizedBlocks
         };
       })
@@ -792,6 +827,14 @@ const App: React.FC = () => {
     if (!user) return;
     localStorage.setItem(storageKey(user.uid, STORAGE_KEYS.notes), JSON.stringify(notes));
   }, [user, notes]);
+
+  useEffect(() => {
+    if (!user) return;
+    localStorage.setItem(
+      storageKey(user.uid, STORAGE_KEYS.noteProjects),
+      JSON.stringify(noteProjects)
+    );
+  }, [user, noteProjects]);
 
   useEffect(() => {
     if (!user) return;
@@ -1149,7 +1192,13 @@ const App: React.FC = () => {
           />
         )}
         {activeTab === 'notes' && (
-          <NotesWorkspace language={language} notes={notes} onNotesChange={setNotes} />
+          <NotesWorkspace
+            language={language}
+            notes={notes}
+            noteProjects={noteProjects}
+            onNotesChange={setNotes}
+            onNoteProjectsChange={setNoteProjects}
+          />
         )}
         {activeTab === 'finance' && (
           <FinanceWorkspace
@@ -1847,15 +1896,33 @@ const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
 type NotesWorkspaceProps = {
   language: Language;
   notes: NotePage[];
+  noteProjects: NoteProject[];
   onNotesChange: (notes: NotePage[]) => void;
+  onNoteProjectsChange: (projects: NoteProject[]) => void;
 };
 
-const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ language, notes, onNotesChange }) => {
+const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({
+  language,
+  notes,
+  noteProjects,
+  onNotesChange,
+  onNoteProjectsChange
+}) => {
   const t = (key: TranslationKey, params?: Record<string, string | number>) =>
     translate(language, key, params);
   const [activeNoteType, setActiveNoteType] = useState<'text' | 'checklist'>('text');
   const [composerTitle, setComposerTitle] = useState('');
   const [composerBody, setComposerBody] = useState('');
+  const [projectDraft, setProjectDraft] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState(noteProjects[0]?.id ?? '');
+  const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!noteProjects.length) return;
+    if (!noteProjects.find(project => project.id === selectedProjectId)) {
+      setSelectedProjectId(noteProjects[0].id);
+    }
+  }, [noteProjects, selectedProjectId]);
 
   const filteredNotes = notes.filter(note => note.noteType === activeNoteType);
   const sortedNotes = useMemo(
@@ -1866,27 +1933,41 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ language, notes, onNote
     [filteredNotes]
   );
 
-  const groupedNotes = useMemo(() => {
-    const today = startOfDay(new Date());
-    const groups = {
-      today: [] as NotePage[],
-      week: [] as NotePage[],
-      older: [] as NotePage[]
-    };
+  const projectSections = useMemo(
+    () =>
+      noteProjects
+        .map(project => ({
+          project,
+          notes: sortedNotes.filter(note => note.projectId === project.id)
+        }))
+        .filter(section => section.notes.length > 0),
+    [noteProjects, sortedNotes]
+  );
 
-    sortedNotes.forEach(note => {
-      const diff = differenceInCalendarDays(today, startOfDay(parseISO(note.updatedAt)));
-      if (diff === 0) {
-        groups.today.push(note);
-      } else if (diff <= 6) {
-        groups.week.push(note);
-      } else {
-        groups.older.push(note);
-      }
-    });
+  const activeNote = activeNoteId ? notes.find(note => note.id === activeNoteId) ?? null : null;
 
-    return groups;
-  }, [sortedNotes]);
+  const addProject = () => {
+    const name = projectDraft.trim();
+    if (!name) return;
+    const newProject: NoteProject = { id: createId(), name };
+    onNoteProjectsChange([newProject, ...noteProjects]);
+    setSelectedProjectId(newProject.id);
+    setProjectDraft('');
+  };
+
+  const deleteProject = (projectId: string) => {
+    if (noteProjects.length <= 1) return;
+    const remaining = noteProjects.filter(project => project.id !== projectId);
+    const fallbackId = remaining[0]?.id ?? '';
+    onNoteProjectsChange(remaining);
+    setSelectedProjectId(prev => (prev === projectId ? fallbackId : prev));
+    onNotesChange(
+      notes.map(note => ({
+        ...note,
+        projectId: note.projectId === projectId ? fallbackId : note.projectId
+      }))
+    );
+  };
 
   const updateNote = (noteId: string, updater: (note: NotePage) => NotePage) => {
     onNotesChange(notes.map(note => (note.id === noteId ? updater(note) : note)));
@@ -1894,6 +1975,7 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ language, notes, onNote
 
   const addNote = () => {
     if (!composerTitle.trim() && !composerBody.trim()) return;
+    const projectId = selectedProjectId || noteProjects[0]?.id || 'project-default';
     let blocks: NoteBlock[] = [];
     if (activeNoteType === 'checklist') {
       const items = composerBody
@@ -1918,7 +2000,8 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ language, notes, onNote
       title: composerTitle.trim() || t('noteTitlePlaceholder'),
       updatedAt: new Date().toISOString(),
       blocks,
-      noteType: activeNoteType
+      noteType: activeNoteType,
+      projectId
     };
     onNotesChange([newNote, ...notes]);
     setComposerTitle('');
@@ -1973,6 +2056,31 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ language, notes, onNote
 
       <div className="notes-board">
         <div className="notes-composer">
+          <div className="notes-project-row">
+            <label className="floating-label">
+              <span>{t('notesProjectLabel')}</span>
+              <select
+                value={selectedProjectId}
+                onChange={event => setSelectedProjectId(event.target.value)}
+              >
+                {noteProjects.map(project => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="notes-project-create">
+              <input
+                value={projectDraft}
+                onChange={event => setProjectDraft(event.target.value)}
+                placeholder={t('notesProjectPlaceholder')}
+              />
+              <button className="ghost-button" onClick={addProject}>
+                <FaPlus /> {t('addProject')}
+              </button>
+            </div>
+          </div>
           <div className="notes-composer-row">
             <input
               className="notes-composer-title"
@@ -2007,92 +2115,136 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ language, notes, onNote
           </div>
         </div>
 
-        <div className="notes-stream">
-          {(['today', 'week', 'older'] as const).map(groupKey => {
-            const groupNotes = groupedNotes[groupKey];
-            if (!groupNotes.length) return null;
-            const label =
-              groupKey === 'today'
-                ? t('notesGroupToday')
-                : groupKey === 'week'
-                ? t('notesGroupWeek')
-                : t('notesGroupOlder');
-            return (
-              <div key={groupKey} className="note-group">
-                <h4 className="note-group-title">{label}</h4>
+        {activeNote ? (
+          <div className="note-detail">
+            <button className="ghost-button note-detail-back" onClick={() => setActiveNoteId(null)}>
+              {t('notesBack')}
+            </button>
+            <div className="note-detail-header">
+              <input
+                className="note-detail-title"
+                value={activeNote.title}
+                onChange={event =>
+                  updateNote(activeNote.id, note => ({
+                    ...note,
+                    title: event.target.value,
+                    updatedAt: new Date().toISOString()
+                  }))
+                }
+                placeholder={t('noteTitlePlaceholder')}
+              />
+              <select
+                className="note-detail-project"
+                value={activeNote.projectId}
+                onChange={event =>
+                  updateNote(activeNote.id, note => ({
+                    ...note,
+                    projectId: event.target.value,
+                    updatedAt: new Date().toISOString()
+                  }))
+                }
+              >
+                {noteProjects.map(project => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="note-detail-body">
+              {activeNote.blocks.map(block => (
+                <div key={block.id} className="note-card-block">
+                  {activeNote.noteType === 'checklist' ? (
+                    <label className="note-card-todo">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(block.checked)}
+                        onChange={() => toggleTodo(activeNote.id, block.id)}
+                      />
+                      <input
+                        className="block-input"
+                        value={block.content}
+                        onChange={event =>
+                          updateBlockContent(activeNote.id, block.id, event.target.value)
+                        }
+                        placeholder={t('todoPlaceholder')}
+                      />
+                    </label>
+                  ) : (
+                    <textarea
+                      rows={3}
+                      className="block-textarea"
+                      value={block.content}
+                      onChange={event =>
+                        updateBlockContent(activeNote.id, block.id, event.target.value)
+                      }
+                      placeholder={t('textPlaceholder')}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="note-card-actions">
+              <button className="ghost-button add-block" onClick={() => addBlock(activeNote.id)}>
+                <FaPlus /> {activeNote.noteType === 'checklist' ? t('addItem') : t('addParagraph')}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="notes-stream">
+            {projectSections.map(section => (
+              <div key={section.project.id} className="note-group">
+                <div className="note-group-header">
+                  <h4 className="note-group-title">{section.project.name}</h4>
+                  <button
+                    className="icon-button"
+                    onClick={() => deleteProject(section.project.id)}
+                    aria-label={t('deleteProjectAria', { name: section.project.name })}
+                  >
+                    <FaTimes />
+                  </button>
+                </div>
                 <div className="note-group-list">
-                  {groupNotes.map(note => (
-                    <article key={note.id} className={`note-card note-card--${note.noteType}`}>
+                  {section.notes.map(note => (
+                    <article
+                      key={note.id}
+                      className={`note-card note-card--${note.noteType}`}
+                      onClick={() => setActiveNoteId(note.id)}
+                    >
                       <div className="note-card-header">
-                        <input
-                          className="note-card-title"
-                          value={note.title}
-                          onChange={event =>
-                            updateNote(note.id, current => ({
-                              ...current,
-                              title: event.target.value,
-                              updatedAt: new Date().toISOString()
-                            }))
-                          }
-                          placeholder={t('noteTitlePlaceholder')}
-                        />
-                        <div className="note-card-meta">
-                          <span>{formatDate(language, parseISO(note.updatedAt), 'MMM d · h:mm a')}</span>
-                          <button className="icon-button" onClick={() => deleteNote(note.id)}>
-                            <FaTrash />
-                          </button>
+                        <div>
+                          <h3 className="note-card-title-text">
+                            {note.title || t('noteTitlePlaceholder')}
+                          </h3>
+                          <span className="note-card-updated">
+                            {formatDate(language, parseISO(note.updatedAt), 'MMM d · h:mm a')}
+                          </span>
                         </div>
-                      </div>
-                      <div className="note-card-body">
-                        {note.blocks.map(block => (
-                          <div key={block.id} className="note-card-block">
-                            {note.noteType === 'checklist' ? (
-                              <label className="note-card-todo">
-                                <input
-                                  type="checkbox"
-                                  checked={Boolean(block.checked)}
-                                  onChange={() => toggleTodo(note.id, block.id)}
-                                />
-                                <input
-                                  className="block-input"
-                                  value={block.content}
-                                  onChange={event =>
-                                    updateBlockContent(note.id, block.id, event.target.value)
-                                  }
-                                  placeholder={t('todoPlaceholder')}
-                                />
-                              </label>
-                            ) : (
-                              <textarea
-                                rows={2}
-                                className="block-textarea"
-                                value={block.content}
-                                onChange={event =>
-                                  updateBlockContent(note.id, block.id, event.target.value)
-                                }
-                                placeholder={t('textPlaceholder')}
-                              />
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      <div className="note-card-actions">
-                        <button className="ghost-button add-block" onClick={() => addBlock(note.id)}>
-                          <FaPlus /> {note.noteType === 'checklist' ? t('addItem') : t('addParagraph')}
+                        <button
+                          className="icon-button"
+                          onClick={event => {
+                            event.stopPropagation();
+                            deleteNote(note.id);
+                          }}
+                        >
+                          <FaTrash />
                         </button>
                       </div>
+                      <p className="note-card-preview">
+                        {note.blocks[0]?.content || t('startWriting')}
+                      </p>
                     </article>
                   ))}
                 </div>
               </div>
-            );
-          })}
-          {sortedNotes.length === 0 && (
-            <p className="notes-empty">
-              {activeNoteType === 'text' ? t('noTextNotes') : t('noChecklists')}
-            </p>
-          )}
-        </div>
+            ))}
+            {sortedNotes.length === 0 && (
+              <p className="notes-empty">
+                {activeNoteType === 'text' ? t('noTextNotes') : t('noChecklists')}
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );
