@@ -507,6 +507,20 @@ body.theme-light {
   gap: 24px;
 }
 
+/* Compact habits workspace spacing to avoid tall empty cards. */
+.habits-panel .panel-body {
+  gap: 12px;
+}
+
+.habits-panel .panel-header__titles h2 {
+  font-size: clamp(1.2rem, 4.2vw, 1.5rem);
+}
+
+.habits-panel .panel-subtitle {
+  margin-top: 4px;
+  font-size: 0.9rem;
+}
+
 .card {
   padding: var(--card-padding-compact);
   border-radius: var(--radius-md);
@@ -945,8 +959,8 @@ body.theme-light .tile-value.negative {
 
 /* Hard reset for habit tracker spacing (remove empty vertical air). */
 .habits-panel .habit-card {
-  padding: 16px;
-  gap: 10px;
+  padding: 12px;
+  gap: 8px;
 }
 
 .habits-panel .habit-card.is-empty {
@@ -1012,6 +1026,41 @@ body.theme-light .tile-value.negative {
   display: flex;
   flex-direction: column;
   gap: 10px; /* Reduce list spacing to shrink card */
+}
+
+/* Rebuilt compact habits card layout. */
+.habit-card--compact {
+  border-radius: 18px;
+}
+
+.habit-card--compact .habit-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.habit-card--compact .habit-card-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.25;
+}
+
+.habit-card--compact .habit-add--compact {
+  width: 100%;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.habit-card--compact .habit-add--compact input {
+  flex: 1;
+  min-width: 140px;
+  min-height: 32px;
+  padding: 6px 10px;
+}
+
+.habit-card--compact .habit-add--compact .ghost-button {
+  padding: 6px 12px;
 }
 
 .habit-row {
@@ -2355,6 +2404,20 @@ body.theme-light .tile-value.negative {
     font-size: 0.9rem;
     width: 100%;
     justify-content: center;
+  }
+
+  .habit-card--compact .habit-card-header h3 {
+    font-size: 1rem;
+  }
+
+  .habit-card--compact .habit-add--compact {
+    gap: 6px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .habit-card--compact .habit-add--compact input {
+    min-height: 30px;
   }
 
   .habit-progress-label {

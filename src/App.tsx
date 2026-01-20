@@ -2077,30 +2077,28 @@ const HabitsWorkspace: React.FC<HabitsWorkspaceProps> = ({
         </div>
       </header>
       <div className="panel-body">
-        <article className="card habit-card">
-          <div className="card-heading">
-            <div>
-              <span className="card-badge muted">{t('habitBadge')}</span>
-              <h3>{t('habitTitle')}</h3>
-            </div>
-            <div className="habit-add">
-              <input
-                type="text"
-                placeholder={t('habitPlaceholder')}
-                value={habitDraft}
-                onChange={(event) => setHabitDraft(event.target.value)}
-              />
-              <button
-                className="ghost-button"
-                onClick={() => {
-                  if (!habitDraft.trim()) return;
-                  onAddHabit(habitDraft);
-                  setHabitDraft('');
-                }}
-              >
-                <FaPlus /> {t('addHabit')}
-              </button>
-            </div>
+        <article className="card habit-card habit-card--compact">
+          <div className="habit-card-header">
+            <span className="card-badge muted">{t('habitBadge')}</span>
+            <h3>{t('habitTitle')}</h3>
+          </div>
+          <div className="habit-add habit-add--compact">
+            <input
+              type="text"
+              placeholder={t('habitPlaceholder')}
+              value={habitDraft}
+              onChange={(event) => setHabitDraft(event.target.value)}
+            />
+            <button
+              className="ghost-button"
+              onClick={() => {
+                if (!habitDraft.trim()) return;
+                onAddHabit(habitDraft);
+                setHabitDraft('');
+              }}
+            >
+              <FaPlus /> {t('addHabit')}
+            </button>
           </div>
           {habits.length === 0 ? (
             <p className="card-row__meta">{t('habitEmptyHint')}</p>
