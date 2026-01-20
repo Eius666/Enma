@@ -275,8 +275,7 @@ const translations = {
     notesGroupToday: 'Today',
     notesGroupWeek: 'This week',
     notesGroupOlder: 'Earlier',
-    notesComposerTitle: 'Note title',
-    notesComposerBody: 'Write a quick thought...',
+    notesComposerBody: 'Title, then your note...',
     addNote: 'Add note',
     notesProjectLabel: 'Project',
     notesProjectPlaceholder: 'New project name',
@@ -434,8 +433,7 @@ const translations = {
     notesGroupToday: 'Сегодня',
     notesGroupWeek: 'На этой неделе',
     notesGroupOlder: 'Ранее',
-    notesComposerTitle: 'Название заметки',
-    notesComposerBody: 'Короткая заметка...',
+    notesComposerBody: 'Название и текст заметки...',
     addNote: 'Добавить заметку',
     notesProjectLabel: 'Проект',
     notesProjectPlaceholder: 'Новый проект',
@@ -1911,7 +1909,6 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({
   const t = (key: TranslationKey, params?: Record<string, string | number>) =>
     translate(language, key, params);
   const [activeNoteType, setActiveNoteType] = useState<'text' | 'checklist'>('text');
-  const [composerTitle, setComposerTitle] = useState('');
   const [composerBody, setComposerBody] = useState('');
   const [projectDraft, setProjectDraft] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState(noteProjects[0]?.id ?? '');
@@ -1974,37 +1971,35 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({
   };
 
   const addNote = () => {
-    if (!composerTitle.trim() && !composerBody.trim()) return;
+    if (!composerBody.trim()) return;
     const projectId = selectedProjectId || noteProjects[0]?.id || 'project-default';
+    const [firstLine, ...restLines] = composerBody.split('\n');
+    const title = firstLine?.trim() || t('noteTitlePlaceholder');
+    const bodyText = restLines.join('\n').trim();
     let blocks: NoteBlock[] = [];
     if (activeNoteType === 'checklist') {
-      const items = composerBody
-        .split('\n')
-        .map(line => line.trim())
-        .filter(Boolean);
+      const items = restLines.map(line => line.trim()).filter(Boolean);
       blocks = items.length
         ? items.map(item => ({ id: createId(), type: 'todo', content: item, checked: false }))
         : [{ id: createId(), type: 'todo', content: '', checked: false }];
     } else {
-      const content = composerBody.trim();
       blocks = [
         {
           id: createId(),
           type: 'paragraph',
-          content: content || t('startWriting')
+          content: bodyText || t('startWriting')
         }
       ];
     }
     const newNote: NotePage = {
       id: createId(),
-      title: composerTitle.trim() || t('noteTitlePlaceholder'),
+      title,
       updatedAt: new Date().toISOString(),
       blocks,
       noteType: activeNoteType,
       projectId
     };
     onNotesChange([newNote, ...notes]);
-    setComposerTitle('');
     setComposerBody('');
   };
 
@@ -2056,45 +2051,44 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({
 
       <div className="notes-board">
         <div className="notes-composer">
-          <div className="notes-project-row">
-            <label className="floating-label">
-              <span>{t('notesProjectLabel')}</span>
-              <select
-                value={selectedProjectId}
-                onChange={event => setSelectedProjectId(event.target.value)}
+          <div className="notes-project-tabs">
+            {noteProjects.map(project => (
+              <button
+                key={project.id}
+                className={`notes-project-tab ${
+                  selectedProjectId === project.id ? 'is-active' : ''
+                }`}
+                onClick={() => setSelectedProjectId(project.id)}
               >
-                {noteProjects.map(project => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="notes-project-create">
-              <input
-                value={projectDraft}
-                onChange={event => setProjectDraft(event.target.value)}
-                placeholder={t('notesProjectPlaceholder')}
-              />
-              <button className="ghost-button" onClick={addProject}>
-                <FaPlus /> {t('addProject')}
+                <span>{project.name}</span>
+                {selectedProjectId === project.id && noteProjects.length > 1 && (
+                  <span
+                    role="button"
+                    className="notes-project-remove"
+                    onClick={event => {
+                      event.stopPropagation();
+                      deleteProject(project.id);
+                    }}
+                  >
+                    <FaTimes />
+                  </span>
+                )}
               </button>
-            </div>
+            ))}
           </div>
-          <div className="notes-composer-row">
+          <div className="notes-project-create">
             <input
-              className="notes-composer-title"
-              value={composerTitle}
-              onChange={event => setComposerTitle(event.target.value)}
-              placeholder={t('notesComposerTitle')}
+              value={projectDraft}
+              onChange={event => setProjectDraft(event.target.value)}
+              placeholder={t('notesProjectPlaceholder')}
             />
-            <button className="primary-button" onClick={addNote}>
-              <FaPlus /> {t('addNote')}
+            <button className="ghost-button" onClick={addProject}>
+              <FaPlus /> {t('addProject')}
             </button>
           </div>
           <textarea
-            rows={2}
-            className="notes-composer-body"
+            rows={4}
+            className="notes-composer-body notes-composer-body--single"
             value={composerBody}
             onChange={event => setComposerBody(event.target.value)}
             placeholder={t('notesComposerBody')}
@@ -2113,6 +2107,9 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({
               <FaTasks /> {t('noteTypeChecklist')}
             </button>
           </div>
+          <button className="primary-button notes-composer-submit" onClick={addNote}>
+            <FaPlus /> {t('addNote')}
+          </button>
         </div>
 
         {activeNote ? (
