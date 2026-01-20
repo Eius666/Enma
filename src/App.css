@@ -1060,6 +1060,18 @@ body.theme-light .tile-value.negative {
   line-height: 1.25;
 }
 
+/* Match day-flow typography with other cards. */
+.habit-checkin.habit-card--compact .habit-card-header {
+  gap: 10px;
+}
+
+.habit-checkin.habit-card--compact .habit-card-header h3 {
+  margin-top: 10px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
 .habit-card--compact .habit-add--compact {
   width: 100%;
   align-items: center;
