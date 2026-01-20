@@ -858,6 +858,46 @@ body.theme-light .ghost-button:hover {
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 20px;
   width: 100%;
+  align-items: start;
+}
+
+/* Tighten Day Flow card spacing to remove large vertical gaps. */
+.overview-grid .card {
+  gap: 12px;
+  padding: 16px;
+}
+
+.overview-grid .card-row {
+  padding: 12px;
+  gap: 12px;
+}
+
+.overview-grid .card-row__meta {
+  line-height: 1.35;
+}
+
+.overview-grid .note-preview {
+  gap: 6px;
+}
+
+.overview-grid .reminder-preview {
+  gap: 10px;
+}
+
+.overview-grid .reminder-preview-item {
+  padding: 10px;
+}
+
+.overview-grid .card-forecast .card-row {
+  margin-top: 0;
+}
+
+.overview-grid .habit-checkin {
+  min-height: auto;
+}
+
+.overview-grid .habit-checkin.is-empty {
+  min-height: auto;
 }
 
 /* Hard unify Day Flow card headings/badges to the same typography. */
