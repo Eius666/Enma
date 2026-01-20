@@ -1884,22 +1884,6 @@ const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({ language, notes, onNote
     }
   };
 
-  const addBlock = (noteId: string, index: number) => {
-    updateNote(noteId, note => {
-      const newBlocks = [...note.blocks];
-      const blockTemplate: NoteBlock =
-        note.noteType === 'checklist'
-          ? { id: createId(), type: 'todo', content: '', checked: false }
-          : { id: createId(), type: 'paragraph', content: '' };
-      newBlocks.splice(index + 1, 0, blockTemplate);
-      return {
-        ...note,
-        blocks: newBlocks,
-        updatedAt: new Date().toISOString()
-      };
-    });
-  };
-
   const updateBlockContent = (noteId: string, blockId: string, content: string) => {
     updateNote(noteId, note => {
       const newBlocks = note.blocks.map(block =>
