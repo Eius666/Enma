@@ -1053,25 +1053,20 @@ body.theme-light .tile-value.negative {
 .habit-card--compact .habit-card-header {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-}
-
-.habit-card--compact .habit-card-header h3 {
-  margin: 0;
-  font-size: 1.05rem;
-  line-height: 1.25;
-}
-
-/* Match day-flow typography with other cards. */
-.habit-checkin.habit-card--compact .habit-card-header {
   gap: 10px;
 }
 
-.habit-checkin.habit-card--compact .habit-card-header h3 {
+.habit-card--compact .habit-card-header h3 {
   margin-top: 10px;
   font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
+  line-height: 1.25;
+}
+
+/* Keep day-flow habit header aligned with other cards. */
+.habit-checkin.habit-card--compact .habit-card-header {
+  gap: 10px;
 }
 
 .habit-card--compact .habit-add--compact {
