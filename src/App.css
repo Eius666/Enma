@@ -461,6 +461,14 @@ body.theme-light {
   margin-top: 6px;
 }
 
+.ui-version {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  margin-left: 6px;
+}
+
 .panel-badge {
   display: inline-flex;
   padding: var(--chip-padding-y) var(--chip-padding-x);

@@ -1412,7 +1412,9 @@ const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
         <div className="panel-header__titles">
           <span className="panel-badge">{t('dayFlowBadge')}</span>
           <h2>{t('dayFlowTitle')}</h2>
-          <p className="panel-subtitle">{t('dayFlowSubtitle')}</p>
+          <p className="panel-subtitle">
+            {t('dayFlowSubtitle')} <span className="ui-version">UI v4.3</span>
+          </p>
         </div>
       </header>
 
