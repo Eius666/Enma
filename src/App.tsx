@@ -37,7 +37,7 @@ import {
   signOut
 } from 'firebase/auth';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import './App.css';
+import './App.v2.css';
 import { auth, db } from './src/firebase';
 import { useTelegramWebApp } from './hooks/useTelegramWebApp';
 
