@@ -175,7 +175,7 @@ const RATES_STORAGE_KEY = 'enma.exchangeRates';
 const RATES_TTL_MS = 60 * 60 * 1000;
 const BASE_CURRENCY: Currency = 'USD';
 const SUPPORTED_CURRENCIES: Currency[] = ['USD', 'EUR', 'GBP', 'RUB'];
-const TELEGRAM_BOT_TOKEN = '8204403009:AAHEaGBlTOy4vFwG1OpHGaP3bUrGEUK0izA';
+const TELEGRAM_BOT_TOKEN = '8204403009:AAHEzUbtWU0BXjX2CllzX0DqVtehhw8Fghg';
 
 const translations = {
   en: {
