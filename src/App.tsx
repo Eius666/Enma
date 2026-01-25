@@ -175,7 +175,6 @@ const RATES_STORAGE_KEY = 'enma.exchangeRates';
 const RATES_TTL_MS = 60 * 60 * 1000;
 const BASE_CURRENCY: Currency = 'USD';
 const SUPPORTED_CURRENCIES: Currency[] = ['USD', 'EUR', 'GBP', 'RUB'];
-const TELEGRAM_BOT_TOKEN = '8204403009:AAHEzUbtWU0BXjX2CllzX0DqVtehhw8Fghg';
 
 const translations = {
   en: {
@@ -555,16 +554,20 @@ const notifyTelegramReminder = async (
       date: dateLabel,
       time: reminder.time
     })}${reminder.notes ? `\n${reminder.notes}` : ''}`;
-    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    const response = await fetch('/api/telegram/send', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        chat_id: chatId,
+        chatId,
         text
       })
     });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.ok === false) {
+      console.warn('Telegram reminder failed', payload);
+    }
   } catch (error) {
     console.warn('Failed to send Telegram reminder', error);
   }
