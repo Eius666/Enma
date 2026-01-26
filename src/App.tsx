@@ -36,7 +36,7 @@ import {
   signInWithEmailAndPassword,
   signOut
 } from 'firebase/auth';
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { Timestamp, deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import './App.v2.css';
 import { auth, db } from './src/firebase';
 import { useTelegramWebApp } from './hooks/useTelegramWebApp';
@@ -542,18 +542,30 @@ const writeRatesCache = (payload: {
   }
 };
 
+const buildTelegramReminderText = (reminder: Reminder, language: Language) => {
+  const dateLabel = formatDate(language, parseISO(reminder.date), 'MMM d, yyyy');
+  return `${translate(language, 'telegramReminderLine', {
+    title: reminder.title,
+    date: dateLabel,
+    time: reminder.time
+  })}${reminder.notes ? `\n${reminder.notes}` : ''}`;
+};
+
+const getReminderScheduledDate = (reminder: Reminder) => {
+  const baseDate = parseISO(reminder.date);
+  const [hoursStr, minutesStr] = reminder.time.split(':');
+  return setMinutes(setHours(baseDate, Number(hoursStr) || 0), Number(minutesStr) || 0);
+};
+
+const ENABLE_CLIENT_REMINDERS = process.env.REACT_APP_CLIENT_REMINDERS === 'true';
+
 const notifyTelegramReminder = async (
   chatId: number,
   reminder: Reminder,
   language: Language
 ) => {
   try {
-    const dateLabel = formatDate(language, parseISO(reminder.date), 'MMM d, yyyy');
-    const text = `${translate(language, 'telegramReminderLine', {
-      title: reminder.title,
-      date: dateLabel,
-      time: reminder.time
-    })}${reminder.notes ? `\n${reminder.notes}` : ''}`;
+    const text = buildTelegramReminderText(reminder, language);
     const response = await fetch('/api/telegram/send', {
       method: 'POST',
       headers: {
@@ -866,7 +878,26 @@ const App: React.FC = () => {
     );
   }, [user, reminders]);
 
+  const remindersBackfillRef = useRef(false);
+
   useEffect(() => {
+    if (!user || !telegram?.initDataUnsafe?.user?.id) return;
+    if (remindersBackfillRef.current) return;
+    if (reminders.length === 0) {
+      remindersBackfillRef.current = true;
+      return;
+    }
+    remindersBackfillRef.current = true;
+    reminders.forEach(reminder => {
+      persistReminderToFirestore(reminder, {
+        isNew: true,
+        status: reminder.done ? 'done' : 'pending'
+      });
+    });
+  }, [reminders, persistReminderToFirestore, telegram, user]);
+
+  useEffect(() => {
+    if (!ENABLE_CLIENT_REMINDERS) return;
     if (!telegram?.initDataUnsafe?.user?.id) return;
     const chatId = telegram.initDataUnsafe.user.id;
     const interval = setInterval(() => {
@@ -874,12 +905,7 @@ const App: React.FC = () => {
         let changed = false;
         const updated = prev.map(reminder => {
           if (reminder.done || reminder.notified) return reminder;
-          const baseDate = parseISO(reminder.date);
-          const [hoursStr, minutesStr] = reminder.time.split(':');
-          const scheduled = setMinutes(
-            setHours(baseDate, Number(hoursStr) || 0),
-            Number(minutesStr) || 0
-          );
+          const scheduled = getReminderScheduledDate(reminder);
           if (scheduled <= new Date()) {
             notifyTelegramReminder(chatId, reminder, language);
             changed = true;
@@ -1025,6 +1051,50 @@ const App: React.FC = () => {
     setHabits(prev => prev.filter(habit => habit.id !== habitId));
   };
 
+  const persistReminderToFirestore = useCallback(
+    async (reminder: Reminder, options?: { isNew?: boolean; status?: 'pending' | 'done' }) => {
+      if (!user || !telegram?.initDataUnsafe?.user?.id) return;
+      const chatId = telegram.initDataUnsafe.user.id;
+      const scheduledAt = getReminderScheduledDate(reminder);
+      const status = options?.status ?? (reminder.done ? 'done' : 'pending');
+      const payload = {
+        id: reminder.id,
+        userId: user.uid,
+        chatId,
+        title: reminder.title,
+        notes: reminder.notes ?? null,
+        date: reminder.date,
+        time: reminder.time,
+        scheduledAt: Timestamp.fromDate(scheduledAt),
+        status,
+        done: reminder.done,
+        language,
+        telegramText: buildTelegramReminderText(reminder, language),
+        updatedAt: serverTimestamp(),
+        ...(options?.isNew ? { createdAt: serverTimestamp() } : {})
+      };
+
+      try {
+        await setDoc(doc(db, 'reminders', reminder.id), payload, { merge: true });
+      } catch (error) {
+        console.warn('Failed to sync reminder', error);
+      }
+    },
+    [language, telegram, user]
+  );
+
+  const deleteReminderFromFirestore = useCallback(
+    async (reminderId: string) => {
+      if (!user) return;
+      try {
+        await deleteDoc(doc(db, 'reminders', reminderId));
+      } catch (error) {
+        console.warn('Failed to delete reminder from Firestore', error);
+      }
+    },
+    [user]
+  );
+
   const addReminder = (date: Date, title: string, time: string, notes?: string) => {
     if (!title.trim()) return;
     const reminder: Reminder = {
@@ -1037,13 +1107,22 @@ const App: React.FC = () => {
       notified: false
     };
     setReminders(prev => [...prev, reminder]);
+    persistReminderToFirestore(reminder, { isNew: true, status: 'pending' });
   };
 
   const toggleReminder = (id: string) => {
     setReminders(prev =>
       prev.map(reminder =>
         reminder.id === id
-          ? { ...reminder, done: !reminder.done, notified: reminder.done ? false : reminder.notified }
+          ? (() => {
+              const next = {
+                ...reminder,
+                done: !reminder.done,
+                notified: reminder.done ? false : reminder.notified
+              };
+              persistReminderToFirestore(next);
+              return next;
+            })()
           : reminder
       )
     );
@@ -1051,6 +1130,7 @@ const App: React.FC = () => {
 
   const deleteReminder = (id: string) => {
     setReminders(prev => prev.filter(reminder => reminder.id !== id));
+    deleteReminderFromFirestore(id);
   };
 
   useEffect(() => {
