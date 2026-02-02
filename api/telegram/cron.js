@@ -89,6 +89,7 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true, processed: results.length, results });
   } catch (error) {
+    console.error('❌ Cron execution error:', error);
     res.status(500).json({ ok: false, description: 'Cron failed' });
   }
 };

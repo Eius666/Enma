@@ -878,6 +878,38 @@ const App: React.FC = () => {
     );
   }, [user, reminders]);
 
+  const persistReminderToFirestore = useCallback(
+    async (reminder: Reminder, options?: { isNew?: boolean; status?: 'pending' | 'done' }) => {
+      if (!user || !telegram?.initDataUnsafe?.user?.id) return;
+      const chatId = telegram.initDataUnsafe.user.id;
+      const scheduledAt = getReminderScheduledDate(reminder);
+      const status = options?.status ?? (reminder.done ? 'done' : 'pending');
+      const payload = {
+        id: reminder.id,
+        userId: user.uid,
+        chatId,
+        title: reminder.title,
+        notes: reminder.notes ?? null,
+        date: reminder.date,
+        time: reminder.time,
+        scheduledAt: Timestamp.fromDate(scheduledAt),
+        status,
+        done: reminder.done,
+        language,
+        telegramText: buildTelegramReminderText(reminder, language),
+        updatedAt: serverTimestamp(),
+        ...(options?.isNew ? { createdAt: serverTimestamp() } : {})
+      };
+
+      try {
+        await setDoc(doc(db, 'reminders', reminder.id), payload, { merge: true });
+      } catch (error) {
+        console.warn('Failed to sync reminder', error);
+      }
+    },
+    [language, telegram, user]
+  );
+
   const remindersBackfillRef = useRef(false);
 
   useEffect(() => {
@@ -1051,37 +1083,7 @@ const App: React.FC = () => {
     setHabits(prev => prev.filter(habit => habit.id !== habitId));
   };
 
-  const persistReminderToFirestore = useCallback(
-    async (reminder: Reminder, options?: { isNew?: boolean; status?: 'pending' | 'done' }) => {
-      if (!user || !telegram?.initDataUnsafe?.user?.id) return;
-      const chatId = telegram.initDataUnsafe.user.id;
-      const scheduledAt = getReminderScheduledDate(reminder);
-      const status = options?.status ?? (reminder.done ? 'done' : 'pending');
-      const payload = {
-        id: reminder.id,
-        userId: user.uid,
-        chatId,
-        title: reminder.title,
-        notes: reminder.notes ?? null,
-        date: reminder.date,
-        time: reminder.time,
-        scheduledAt: Timestamp.fromDate(scheduledAt),
-        status,
-        done: reminder.done,
-        language,
-        telegramText: buildTelegramReminderText(reminder, language),
-        updatedAt: serverTimestamp(),
-        ...(options?.isNew ? { createdAt: serverTimestamp() } : {})
-      };
 
-      try {
-        await setDoc(doc(db, 'reminders', reminder.id), payload, { merge: true });
-      } catch (error) {
-        console.warn('Failed to sync reminder', error);
-      }
-    },
-    [language, telegram, user]
-  );
 
   const deleteReminderFromFirestore = useCallback(
     async (reminderId: string) => {
