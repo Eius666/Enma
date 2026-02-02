@@ -23,7 +23,11 @@ module.exports = async (req, res) => {
     const header = req.headers?.authorization ?? '';
     const bearer = header.startsWith('Bearer ') ? header.slice(7) : '';
     const querySecret = typeof req.query?.secret === 'string' ? req.query.secret : '';
-    if (bearer !== cronSecret && querySecret !== cronSecret) {
+    // Allow Vercel Cron automatically
+    const isVercelCron = req.headers['user-agent'] === 'vercel-cron/1.0';
+    
+    if (!isVercelCron && bearer !== cronSecret && querySecret !== cronSecret) {
+      console.warn('⚠️ Unauthorized cron attempt');
       res.status(401).json({ ok: false, description: 'Unauthorized' });
       return;
     }
