@@ -880,7 +880,17 @@ const App: React.FC = () => {
 
   const persistReminderToFirestore = useCallback(
     async (reminder: Reminder, options?: { isNew?: boolean; status?: 'pending' | 'done' }) => {
-      if (!user || !telegram?.initDataUnsafe?.user?.id) return;
+      if (!user) {
+         // Debug Alert
+         if (options?.isNew) alert('DEBUG: Error - No Firebase User');
+         return;
+      }
+      if (!telegram?.initDataUnsafe?.user?.id) {
+         // Debug Alert
+         if (options?.isNew) alert('DEBUG: Error - No Telegram ID');
+         return;
+      }
+      
       const chatId = telegram.initDataUnsafe.user.id;
       const scheduledAt = getReminderScheduledDate(reminder);
       const status = options?.status ?? (reminder.done ? 'done' : 'pending');
@@ -903,8 +913,11 @@ const App: React.FC = () => {
 
       try {
         await setDoc(doc(db, 'reminders', reminder.id), payload, { merge: true });
+        // confirm save success
+        // if (options?.isNew) alert('DEBUG: Saved to Firestore!');
       } catch (error) {
         console.warn('Failed to sync reminder', error);
+        alert(`DEBUG: Save Failed - ${(error as Error).message}`);
       }
     },
     [language, telegram, user]
