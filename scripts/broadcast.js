@@ -24,7 +24,10 @@ const run = async () => {
     .map(doc => doc.data().chatId)
     .filter(Boolean);
 
+  console.log(`Found ${chatIds.length} chat ids.`);
+
   let sent = 0;
+  let failed = 0;
   for (const chatId of chatIds) {
     try {
       const response = await fetch(
@@ -38,13 +41,21 @@ const run = async () => {
       const payload = await response.json();
       if (response.ok && payload.ok) {
         sent += 1;
+      } else {
+        failed += 1;
+        console.warn('Failed to send message', {
+          chatId,
+          status: response.status,
+          description: payload?.description
+        });
       }
     } catch (error) {
+      failed += 1;
       console.warn('Failed to send message to chat', chatId, error);
     }
   }
 
-  console.log(`Sent to ${sent}/${chatIds.length} users.`);
+  console.log(`Sent to ${sent}/${chatIds.length} users. Failed: ${failed}.`);
 };
 
 run().catch(error => {
