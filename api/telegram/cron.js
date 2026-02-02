@@ -18,6 +18,17 @@ module.exports = async (req, res) => {
     return;
   }
 
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret) {
+    const header = req.headers?.authorization ?? '';
+    const bearer = header.startsWith('Bearer ') ? header.slice(7) : '';
+    const querySecret = typeof req.query?.secret === 'string' ? req.query.secret : '';
+    if (bearer !== cronSecret && querySecret !== cronSecret) {
+      res.status(401).json({ ok: false, description: 'Unauthorized' });
+      return;
+    }
+  }
+
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
     res.status(500).json({ ok: false, description: 'Missing TELEGRAM_BOT_TOKEN' });

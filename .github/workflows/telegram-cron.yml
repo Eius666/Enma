@@ -1,0 +1,18 @@
+name: Telegram reminder cron
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping-cron:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call reminder cron endpoint
+        run: |
+          curl -sS -X POST "$CRON_ENDPOINT" \
+            -H "Authorization: Bearer $CRON_SECRET"
+        env:
+          CRON_ENDPOINT: ${{ secrets.CRON_ENDPOINT }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
