@@ -956,6 +956,24 @@ const App: React.FC = () => {
   const remindersBackfillRef = useRef(false);
   const transactionsBackfillRef = useRef(false);
 
+  const refreshTransactionsFromFirestore = useCallback(async () => {
+    if (!user) return;
+    try {
+      const q = query(collection(db, 'transactions'), where('userId', '==', user.uid), orderBy('date', 'desc'));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const cloudTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
+        setTransactions(cloudTransactions);
+        alert(`✅ Загружено ${cloudTransactions.length} транзакций из облака`);
+      } else {
+        alert('ℹ️ Нет транзакций в облачной базе');
+      }
+    } catch (error) {
+      console.warn('Failed to fetch transactions from cloud', error);
+      alert('❌ Ошибка загрузки из облака');
+    }
+  }, [user]);
+
   useEffect(() => {
     if (!user) return;
     
@@ -1373,6 +1391,7 @@ const App: React.FC = () => {
             onTransactionsChange={setTransactions}
             onPersistTransaction={persistTransactionToFirestore}
             onDeleteTransaction={deleteTransactionFromFirestore}
+            onRefreshTransactions={refreshTransactionsFromFirestore}
           />
         )}
         {activeTab === 'habits' && (
@@ -2534,6 +2553,7 @@ type FinanceWorkspaceProps = {
   onTransactionsChange: (transactions: Transaction[]) => void;
   onPersistTransaction: (transaction: Transaction) => void;
   onDeleteTransaction: (id: string) => void;
+  onRefreshTransactions: () => void;
 };
 
 const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
@@ -2546,7 +2566,8 @@ const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
   transactions,
   onTransactionsChange,
   onPersistTransaction,
-  onDeleteTransaction
+  onDeleteTransaction,
+  onRefreshTransactions
 }) => {
   const t = (key: TranslationKey, params?: Record<string, string | number>) =>
     translate(language, key, params);
@@ -2772,7 +2793,16 @@ const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
         </div>
 
         <div className="transactions-card">
-          <h3>{t('recentActivity')} ({transactions.length})</h3>
+          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+            <h3>{t('recentActivity')} ({transactions.length})</h3>
+            <button 
+              className="ghost-button" 
+              onClick={onRefreshTransactions}
+              style={{padding: '8px 16px'}}
+            >
+              🔄 Обновить
+            </button>
+          </div>
           {transactions.length === 0 ? (
             <p className="empty-hint">{t('noTransactions')}</p>
           ) : (
