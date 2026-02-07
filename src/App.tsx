@@ -36,7 +36,7 @@ import {
   signInWithEmailAndPassword,
   signOut
 } from 'firebase/auth';
-import { Timestamp, deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { Timestamp, deleteDoc, doc, serverTimestamp, setDoc, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import './App.v2.css';
 import { auth, db } from './src/firebase';
 import { useTelegramWebApp } from './hooks/useTelegramWebApp';
@@ -878,6 +878,43 @@ const App: React.FC = () => {
     );
   }, [user, reminders]);
 
+  useEffect(() => {
+    if (!user || !telegram?.initDataUnsafe?.user?.id) return;
+    const chatId = telegram.initDataUnsafe.user.id;
+    setDoc(doc(db, 'users', user.uid), {
+      chatId,
+      updatedAt: serverTimestamp()
+    }, { merge: true }).catch(err => console.warn('Failed to sync user mapping', err));
+  }, [user, telegram]);
+
+  const persistTransactionToFirestore = useCallback(
+    async (transaction: Transaction) => {
+      if (!user) return;
+      try {
+        await setDoc(doc(db, 'transactions', transaction.id), {
+          ...transaction,
+          userId: user.uid,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      } catch (error) {
+        console.warn('Failed to sync transaction', error);
+      }
+    },
+    [user]
+  );
+
+  const deleteTransactionFromFirestore = useCallback(
+    async (id: string) => {
+      if (!user) return;
+      try {
+        await deleteDoc(doc(db, 'transactions', id));
+      } catch (error) {
+        console.warn('Failed to delete transaction from Firestore', error);
+      }
+    },
+    [user]
+  );
+
   const persistReminderToFirestore = useCallback(
     async (reminder: Reminder, options?: { isNew?: boolean; status?: 'pending' | 'done' }) => {
       if (!user) {
@@ -917,6 +954,41 @@ const App: React.FC = () => {
   );
 
   const remindersBackfillRef = useRef(false);
+  const transactionsBackfillRef = useRef(false);
+
+  useEffect(() => {
+    if (!user) return;
+    
+    const fetchTransactions = async () => {
+      try {
+        const q = query(collection(db, 'transactions'), where('userId', '==', user.uid), orderBy('date', 'desc'));
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+          const cloudTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
+          setTransactions(prev => {
+            const existingIds = new Set(prev.map(t => t.id));
+            const fresh = cloudTransactions.filter(t => !existingIds.has(t.id));
+            return [...fresh, ...prev].sort((a,b) => b.date.localeCompare(a.date));
+          });
+        }
+      } catch (error) {
+        console.warn('Failed to fetch transactions from cloud', error);
+      }
+    };
+
+    fetchTransactions();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (transactionsBackfillRef.current) return;
+    if (transactions.length === 0) {
+      transactionsBackfillRef.current = true;
+      return;
+    }
+    transactionsBackfillRef.current = true;
+    transactions.forEach(tx => persistTransactionToFirestore(tx));
+  }, [transactions, persistTransactionToFirestore, user]);
 
   useEffect(() => {
     if (!user || !telegram?.initDataUnsafe?.user?.id) return;
@@ -1299,6 +1371,8 @@ const App: React.FC = () => {
             onCategoriesChange={setCategories}
             transactions={transactions}
             onTransactionsChange={setTransactions}
+            onPersistTransaction={persistTransactionToFirestore}
+            onDeleteTransaction={deleteTransactionFromFirestore}
           />
         )}
         {activeTab === 'habits' && (
@@ -2458,6 +2532,8 @@ type FinanceWorkspaceProps = {
   onCategoriesChange: (categories: Category[]) => void;
   transactions: Transaction[];
   onTransactionsChange: (transactions: Transaction[]) => void;
+  onPersistTransaction: (transaction: Transaction) => void;
+  onDeleteTransaction: (id: string) => void;
 };
 
 const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
@@ -2468,7 +2544,9 @@ const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
   categories,
   onCategoriesChange,
   transactions,
-  onTransactionsChange
+  onTransactionsChange,
+  onPersistTransaction,
+  onDeleteTransaction
 }) => {
   const t = (key: TranslationKey, params?: Record<string, string | number>) =>
     translate(language, key, params);
@@ -2520,6 +2598,7 @@ const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
       date: new Date().toISOString()
     };
     onTransactionsChange([transaction, ...transactions]);
+    onPersistTransaction(transaction);
     setDraft({ ...draft, amount: '', description: '' });
   };
 
@@ -2541,6 +2620,7 @@ const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
 
   const deleteTransaction = (id: string) => {
     onTransactionsChange(transactions.filter(tx => tx.id !== id));
+    onDeleteTransaction(id);
   };
 
   const formatCurrency = (amount: number) =>
