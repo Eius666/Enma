@@ -2587,8 +2587,12 @@ const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
   }, [transactions]);
 
   const addTransaction = () => {
+    console.log('[DEBUG] addTransaction called', { draft, transactions });
     const amount = parseFloat(draft.amount);
-    if (!draft.description.trim() || !amount || !draft.categoryId) return;
+    if (!draft.description.trim() || !amount || !draft.categoryId) {
+      console.log('[DEBUG] Validation failed', { description: draft.description, amount, categoryId: draft.categoryId });
+      return;
+    }
     const transaction: Transaction = {
       id: createId(),
       type: draft.type,
@@ -2597,9 +2601,11 @@ const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
       description: draft.description.trim(),
       date: new Date().toISOString()
     };
+    console.log('[DEBUG] Created transaction', transaction);
     onTransactionsChange([transaction, ...transactions]);
     onPersistTransaction(transaction);
     setDraft({ ...draft, amount: '', description: '' });
+    console.log('[DEBUG] Transaction added, new count:', transactions.length + 1);
   };
 
   const addCategory = () => {
@@ -2761,6 +2767,10 @@ const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
 
         <div className="transactions-card">
           <h3>{t('recentActivity')}</h3>
+          {(() => {
+            console.log('[DEBUG] Rendering transactions, count:', transactions.length, transactions);
+            return null;
+          })()}
           {transactions.length === 0 ? (
             <p className="empty-hint">{t('noTransactions')}</p>
           ) : (
