@@ -1,4 +1,7 @@
-const fetch = require('node-fetch');
+if (parseInt(process.versions.node) < 18) {
+  console.error('Node.js 18+ required (built-in fetch). Current:', process.version);
+  process.exit(1);
+}
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 

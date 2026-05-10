@@ -26,8 +26,15 @@
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
+    "typecheck": "tsc --noEmit",
+    "typecheck:api": "tsc --project tsconfig.api.json",
     "predeploy": "cross-env PUBLIC_URL=https://Eius666.github.io/Enma npm run build",
-    "deploy": "gh-pages -d build"
+    "deploy": "gh-pages -d build",
+    "deploy:vercel": "bash scripts/deploy-vercel.sh --prod",
+    "deploy:vercel:preview": "bash scripts/deploy-vercel.sh",
+    "deploy:firebase": "firebase deploy --only firestore",
+    "webhook:set": "node scripts/set-webhook.js",
+    "webhook:check": "node scripts/check-webhook.js"
   },
   "eslintConfig": {
     "extends": [
@@ -52,6 +59,6 @@
     "gh-pages": "^6.3.0"
   },
   "engines": {
-    "node": "24.x"
+    "node": "20.x"
   }
 }

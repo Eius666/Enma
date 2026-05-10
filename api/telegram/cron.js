@@ -1,8 +1,29 @@
 const { admin, db } = require('../_lib/firebaseAdmin');
+const { validateRequest } = require('../_lib/auth');
 
 const TELEGRAM_API = 'https://api.telegram.org';
 
-const sendTelegramMessage = async (token, chatId, text) => {
+// Telegram limits: 30 msg/sec globally, 1 msg/sec per chat.
+// We serialize sends and track the last send timestamp per chatId.
+const lastSentAt = new Map();
+const GLOBAL_INTERVAL_MS = 50;   // 20 msgs/sec — well under the 30/sec global cap
+const PER_CHAT_INTERVAL_MS = 1100; // 1.1 sec between messages to the same chat
+
+let lastGlobalSend = 0;
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+const throttledSend = async (token, chatId, text) => {
+  const now = Date.now();
+  const globalWait = Math.max(0, lastGlobalSend + GLOBAL_INTERVAL_MS - now);
+  const perChatWait = Math.max(0, (lastSentAt.get(chatId) ?? 0) + PER_CHAT_INTERVAL_MS - now);
+  const wait = Math.max(globalWait, perChatWait);
+  if (wait > 0) await sleep(wait);
+
+  const sendTime = Date.now();
+  lastGlobalSend = sendTime;
+  lastSentAt.set(chatId, sendTime);
+
   const response = await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -12,25 +33,18 @@ const sendTelegramMessage = async (token, chatId, text) => {
   return { ok: response.ok && payload.ok !== false, status: response.status, payload };
 };
 
+const sendTelegramMessage = (token, chatId, text) => throttledSend(token, chatId, text);
+
 module.exports = async (req, res) => {
   if (!['GET', 'POST'].includes(req.method)) {
     res.status(405).json({ ok: false, description: 'Method not allowed' });
     return;
   }
 
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const header = req.headers?.authorization ?? '';
-    const bearer = header.startsWith('Bearer ') ? header.slice(7) : '';
-    const querySecret = typeof req.query?.secret === 'string' ? req.query.secret : '';
-    // Allow Vercel Cron automatically
-    const isVercelCron = req.headers['user-agent'] === 'vercel-cron/1.0';
-    
-    if (!isVercelCron && bearer !== cronSecret && querySecret !== cronSecret) {
-      console.warn('⚠️ Unauthorized cron attempt');
-      res.status(401).json({ ok: false, description: 'Unauthorized' });
-      return;
-    }
+  const authResult = validateRequest(req);
+  if (!authResult.ok) {
+    res.status(authResult.status).json(authResult.body);
+    return;
   }
 
   const token = process.env.TELEGRAM_BOT_TOKEN;
