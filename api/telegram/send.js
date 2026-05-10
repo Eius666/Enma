@@ -1,13 +1,6 @@
-const { validateRequest } = require('../_lib/auth');
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).json({ ok: false, description: 'Method not allowed' });
-    return;
-  }
-
-  const authResult = validateRequest(req);
-  if (!authResult.ok) {
-    res.status(authResult.status).json(authResult.body);
     return;
   }
 
