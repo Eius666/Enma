@@ -5,9 +5,6 @@
   "functions": {
     "api/**/*.js": {
       "maxDuration": 30
-    },
-    "api/telegram/cron.js": {
-      "maxDuration": 60
     }
   },
   "rewrites": [
