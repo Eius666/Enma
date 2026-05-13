@@ -11,7 +11,7 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 };
 
 /** Return the locale string for Intl formatting. */
-function getNumberLocale(language: Locale): string {
+export function getNumberLocale(language: Locale): string {
   return language === 'ru' ? 'ru-RU' : 'en-US';
 }
 

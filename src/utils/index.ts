@@ -12,6 +12,7 @@ export {
   formatCurrency,
   getCurrencySymbol,
   getCurrencyCode,
+  getNumberLocale,
 } from './formatCurrency';
 
 export {
