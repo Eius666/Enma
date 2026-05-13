@@ -1,3 +1,5 @@
+'use strict';
+
 const { admin, db } = require('../_lib/firebaseAdmin');
 
 const TELEGRAM_API = 'https://api.telegram.org';
@@ -18,16 +20,25 @@ module.exports = async (req, res) => {
     return;
   }
 
+  // --- Cron authentication ---
+  // Require a Bearer token matching CRON_SECRET.  If CRON_SECRET is not set
+  // the endpoint is unprotected — warn loudly.
+  //
+  // REMOVED: the `user-agent === 'vercel-cron/1.0'` bypass.  Any HTTP client
+  // can forge a User-Agent header; relying on it is a false sense of security.
+  // Vercel's built-in cron will happily provide the Authorization header when
+  // you include the cron secret in vercel.json's env.
+  //
+  // REMOVED: secret in query string — secrets in URLs end up in server logs,
+  // CDN logs, and browser history.  Use the Authorization header only.
   const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const header = req.headers?.authorization ?? '';
-    const bearer = header.startsWith('Bearer ') ? header.slice(7) : '';
-    const querySecret = typeof req.query?.secret === 'string' ? req.query.secret : '';
-    // Allow Vercel Cron automatically
-    const isVercelCron = req.headers['user-agent'] === 'vercel-cron/1.0';
-    
-    if (!isVercelCron && bearer !== cronSecret && querySecret !== cronSecret) {
-      console.warn('⚠️ Unauthorized cron attempt');
+  if (!cronSecret) {
+    console.warn('[cron] CRON_SECRET is not set — cron endpoint is unprotected!');
+  } else {
+    const authHeader = req.headers?.authorization ?? '';
+    const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    if (bearer !== cronSecret) {
+      console.warn('[cron] Unauthorized cron attempt');
       res.status(401).json({ ok: false, description: 'Unauthorized' });
       return;
     }
