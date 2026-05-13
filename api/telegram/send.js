@@ -5,9 +5,7 @@ const { rateLimit, getClientIp } = require('../_lib/rateLimit');
 // Telegram message length limit.
 const MAX_TEXT_LENGTH = 4096;
 
-// Allow at most 10 send requests per IP per minute.
-// This prevents this endpoint from being used as an open Telegram spam proxy.
-const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 
 // TODO(security): For complete caller authentication, the client should send

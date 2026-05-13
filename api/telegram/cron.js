@@ -1,6 +1,7 @@
 'use strict';
 
 const { admin, db } = require('../_lib/firebaseAdmin');
+const { rateLimit, getClientIp } = require('../_lib/rateLimit');
 
 const TELEGRAM_API = 'https://api.telegram.org';
 
@@ -17,6 +18,14 @@ const sendTelegramMessage = async (token, chatId, text) => {
 module.exports = async (req, res) => {
   if (!['GET', 'POST'].includes(req.method)) {
     res.status(405).json({ ok: false, description: 'Method not allowed' });
+    return;
+  }
+
+  // --- Rate limiting ---
+  const ip = getClientIp(req);
+  const limitMax = req.method === 'GET' ? 60 : 20;
+  if (!rateLimit(`cron:${ip}`, limitMax, 60 * 1000)) {
+    res.status(429).json({ ok: false, description: 'Too many requests' });
     return;
   }
 

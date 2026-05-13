@@ -6,9 +6,7 @@ const { rateLimit, getClientIp } = require('../_lib/rateLimit');
 
 const TELEGRAM_API = 'https://api.telegram.org';
 
-// Limit webhook calls per IP — genuine Telegram IPs will never hit this, but
-// attackers replaying requests will.
-const RATE_LIMIT_MAX = 30;
+const RATE_LIMIT_MAX = 100;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 
 const sendTelegramMessage = async (token, chatId, text) => {
