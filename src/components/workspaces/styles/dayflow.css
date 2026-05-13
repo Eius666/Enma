@@ -111,7 +111,7 @@
   box-shadow: 0 16px 32px rgba(82, 50, 200, 0.18);
 }
 
-.tile-label {
+.glance-tile .tile-label {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -119,10 +119,8 @@
   font-weight: 600;
 }
 
-.tile-value {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-primary);
+.tile-value.positive {
+  color: var(--accent-strong);
 }
 
 .tile-value.negative {
@@ -133,10 +131,6 @@ body.theme-light .glance-tile {
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.96), rgba(223, 227, 255, 0.92));
   border: 1px solid rgba(143, 150, 220, 0.35);
   box-shadow: 0 24px 48px rgba(143, 150, 220, 0.24);
-}
-
-body.theme-light .tile-value {
-  color: #1d2043;
 }
 
 body.theme-light .tile-value.negative {

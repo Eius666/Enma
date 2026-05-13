@@ -77,6 +77,9 @@
   height: clamp(6px, 2vw, 8px);
   border-radius: 50%;
   flex-shrink: 0;
+  overflow: hidden;
+  font-size: 0;
+  line-height: 0;
 }
 
 .calendar-more {

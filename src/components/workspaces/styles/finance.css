@@ -26,6 +26,20 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.summary-card .tile-label {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.summary-card .tile-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
 .summary-card.positive {
   border-color: rgba(130, 247, 199, 0.4);
 }
