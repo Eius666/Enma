@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import './styles/calendar.css';
 import {
   addDays,
   addMonths,

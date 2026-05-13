@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import './styles/notes.css';
 import { compareAsc, parseISO } from 'date-fns';
 import { FaPlus, FaStickyNote, FaTasks, FaTimes, FaTrash } from 'react-icons/fa';
 import { createT } from '../../i18n/createT';

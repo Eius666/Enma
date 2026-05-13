@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import './styles/habits.css';
 import { addDays, format, startOfWeek } from 'date-fns';
 import { FaPlus, FaTrash } from 'react-icons/fa';
 import { createT } from '../../i18n/createT';

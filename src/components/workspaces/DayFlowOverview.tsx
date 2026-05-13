@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import './styles/dayflow.css';
 import { format, parseISO } from 'date-fns';
 import { createT } from '../../i18n/createT';
 import { formatDate } from '../../utils/formatDate';

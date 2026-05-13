@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import './styles/auth.css';
 import { FaMoon, FaSun } from 'react-icons/fa';
 import {
   createUserWithEmailAndPassword,

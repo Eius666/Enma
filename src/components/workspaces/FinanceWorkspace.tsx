@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import './styles/finance.css';
 import { parseISO } from 'date-fns';
 import { FaPlus, FaTag, FaTimes, FaTrash } from 'react-icons/fa';
 import { createT } from '../../i18n/createT';

@@ -1,0 +1,416 @@
+.habits-panel .panel-body {
+  gap: 12px;
+}
+
+.habits-panel .panel-header__titles h2 {
+  font-size: clamp(1.2rem, 4.2vw, 1.5rem);
+}
+
+.habits-panel .panel-subtitle {
+  margin-top: 4px;
+  font-size: 0.9rem;
+}
+
+.habit-card {
+  gap: 12px;
+}
+
+.habits-panel .habit-card {
+  padding: 12px;
+  gap: 8px;
+}
+
+.habits-panel .habit-card.is-empty {
+  min-height: auto;
+  justify-content: flex-start;
+}
+
+.habit-checkin .card-heading {
+  gap: 12px;
+}
+
+.habit-checkin .card-badge {
+  margin-top: -8px;
+}
+
+.habit-checkin .habit-subtitle {
+  margin-top: 2px;
+}
+
+.habit-checkin .habit-card-header {
+  gap: 6px;
+}
+
+.habit-checkin .habit-card-header .card-badge {
+  margin-top: 0;
+}
+
+.habit-checkin .habit-card-header h3 {
+  margin-top: 10px !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  color: var(--text-primary) !important;
+  line-height: 1.25 !important;
+}
+
+.habit-checkin.is-empty {
+  min-height: auto;
+  justify-content: flex-start;
+}
+
+.habit-card .card-heading {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.habit-card .card-heading > div:first-child {
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+
+.habit-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  flex: 1 1 240px;
+  justify-content: flex-end;
+}
+
+.habit-add input {
+  flex: 1;
+  min-width: 160px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 6px 10px;
+  min-height: 34px;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.habit-add .ghost-button {
+  white-space: nowrap;
+  padding: 6px 10px;
+}
+
+.habit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.habit-card--compact {
+  border-radius: 18px;
+}
+
+.habit-card--compact .habit-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.habit-card--compact .habit-card-header h3 {
+  margin-top: 10px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.25;
+}
+
+.habit-checkin.habit-card--compact .habit-card-header {
+  gap: 10px;
+}
+
+.habit-card--compact .habit-add--compact {
+  width: 100%;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.habit-card--compact .habit-add--compact input {
+  flex: 1;
+  min-width: 140px;
+  min-height: 32px;
+  padding: 6px 10px;
+}
+
+.habit-card--compact .habit-add--compact .ghost-button {
+  padding: 6px 12px;
+}
+
+.habit-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.habit-title {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.habit-subtitle {
+  margin-top: 4px;
+}
+
+.habit-checkin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.habit-checkin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.habit-checkin-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.habit-checkin-toggle {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-base), border var(--transition-base);
+}
+
+.habit-checkin-toggle.is-done {
+  background: rgba(130, 247, 199, 0.2);
+  border-color: rgba(130, 247, 199, 0.6);
+}
+
+.habit-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.habit-title-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.habit-delete {
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--transition-base), color var(--transition-base);
+}
+
+.habit-delete:hover {
+  color: var(--text-primary);
+  background: rgba(124, 92, 255, 0.2);
+}
+
+.habit-progress {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.habit-progress span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent-strong);
+}
+
+.habit-progress-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.habit-days {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(40px, 1fr));
+  gap: 6px;
+}
+
+.habit-day {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 11px;
+  gap: 2px;
+  cursor: pointer;
+  transition: border var(--transition-base), background var(--transition-base);
+}
+
+.habit-day.is-done {
+  background: rgba(130, 247, 199, 0.18);
+  border-color: rgba(130, 247, 199, 0.6);
+}
+
+.habit-day-name {
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.habit-day-date {
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .habit-days {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .habit-card .card-heading {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+  }
+
+  .habit-add {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 6px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .habit-row {
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .habit-card .card-heading h3 {
+    line-height: 1.2;
+  }
+
+  .habit-card {
+    gap: 6px;
+    padding: 8px;
+    border-radius: 16px;
+  }
+
+  .habits-panel .habit-card.is-empty {
+    min-height: auto;
+  }
+
+  .habit-checkin.is-empty {
+    min-height: auto;
+  }
+
+  .habit-list {
+    max-height: 200px;
+    overflow: auto;
+    padding-right: 4px;
+  }
+
+  .habit-card .card-heading {
+    margin-bottom: 0;
+  }
+
+  .habit-add {
+    margin-top: 0;
+  }
+
+  .habit-add + .habit-list {
+    margin-top: 4px;
+  }
+
+  .habit-card .panel-subtitle {
+    margin-top: 0;
+  }
+
+  .habit-card {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .habit-card .card-heading {
+    gap: 6px;
+  }
+
+  .habit-card .card-badge {
+    padding: 6px 12px;
+    font-size: 10px;
+  }
+
+  .habit-card h3 {
+    font-size: 1.05rem;
+  }
+
+  .habit-card .panel-subtitle,
+  .habit-card p {
+    font-size: 0.9rem;
+  }
+
+  .habit-add input {
+    padding: 6px 10px;
+    min-height: 30px;
+    font-size: 0.9rem;
+    width: 100%;
+  }
+
+  .habit-add .ghost-button {
+    padding: 6px 10px;
+    font-size: 0.9rem;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .habit-card--compact .habit-card-header h3 {
+    font-size: 1rem;
+  }
+
+  .habit-card--compact .habit-add--compact {
+    gap: 6px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .habit-card--compact .habit-add--compact input {
+    min-height: 30px;
+  }
+
+  .habit-progress-label {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .habit-days {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

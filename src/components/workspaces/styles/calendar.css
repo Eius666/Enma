@@ -1,0 +1,411 @@
+.calendar-panel {
+  gap: clamp(18px, 4vw, 28px);
+}
+
+.calendar-header {
+  flex-wrap: wrap;
+}
+
+.calendar-content {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: clamp(16px, 4vw, 24px);
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: clamp(8px, 2.6vw, 12px);
+}
+
+.calendar-weekday {
+  text-align: center;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+}
+
+.calendar-cell {
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  transition: background var(--transition-base), border var(--transition-base);
+  min-height: clamp(90px, 18vw, 120px);
+}
+
+.calendar-cell:hover {
+  background: rgba(124, 92, 255, 0.1);
+  border-color: rgba(124, 92, 255, 0.3);
+}
+
+.calendar-cell.is-faded {
+  opacity: 0.35;
+}
+
+.calendar-cell.is-selected {
+  background: rgba(124, 92, 255, 0.18);
+  border-color: rgba(124, 92, 255, 0.5);
+}
+
+.calendar-cell.is-today {
+  border-color: rgba(124, 92, 255, 0.6);
+}
+
+.calendar-date {
+  font-size: clamp(11px, 2.8vw, 13px);
+  font-weight: 600;
+  color: var(--text-secondary);
+  align-self: flex-start;
+}
+
+.calendar-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: auto;
+}
+
+.calendar-badge {
+  width: clamp(6px, 2vw, 8px);
+  height: clamp(6px, 2vw, 8px);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.calendar-more {
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.calendar-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.calendar-sidebar input[type='time'] {
+  width: 100%;
+  min-width: 0;
+  border-radius: var(--radius-xs);
+}
+
+.sidebar-card {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: var(--card-padding-compact);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.reminder-card .add-reminder-btn {
+  width: clamp(42px, 12vw, 48px);
+  height: clamp(42px, 12vw, 48px);
+  border-radius: var(--radius-xs);
+  background: rgba(124, 92, 255, 0.25);
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.reminder-form {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.9rem, 3vw, 1.25rem);
+  padding: var(--card-padding-compact);
+}
+
+.reminder-time-row {
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(0.6rem, 2.5vw, 0.9rem);
+  width: 100%;
+  justify-content: center;
+}
+
+.reminder-time-row .floating-label {
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.reminder-time-row input[type='time'] {
+  width: min(100%, clamp(170px, 50vw, 220px));
+  min-width: 0;
+  max-width: 100%;
+  border-radius: var(--radius-xs);
+}
+
+.add-reminder-btn {
+  width: clamp(42px, 12vw, 48px);
+  height: clamp(42px, 12vw, 48px);
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  align-self: flex-end;
+}
+
+.calendar-time-field {
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.calendar-time-field input[type='time'] {
+  width: min(100%, clamp(170px, 50vw, 220px));
+  min-width: 0;
+  max-width: 100%;
+  border-radius: var(--radius-xs);
+}
+
+.reminder-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, 2.6vw, 10px);
+  padding: 0;
+}
+
+.reminder-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: var(--control-padding-y) var(--control-padding-x);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.reminder-item.is-done .reminder-title {
+  text-decoration: line-through;
+  color: var(--text-secondary);
+}
+
+.reminder-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.reminder-title {
+  font-weight: 600;
+}
+
+.reminder-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.reminder-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-palette {
+  display: flex;
+  gap: 10px;
+}
+
+.color-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform var(--transition-base), border var(--transition-base);
+}
+
+.color-swatch.is-selected {
+  transform: scale(1.05);
+  border-color: rgba(255, 255, 255, 0.9);
+}
+
+.floating-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: clamp(11px, 2.8vw, 13px);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+
+.floating-label input,
+.floating-label textarea,
+.floating-label select {
+  width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  padding: var(--control-padding-y) var(--control-padding-x);
+  min-height: var(--control-min-height);
+  font-size: clamp(14px, 3.4vw, 15px);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  transition: border var(--transition-base), background var(--transition-base);
+}
+
+.floating-label input:focus,
+.floating-label textarea:focus,
+.floating-label select:focus {
+  outline: none;
+  border-color: rgba(124, 92, 255, 0.6);
+  background: rgba(124, 92, 255, 0.15);
+}
+
+.floating-label textarea {
+  resize: vertical;
+  min-height: clamp(72px, 16vw, 96px);
+  line-height: 1.5;
+}
+
+.primary-button.add-task,
+.primary-button.add-transaction {
+  align-self: flex-start;
+}
+
+.task-list-card {
+  gap: 12px;
+}
+
+.task-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, 2.6vw, 12px);
+}
+
+.task-list-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.task-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.task-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.task-title {
+  font-weight: 600;
+}
+
+.task-note,
+.task-time {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.icon-button {
+  background: var(--icon-bg);
+  border: 1px solid var(--icon-border);
+  color: var(--icon-color);
+  border-radius: var(--radius-xs);
+  width: clamp(30px, 8vw, 36px);
+  height: clamp(30px, 8vw, 36px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--transition-base), border var(--transition-base), box-shadow var(--transition-base);
+  box-shadow: none;
+}
+
+.icon-button:hover {
+  background: rgba(124, 92, 255, 0.25);
+  border-color: rgba(124, 92, 255, 0.45);
+  box-shadow: 0 10px 24px rgba(120, 96, 255, 0.2);
+}
+
+.primary-button svg,
+.ghost-button svg,
+.pill-control svg,
+.icon-button svg,
+.note-type-switch button svg,
+.category-chip svg,
+.category-remove svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: block;
+}
+
+.empty-hint {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+@media (max-width: 640px) {
+  .calendar-grid {
+    gap: 8px;
+  }
+
+  .calendar-cell {
+    min-height: clamp(80px, 18vw, 90px);
+  }
+}
+
+@media (max-width: 480px) {
+  .calendar-content {
+    grid-template-columns: 1fr;
+  }
+
+  .calendar-header {
+    align-items: flex-start;
+  }
+
+  .task-list-item,
+  .transaction-row {
+    grid-template-columns: 1fr;
+  }
+
+  .reminder-time-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: clamp(0.6rem, 3vw, 0.8rem);
+  }
+
+  .add-reminder-btn {
+    width: clamp(40px, 12vw, 44px);
+    height: clamp(40px, 12vw, 44px);
+    border-radius: var(--radius-xs);
+  }
+
+  .reminder-time-row input[type='time'] {
+    width: min(100%, clamp(170px, 50vw, 220px));
+  }
+}
+
+@media (max-width: 420px) {
+  .icon-button {
+    width: 30px;
+    height: 30px;
+  }
+}

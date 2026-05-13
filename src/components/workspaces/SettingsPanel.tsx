@@ -1,4 +1,5 @@
 import React from 'react';
+import './styles/settings.css';
 import { createT } from '../../i18n/createT';
 import { formatDate } from '../../utils/formatDate';
 import type { Language, Currency } from './types';

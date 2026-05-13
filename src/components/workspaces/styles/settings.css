@@ -1,0 +1,73 @@
+.settings-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.settings-card {
+  padding: var(--card-padding-compact);
+  border-radius: var(--radius-md);
+  background: var(--card-bg-soft);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  min-width: 0;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.settings-label {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.settings-row p {
+  color: var(--text-secondary);
+  max-width: 420px;
+}
+
+.settings-control {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  min-width: 200px;
+}
+
+.settings-control select {
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.settings-row + .settings-row {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.settings-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.settings-hint {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+@media (min-resolution: 2dppx) {
+  .settings-card {
+    border-width: 0.5px;
+  }
+}
