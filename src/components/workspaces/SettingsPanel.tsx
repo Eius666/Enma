@@ -81,7 +81,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
               >
                 <option value="USD">{t('settings.currencyOptionUSD')}</option>
                 <option value="EUR">{t('settings.currencyOptionEUR')}</option>
-                <option value="GBP">{t('settings.currencyOptionGBP')}</option>
+                <option value="BYN">{t('settings.currencyOptionBYN')}</option>
+                <option value="CNY">{t('settings.currencyOptionCNY')}</option>
                 <option value="RUB">{t('settings.currencyOptionRUB')}</option>
               </select>
               <div className="settings-actions">

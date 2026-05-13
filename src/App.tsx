@@ -43,7 +43,7 @@ import { useTelegramWebApp } from './hooks/useTelegramWebApp';
 
 type Theme = 'dark' | 'light';
 type Language = 'en' | 'ru';
-type Currency = 'USD' | 'EUR' | 'GBP' | 'RUB';
+type Currency = 'RUB' | 'USD' | 'EUR' | 'BYN' | 'CNY';
 type PrimaryTab = 'day-flow' | 'calendar' | 'notes' | 'finance' | 'habits' | 'settings';
 
 type CalendarTask = {
@@ -174,7 +174,7 @@ const CURRENCY_STORAGE_KEY = 'enma.currency';
 const RATES_STORAGE_KEY = 'enma.exchangeRates';
 const RATES_TTL_MS = 60 * 60 * 1000;
 const BASE_CURRENCY: Currency = 'USD';
-const SUPPORTED_CURRENCIES: Currency[] = ['USD', 'EUR', 'GBP', 'RUB'];
+const SUPPORTED_CURRENCIES: Currency[] = ['USD', 'EUR', 'BYN', 'CNY', 'RUB'];
 
 const translations = {
   en: {
@@ -326,7 +326,8 @@ const translations = {
     currencyDescription: 'Choose the currency used for balances and totals.',
     currencyOptionUSD: 'US Dollar',
     currencyOptionEUR: 'Euro',
-    currencyOptionGBP: 'British Pound',
+    currencyOptionBYN: 'Belarusian Ruble',
+    currencyOptionCNY: 'Chinese Yuan',
     currencyOptionRUB: 'Russian Ruble',
     ratesUpdated: 'Rates updated: {date}',
     ratesUpdating: 'Updating exchange rates...',
@@ -484,7 +485,8 @@ const translations = {
     currencyDescription: 'Выберите валюту для отображения баланса и итогов.',
     currencyOptionUSD: 'Доллар США',
     currencyOptionEUR: 'Евро',
-    currencyOptionGBP: 'Британский фунт',
+    currencyOptionBYN: 'Белорусский рубль',
+    currencyOptionCNY: 'Китайский юань',
     currencyOptionRUB: 'Российский рубль',
     ratesUpdated: 'Курсы обновлены: {date}',
     ratesUpdating: 'Обновляем курсы...',
@@ -2917,7 +2919,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               >
                 <option value="USD">{t('currencyOptionUSD')}</option>
                 <option value="EUR">{t('currencyOptionEUR')}</option>
-                <option value="GBP">{t('currencyOptionGBP')}</option>
+                <option value="BYN">{t('currencyOptionBYN')}</option>
+                <option value="CNY">{t('currencyOptionCNY')}</option>
                 <option value="RUB">{t('currencyOptionRUB')}</option>
               </select>
               <div className="settings-actions">
