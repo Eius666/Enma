@@ -38,7 +38,7 @@ import {
 } from 'firebase/auth';
 import { Timestamp, deleteDoc, doc, serverTimestamp, setDoc, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import './App.v2.css';
-import { auth, db } from './src/firebase';
+import { auth, db } from './firebase';
 import { useTelegramWebApp } from './hooks/useTelegramWebApp';
 
 type Theme = 'dark' | 'light';

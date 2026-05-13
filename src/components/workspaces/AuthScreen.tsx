@@ -5,7 +5,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
 } from 'firebase/auth';
-import { auth } from '../../src/firebase';
+import { auth } from '../../firebase';
 import { createT } from '../../i18n/createT';
 import type { Language, Theme } from './types';
 

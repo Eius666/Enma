@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { onSnapshot, query, orderBy, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { goalsCollection } from '../../lib/firestore';
-import { db } from '../../src/firebase';
+import { db } from '../../firebase';
 import type { Goal } from '../../types';
 
 export function useGoals(userId: string | null, workspaceId: string | null) {

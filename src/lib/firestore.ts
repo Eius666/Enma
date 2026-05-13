@@ -1,5 +1,5 @@
 import { collection, doc, CollectionReference, DocumentReference } from 'firebase/firestore';
-import { db } from '../src/firebase';
+import { db } from '../firebase';
 import type { UserProfile, Workspace, FinanceTransaction, Habit, HabitLog, Note, Goal } from '../types';
 
 // Typed collection references — workspace-nested data model:

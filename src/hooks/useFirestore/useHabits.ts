@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { onSnapshot, query, orderBy, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { habitsCollection } from '../../lib/firestore';
-import { db } from '../../src/firebase';
+import { db } from '../../firebase';
 import type { Habit } from '../../types';
 
 export function useHabits(userId: string | null, workspaceId: string | null) {
