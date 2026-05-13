@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { onSnapshot, query, orderBy, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { habitsCollection, workspacesCollection } from '../../lib/firestore';
+import { habitsCollection } from '../../lib/firestore';
 import { db } from '../../src/firebase';
 import type { Habit } from '../../types';
 
