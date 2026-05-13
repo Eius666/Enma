@@ -153,6 +153,7 @@ export const ru = {
     chooseCategory: 'Выберите категорию',
     saveTransaction: 'Сохранить транзакцию',
     recentActivity: 'Последние операции',
+    refresh: 'Обновить',
     noTransactions: 'Транзакций пока нет.',
     deleteTransactionAria: 'Удалить транзакцию',
     uncategorized: 'Без категории',

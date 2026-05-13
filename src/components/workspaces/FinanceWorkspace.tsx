@@ -261,7 +261,7 @@ export const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
               onClick={onRefreshTransactions}
               style={{ padding: '8px 16px' }}
             >
-              🔄 {t('finance.recentActivity')}
+              🔄 {t('finance.refresh')}
             </button>
           </div>
           {transactions.length === 0 ? (

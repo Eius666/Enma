@@ -153,6 +153,7 @@ export const en = {
     chooseCategory: 'Choose category',
     saveTransaction: 'Save transaction',
     recentActivity: 'Recent activity',
+    refresh: 'Refresh',
     noTransactions: 'No transactions logged yet.',
     deleteTransactionAria: 'Delete transaction',
     uncategorized: 'Uncategorized',
