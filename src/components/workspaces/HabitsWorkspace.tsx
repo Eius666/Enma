@@ -24,6 +24,12 @@ export const HabitsWorkspace: React.FC<HabitsWorkspaceProps> = ({
   const t = createT(language);
   const [habitDraft, setHabitDraft] = useState('');
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+
+  const handleHabitResize = (event: React.FormEvent<HTMLTextAreaElement>) => {
+    const el = event.currentTarget;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  };
   const weekDays = Array.from({ length: 7 }).map((_, index) => addDays(weekStart, index));
   const dayKeys = weekDays.map(day => format(day, 'yyyy-MM-dd'));
 
@@ -39,11 +45,22 @@ export const HabitsWorkspace: React.FC<HabitsWorkspaceProps> = ({
       <div className="panel-body">
         <article className="card habit-card habit-card--compact">
           <div className="habit-add habit-add--compact">
-            <input
-              type="text"
+            <textarea
+              className="habit-input"
+              rows={1}
               placeholder={t('habits.placeholder')}
               value={habitDraft}
               onChange={event => setHabitDraft(event.target.value)}
+              onInput={handleHabitResize}
+              onKeyDown={event => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  if (habitDraft.trim()) {
+                    onAddHabit(habitDraft);
+                    setHabitDraft('');
+                  }
+                }
+              }}
             />
             <button
               className="ghost-button"

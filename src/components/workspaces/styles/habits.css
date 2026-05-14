@@ -78,7 +78,8 @@
   justify-content: flex-end;
 }
 
-.habit-add input {
+.habit-add input,
+.habit-input {
   flex: 1;
   min-width: 160px;
   border-radius: 14px;
@@ -88,6 +89,20 @@
   min-height: 34px;
   color: var(--text-primary);
   font-size: 0.95rem;
+  font-family: var(--font-body);
+}
+
+.habit-input {
+  resize: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+  max-width: 100%;
+  box-sizing: border-box;
+  line-height: 1.5;
+  max-height: 120px;
 }
 
 .habit-add .ghost-button {
@@ -130,10 +145,10 @@
   gap: 8px;
 }
 
-.habit-card--compact .habit-add--compact input {
+.habit-card--compact .habit-add--compact input,
+.habit-card--compact .habit-add--compact .habit-input {
   flex: 1;
   min-width: 140px;
-  height: 40px;
   min-height: 40px;
   padding: 8px 12px;
 }
@@ -379,7 +394,8 @@
     font-size: 0.9rem;
   }
 
-  .habit-add input {
+  .habit-add input,
+  .habit-input {
     padding: 6px 10px;
     min-height: 30px;
     font-size: 0.9rem;
@@ -403,7 +419,8 @@
     align-items: stretch;
   }
 
-  .habit-card--compact .habit-add--compact input {
+  .habit-card--compact .habit-add--compact input,
+  .habit-card--compact .habit-add--compact .habit-input {
     min-height: 30px;
   }
 
