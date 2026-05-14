@@ -146,6 +146,12 @@ export const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({
     });
   };
 
+  const handleAutoResize = (event: React.FormEvent<HTMLTextAreaElement>) => {
+    const el = event.currentTarget;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 300) + 'px';
+  };
+
   return (
     <section className="panel notes-panel notes-panel--stacked">
       <header className="panel-header">
@@ -192,10 +198,10 @@ export const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({
             </button>
           </div>
           <textarea
-            rows={4}
             className="notes-composer-body notes-composer-body--single"
             value={composerBody}
             onChange={event => setComposerBody(event.target.value)}
+            onInput={handleAutoResize}
             placeholder={t('notes.composerBody')}
           />
           <div className="note-type-switch">
@@ -274,12 +280,12 @@ export const NotesWorkspace: React.FC<NotesWorkspaceProps> = ({
                     </label>
                   ) : (
                     <textarea
-                      rows={3}
                       className="block-textarea"
                       value={block.content}
                       onChange={event =>
                         updateBlockContent(activeNote.id, block.id, event.target.value)
                       }
+                      onInput={handleAutoResize}
                       placeholder={t('notes.textPlaceholder')}
                     />
                   )}

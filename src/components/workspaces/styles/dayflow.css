@@ -63,13 +63,13 @@
 
 /* Financial snapshot card — long balance+income+expense string needs smaller text */
 .overview-grid .card-timeline .card-heading h3 {
-  font-size: clamp(11px, 2.6vw, 13px);
-  font-weight: 500;
-  line-height: 1.55;
-  overflow-wrap: break-word;
-  word-break: break-word;
+  font-size: clamp(16px, 4vw, 20px);
+  font-weight: 700;
+  line-height: 1.25;
   margin-top: 6px;
-  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .overview-grid .card-timeline {
@@ -81,8 +81,10 @@
 }
 
 .card-timeline .glance-tile .tile-value {
-  font-size: clamp(12px, 3.2vw, 15px);
-  word-break: break-word;
+  font-size: clamp(14px, 3.5vw, 18px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .upcoming-list {
@@ -136,11 +138,11 @@
 }
 
 .glance-tile .tile-label {
-  font-size: 11px;
+  font-size: var(--font-xs);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-secondary);
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .tile-value.positive {

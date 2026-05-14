@@ -19,8 +19,8 @@
 }
 
 .settings-label {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: var(--font-md);
+  font-weight: var(--weight-semibold);
   margin-bottom: 8px;
   display: block;
 }

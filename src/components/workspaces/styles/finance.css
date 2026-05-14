@@ -24,20 +24,27 @@
   flex-direction: column;
   gap: 6px;
   border: 1px solid rgba(255, 255, 255, 0.08);
+  align-items: center;
 }
 
 .summary-card .tile-label {
-  font-size: 13px;
+  font-size: clamp(10px, 2.5vw, 12px);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-secondary);
   font-weight: 600;
+  text-align: center;
 }
 
 .summary-card .tile-value {
-  font-size: 18px;
+  font-size: clamp(16px, 4vw, 22px);
   font-weight: 600;
   color: var(--text-primary);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .summary-card.positive {
@@ -262,6 +269,11 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 14px;
+  }
+
+  .summary-card .tile-label,
+  .summary-card .tile-value {
+    text-align: left;
   }
 
   .transaction-row {

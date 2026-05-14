@@ -38,10 +38,6 @@ export const HabitsWorkspace: React.FC<HabitsWorkspaceProps> = ({
       </header>
       <div className="panel-body">
         <article className="card habit-card habit-card--compact">
-          <div className="habit-card-header">
-            <span className="card-badge muted">{t('habits.badge')}</span>
-            <h3>{t('habits.title')}</h3>
-          </div>
           <div className="habit-add habit-add--compact">
             <input
               type="text"

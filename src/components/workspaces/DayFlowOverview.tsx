@@ -92,12 +92,8 @@ export const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
           <header className="card-heading">
             <div>
               <span className="card-badge muted">{t('dayFlow.financialSnapshot')}</span>
-              <h3>
-                {t('dayFlow.balanceLine', {
-                  balance: fmt(financeSummary.balance),
-                  income: fmt(financeSummary.income),
-                  expenses: fmt(financeSummary.expenses),
-                })}
+              <h3 className={financeSummary.balance >= 0 ? 'positive' : 'negative'}>
+                {fmt(financeSummary.balance)}
               </h3>
             </div>
           </header>
