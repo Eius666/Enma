@@ -140,7 +140,7 @@ export const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
           </div>
           <div className="summary-card negative">
             <span className="tile-label">{t('finance.expenses')}</span>
-            <span className="tile-value">-{fmt(totals.expenses)}</span>
+            <span className="tile-value">{fmt(totals.expenses)}</span>
           </div>
         </div>
         <div className="category-card">
@@ -279,7 +279,7 @@ export const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
                   </div>
                   <div className="transaction-meta">
                     <span className="transaction-amount">
-                      {tx.type === 'income' ? '+' : '-'}
+                      {tx.type === 'income' ? '+' : ''}
                       {fmt(tx.amount)}
                     </span>
                     <button

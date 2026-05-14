@@ -104,7 +104,7 @@ export const DayFlowOverview: React.FC<DayFlowOverviewProps> = ({
             </div>
             <div className="glance-tile">
               <span className="tile-label">{t('dayFlow.expensesLabel')}</span>
-              <span className="tile-value negative">-{fmt(financeSummary.expenses)}</span>
+              <span className="tile-value negative">{fmt(financeSummary.expenses)}</span>
             </div>
             <div className="glance-tile">
               <span className="tile-label">{t('dayFlow.netFlowLabel')}</span>
