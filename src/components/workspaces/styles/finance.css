@@ -222,14 +222,48 @@
   }
 }
 
-@media (max-width: 640px) {
-  .finance-body {
+/* Override App.v2.css responsive rules that finance.css base styles would otherwise clobber. */
+@media (max-width: 900px) {
+  .finance-upper {
     grid-template-columns: 1fr;
+  }
+
+  .finance-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .finance-lower {
+    grid-template-columns: 1fr;
+  }
+
+  .transaction-form-card,
+  .transactions-card {
+    padding: clamp(14px, 4vw, 20px);
+  }
+}
+
+@media (max-width: 640px) {
+  .finance-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .summary-card .tile-value {
+    font-size: clamp(13px, 3.8vw, 16px);
   }
 }
 
 @media (max-width: 480px) {
-  .task-list-item,
+  .finance-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-card {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+  }
+
   .transaction-row {
     grid-template-columns: 1fr;
   }
@@ -237,6 +271,10 @@
   .transaction-meta {
     justify-content: space-between;
     width: 100%;
+  }
+
+  .category-form {
+    grid-template-columns: 1fr;
   }
 }
 

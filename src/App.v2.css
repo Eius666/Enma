@@ -179,7 +179,7 @@ body.theme-light {
 }
 
 .hero-card h1 {
-  font-size: clamp(36px, 4vw, 48px);
+  font-size: clamp(22px, 6vw, 48px);
   line-height: 1.05;
   font-weight: 700;
 }
@@ -2588,12 +2588,25 @@ body.theme-light .tile-value.negative {
   .primary-button,
   .ghost-button,
   .icon-button,
-  .sign-out-button {
+  .sign-out-button,
+  .habit-day,
+  .type-pill,
+  .notes-project-tab {
     min-height: 44px;
   }
 
   .top-tab {
     padding: 12px 16px;
+  }
+
+  .habit-delete {
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  .color-swatch {
+    width: 36px;
+    height: 36px;
   }
 }
 
@@ -2654,6 +2667,11 @@ body.theme-light .tile-value.negative {
     gap: 8px;
     padding: 6px 8px;
     border-radius: 20px;
+    scrollbar-width: none;
+  }
+
+  .top-tabs::-webkit-scrollbar {
+    display: none;
   }
 
   .top-tab {
