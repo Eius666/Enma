@@ -12,7 +12,7 @@
 }
 
 .overview-grid > .card {
-  height: 100%;
+  height: auto;
   min-height: 220px;
 }
 
