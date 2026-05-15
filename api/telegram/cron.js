@@ -24,7 +24,7 @@ module.exports = async (req, res) => {
   // --- Rate limiting ---
   const ip = getClientIp(req);
   const limitMax = req.method === 'GET' ? 60 : 20;
-  if (!rateLimit(`cron:${ip}`, limitMax, 60 * 1000)) {
+  if (!await rateLimit(`cron:${ip}`, limitMax, 60 * 1000)) {
     res.status(429).json({ ok: false, description: 'Too many requests' });
     return;
   }

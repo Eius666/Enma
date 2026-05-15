@@ -69,7 +69,7 @@ module.exports = async (req, res) => {
 
   // --- IP rate limiting (secondary defence) ---
   const ip = getClientIp(req);
-  if (!rateLimit(`webhook:${ip}`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS)) {
+  if (!await rateLimit(`webhook:${ip}`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS)) {
     res.status(200).json({ ok: true }); // Return 200 to Telegram per convention
     return;
   }

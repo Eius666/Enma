@@ -16,7 +16,7 @@ module.exports = async (req, res) => {
 
   // --- Rate limiting ---
   const ip = getClientIp(req);
-  if (!rateLimit(`send:${ip}`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS)) {
+  if (!await rateLimit(`send:${ip}`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS)) {
     res.status(429).json({ ok: false, description: 'Too many requests' });
     return;
   }
