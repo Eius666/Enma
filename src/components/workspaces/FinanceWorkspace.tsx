@@ -143,61 +143,6 @@ export const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
             <span className="tile-value">{fmt(totals.expenses)}</span>
           </div>
         </div>
-        <div className="category-card">
-          <header>
-            <span className="card-badge muted">{t('finance.categoriesBadge')}</span>
-            <h3>{t('finance.categoriesTitle')}</h3>
-          </header>
-          <div className="category-quick-list">
-            {categories.map(category => (
-              <div key={category.id} className="category-chip">
-                <FaTag />
-                <span>{category.name}</span>
-                <button
-                  type="button"
-                  className="category-remove"
-                  onClick={() => deleteCategory(category.id)}
-                  aria-label={t('finance.deleteCategoryAria', { name: category.name })}
-                >
-                  <FaTimes />
-                </button>
-              </div>
-            ))}
-          </div>
-          <div className="category-form">
-            <label className="floating-label">
-              <span>{t('finance.categoryNameLabel')}</span>
-              <input
-                value={categoryDraft.name}
-                onChange={event =>
-                  setCategoryDraft(prev => ({ ...prev, name: event.target.value }))
-                }
-                placeholder={t('finance.categoryNamePlaceholder')}
-              />
-            </label>
-            <label className="floating-label">
-              <span>{t('finance.categoryTypeLabel')}</span>
-              <select
-                value={categoryDraft.type}
-                onChange={event =>
-                  setCategoryDraft(prev => ({
-                    ...prev,
-                    type: event.target.value as 'income' | 'expense',
-                  }))
-                }
-              >
-                <option value="income">{t('finance.categoryTypeIncome')}</option>
-                <option value="expense">{t('finance.categoryTypeExpense')}</option>
-              </select>
-            </label>
-            <button className="ghost-button" onClick={addCategory}>
-              <FaPlus /> {t('finance.addCategory')}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="finance-lower">
         <div className="transaction-form-card">
           <h3>{t('finance.logTransactionTitle')}</h3>
           <div className="type-toggle">
@@ -251,6 +196,61 @@ export const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
           <button className="primary-button add-transaction" onClick={addTransaction}>
             <FaPlus /> {t('finance.saveTransaction')}
           </button>
+        </div>
+      </div>
+
+      <div className="finance-lower">
+        <div className="category-card">
+          <header>
+            <span className="card-badge muted">{t('finance.categoriesBadge')}</span>
+            <h3>{t('finance.categoriesTitle')}</h3>
+          </header>
+          <div className="category-quick-list">
+            {categories.map(category => (
+              <div key={category.id} className="category-chip">
+                <FaTag />
+                <span>{category.name}</span>
+                <button
+                  type="button"
+                  className="category-remove"
+                  onClick={() => deleteCategory(category.id)}
+                  aria-label={t('finance.deleteCategoryAria', { name: category.name })}
+                >
+                  <FaTimes />
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="category-form">
+            <label className="floating-label">
+              <span>{t('finance.categoryNameLabel')}</span>
+              <input
+                value={categoryDraft.name}
+                onChange={event =>
+                  setCategoryDraft(prev => ({ ...prev, name: event.target.value }))
+                }
+                placeholder={t('finance.categoryNamePlaceholder')}
+              />
+            </label>
+            <label className="floating-label">
+              <span>{t('finance.categoryTypeLabel')}</span>
+              <select
+                value={categoryDraft.type}
+                onChange={event =>
+                  setCategoryDraft(prev => ({
+                    ...prev,
+                    type: event.target.value as 'income' | 'expense',
+                  }))
+                }
+              >
+                <option value="income">{t('finance.categoryTypeIncome')}</option>
+                <option value="expense">{t('finance.categoryTypeExpense')}</option>
+              </select>
+            </label>
+            <button className="ghost-button" onClick={addCategory}>
+              <FaPlus /> {t('finance.addCategory')}
+            </button>
+          </div>
         </div>
 
         <div className="transactions-card">
