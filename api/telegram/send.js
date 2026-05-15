@@ -1,18 +1,12 @@
 'use strict';
 
 const { rateLimit, getClientIp } = require('../_lib/rateLimit');
+const { verifyInitData } = require('../_lib/verifyWebhookSig');
 
-// Telegram message length limit.
 const MAX_TEXT_LENGTH = 4096;
 
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-
-// TODO(security): For complete caller authentication, the client should send
-// the Telegram initData string in an `X-Telegram-Init-Data` header and we
-// should call verifyInitData() here to confirm the request comes from our own
-// Mini App.  That requires App.tsx to be updated to forward initData, which is
-// a separate phase.
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -24,6 +18,14 @@ module.exports = async (req, res) => {
   const ip = getClientIp(req);
   if (!rateLimit(`send:${ip}`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS)) {
     res.status(429).json({ ok: false, description: 'Too many requests' });
+    return;
+  }
+
+  // --- Caller authentication ---
+  const initData = req.headers['x-telegram-init-data'] ?? '';
+  const authResult = verifyInitData(initData);
+  if (!authResult.ok) {
+    res.status(401).json({ ok: false, description: 'Unauthorized' });
     return;
   }
 
