@@ -923,7 +923,7 @@ const App: React.FC = () => {
         notes: reminder.notes ?? null,
         date: reminder.date,
         time: reminder.time,
-        scheduledAt: Timestamp.fromDate(scheduledAt),
+        scheduledAt: Timestamp.fromDate(new Date(scheduledAt.getTime() - 30_000)),
         status,
         done: reminder.done,
         language,
