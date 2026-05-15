@@ -74,6 +74,7 @@ export const ru = {
     checkinEmpty: 'Добавьте привычки во вкладке «Привычки», чтобы отмечать их.',
     workspaceTitle: 'Рабочее пространство привычек',
     workspaceSubtitle: 'Создавайте, редактируйте и отслеживайте привычки.',
+    reminderTimeLabel: 'Напоминать в',
   },
   calendar: {
     badge: 'Календарь',
@@ -97,6 +98,12 @@ export const ru = {
     scheduleTitle: 'Расписание',
     noTasksForDay: 'На этот день задач нет.',
     deleteTaskAria: 'Удалить задачу',
+    deadlineLabel: 'Дедлайн',
+    notifyBeforeLabel: 'Уведомить за',
+    notifyBefore5: '5 мин',
+    notifyBefore15: '15 мин',
+    notifyBefore30: '30 мин',
+    notifyBefore60: '1 час',
   },
   notes: {
     latestBadge: 'Свежая заметка',

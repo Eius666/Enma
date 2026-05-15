@@ -90,9 +90,17 @@ module.exports = async (req, res) => {
       });
 
       if (!claimed) continue;
-      const text =
-        claimed.telegramText ||
-        `Reminder: ${claimed.title}${claimed.time ? `\n${claimed.time}` : ''}`;
+      let text;
+      if (claimed.telegramText) {
+        text = claimed.telegramText;
+      } else if (claimed.type === 'task_deadline') {
+        const mins = claimed.notifyBefore ?? 15;
+        text = `⏰ Напоминание: «${claimed.title}» через ${mins} мин`;
+      } else if (claimed.type === 'habit_reminder') {
+        text = `🌱 Привычка: «${claimed.title}» — не забудь отметить сегодня!`;
+      } else {
+        text = `Reminder: ${claimed.title}${claimed.time ? `\n${claimed.time}` : ''}`;
+      }
 
       const sendResult = await sendTelegramMessage(token, claimed.chatId, text);
       if (sendResult.ok) {

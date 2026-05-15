@@ -74,6 +74,7 @@ export const en = {
     checkinEmpty: 'Add habits in the Habits tab to see daily check-ins.',
     workspaceTitle: 'Habit workspace',
     workspaceSubtitle: 'Create, edit, and review your weekly habits here.',
+    reminderTimeLabel: 'Daily reminder at',
   },
   calendar: {
     badge: 'Calendar',
@@ -97,6 +98,12 @@ export const en = {
     scheduleTitle: 'Schedule',
     noTasksForDay: 'No tasks yet for this day.',
     deleteTaskAria: 'Delete task',
+    deadlineLabel: 'Deadline',
+    notifyBeforeLabel: 'Notify before',
+    notifyBefore5: '5 min',
+    notifyBefore15: '15 min',
+    notifyBefore30: '30 min',
+    notifyBefore60: '1 hour',
   },
   notes: {
     latestBadge: 'Latest note',

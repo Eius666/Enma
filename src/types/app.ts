@@ -23,6 +23,8 @@ export type CalendarTask = {
   date: string;
   color: string;
   notes?: string;
+  deadline?: string;
+  notifyBefore?: number;
 };
 
 export type NoteBlock = {
@@ -69,6 +71,7 @@ export type Habit = {
   id: string;
   title: string;
   history: Record<string, boolean>;
+  reminderTime?: string;
 };
 
 // Minimal user profile stored in localStorage.

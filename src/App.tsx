@@ -17,7 +17,7 @@ import {
   signInAnonymously,
   signOut
 } from 'firebase/auth';
-import { Timestamp, deleteDoc, doc, serverTimestamp, setDoc, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { Timestamp, deleteDoc, doc, getDoc, serverTimestamp, setDoc, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import './App.v2.css';
 import { auth, db } from './firebase';
 import { useTelegramWebApp } from './hooks/useTelegramWebApp';
@@ -42,6 +42,8 @@ type CalendarTask = {
   date: string;
   color: string;
   notes?: string;
+  deadline?: string;
+  notifyBefore?: number;
 };
 
 type NoteBlock = {
@@ -84,6 +86,7 @@ type Habit = {
   id: string;
   title: string;
   history: Record<string, boolean>;
+  reminderTime?: string;
 };
 
 type UserProfile = {
@@ -1137,14 +1140,65 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const addHabit = (title: string) => {
+  const habitReminderDateRef = useRef<string>('');
+
+  const scheduleHabitReminder = useCallback(
+    async (habit: Habit) => {
+      if (!habit.reminderTime || !user || !telegram?.initDataUnsafe?.user?.id) return;
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const [hh, mm] = habit.reminderTime.split(':').map(Number);
+      const scheduledDate = new Date();
+      scheduledDate.setHours(hh, mm, 0, 0);
+      scheduledDate.setTime(scheduledDate.getTime() - 30_000);
+      if (scheduledDate <= new Date()) return;
+      const docId = `habit-${habit.id}-${today}`;
+      try {
+        const snap = await getDoc(doc(db, 'reminders', docId));
+        if (snap.exists()) return;
+        await setDoc(doc(db, 'reminders', docId), {
+          id: docId,
+          userId: user.uid,
+          chatId: telegram.initDataUnsafe.user.id,
+          type: 'habit_reminder',
+          habitId: habit.id,
+          title: habit.title,
+          scheduledAt: Timestamp.fromDate(scheduledDate),
+          status: 'pending',
+          telegramText:
+            language === 'ru'
+              ? `🌱 Привычка: «${habit.title}» — не забудь отметить сегодня!`
+              : `🌱 Habit: «${habit.title}» — don't forget to check in today!`,
+          language,
+          date: today,
+          updatedAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+        });
+      } catch (error) {
+        console.warn('Failed to schedule habit reminder', error);
+      }
+    },
+    [user, telegram, language]
+  );
+
+  useEffect(() => {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    if (!user || habits.length === 0 || habitReminderDateRef.current === today) return;
+    habitReminderDateRef.current = today;
+    habits.forEach(habit => {
+      if (habit.reminderTime) scheduleHabitReminder(habit);
+    });
+  }, [habits, user, scheduleHabitReminder]);
+
+  const addHabit = (title: string, reminderTime?: string) => {
     if (!title.trim()) return;
     const newHabit: Habit = {
       id: createId(),
       title: title.trim(),
-      history: {}
+      history: {},
+      reminderTime,
     };
     setHabits(prev => [...prev, newHabit]);
+    if (reminderTime) scheduleHabitReminder(newHabit);
   };
 
   const toggleHabitDay = (habitId: string, dateKey: string) => {
@@ -1176,6 +1230,53 @@ const App: React.FC = () => {
         await deleteDoc(doc(db, 'reminders', reminderId));
       } catch (error) {
         console.warn('Failed to delete reminder from Firestore', error);
+      }
+    },
+    [user]
+  );
+
+  const handleTaskAdded = useCallback(
+    async (task: CalendarTask) => {
+      if (!task.deadline || !user || !telegram?.initDataUnsafe?.user?.id) return;
+      const notifyBefore = task.notifyBefore ?? 15;
+      const scheduledMs = new Date(task.deadline).getTime() - notifyBefore * 60 * 1000 - 30_000;
+      const scheduledAt = new Date(scheduledMs);
+      if (scheduledAt <= new Date()) return;
+      const reminderId = `task-deadline-${task.id}`;
+      const telegramText =
+        language === 'ru'
+          ? `⏰ Напоминание: «${task.title}» через ${notifyBefore} мин`
+          : `⏰ Reminder: «${task.title}» in ${notifyBefore} min`;
+      try {
+        await setDoc(doc(db, 'reminders', reminderId), {
+          id: reminderId,
+          userId: user.uid,
+          chatId: telegram.initDataUnsafe.user.id,
+          type: 'task_deadline',
+          taskId: task.id,
+          title: task.title,
+          notifyBefore,
+          scheduledAt: Timestamp.fromDate(scheduledAt),
+          status: 'pending',
+          telegramText,
+          language,
+          updatedAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+        });
+      } catch (error) {
+        console.warn('Failed to write task deadline reminder', error);
+      }
+    },
+    [user, telegram, language]
+  );
+
+  const handleTaskDeleted = useCallback(
+    async (taskId: string) => {
+      if (!user) return;
+      try {
+        await deleteDoc(doc(db, 'reminders', `task-deadline-${taskId}`));
+      } catch (error) {
+        console.warn('Failed to delete task deadline reminder', error);
       }
     },
     [user]
@@ -1357,6 +1458,8 @@ const App: React.FC = () => {
             onAddReminder={addReminder}
             onToggleReminder={toggleReminder}
             onDeleteReminder={deleteReminder}
+            onTaskAdded={handleTaskAdded}
+            onTaskDeleted={handleTaskDeleted}
           />
         )}
         {activeTab === 'notes' && (

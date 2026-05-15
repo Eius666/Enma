@@ -30,6 +30,8 @@ type CalendarWorkspaceProps = {
   onAddReminder: (date: Date, title: string, time: string, notes?: string) => void;
   onToggleReminder: (id: string) => void;
   onDeleteReminder: (id: string) => void;
+  onTaskAdded?: (task: CalendarTask) => void;
+  onTaskDeleted?: (id: string) => void;
 };
 
 export const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
@@ -40,6 +42,8 @@ export const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
   onAddReminder,
   onToggleReminder,
   onDeleteReminder,
+  onTaskAdded,
+  onTaskDeleted,
 }) => {
   const t = createT(language);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -48,6 +52,8 @@ export const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
   const [draftNotes, setDraftNotes] = useState('');
   const [selectedColor, setSelectedColor] = useState(TASK_COLOR_PALETTE[0]);
   const [draftTime, setDraftTime] = useState('09:00');
+  const [draftDeadlineTime, setDraftDeadlineTime] = useState('');
+  const [draftNotifyBefore, setDraftNotifyBefore] = useState(15);
   const [reminderTitle, setReminderTitle] = useState('');
   const [reminderTime, setReminderTime] = useState('09:00');
   const [reminderNotes, setReminderNotes] = useState('');
@@ -72,17 +78,30 @@ export const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
       setHours(new Date(selectedDate), Number(hourStr) || 0),
       Number(minuteStr) || 0
     );
+    let deadline: string | undefined;
+    if (draftDeadlineTime) {
+      const [dh, dm] = draftDeadlineTime.split(':');
+      deadline = setMinutes(
+        setHours(new Date(selectedDate), Number(dh) || 0),
+        Number(dm) || 0
+      ).toISOString();
+    }
     const newTask: CalendarTask = {
       id: createId(),
       title: draftTitle.trim(),
       date: dateWithTime.toISOString(),
       color: selectedColor,
       notes: draftNotes.trim() || undefined,
+      deadline,
+      notifyBefore: deadline ? draftNotifyBefore : undefined,
     };
     onTasksChange([...tasks, newTask]);
+    if (newTask.deadline) onTaskAdded?.(newTask);
     setDraftTitle('');
     setDraftNotes('');
     setDraftTime('09:00');
+    setDraftDeadlineTime('');
+    setDraftNotifyBefore(15);
   };
 
   const handleAddReminder = () => {
@@ -93,7 +112,9 @@ export const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
   };
 
   const deleteTask = (id: string) => {
+    const taskToDelete = tasks.find(task => task.id === id);
     onTasksChange(tasks.filter(task => task.id !== id));
+    if (taskToDelete?.deadline) onTaskDeleted?.(id);
   };
 
   const startDate = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 });
@@ -210,6 +231,28 @@ export const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
                 onChange={event => setDraftTime(event.target.value)}
               />
             </label>
+            <label className="floating-label calendar-time-field">
+              <span>{t('calendar.deadlineLabel')}</span>
+              <input
+                type="time"
+                value={draftDeadlineTime}
+                onChange={event => setDraftDeadlineTime(event.target.value)}
+              />
+            </label>
+            {draftDeadlineTime && (
+              <label className="floating-label">
+                <span>{t('calendar.notifyBeforeLabel')}</span>
+                <select
+                  value={draftNotifyBefore}
+                  onChange={event => setDraftNotifyBefore(Number(event.target.value))}
+                >
+                  <option value={5}>{t('calendar.notifyBefore5')}</option>
+                  <option value={15}>{t('calendar.notifyBefore15')}</option>
+                  <option value={30}>{t('calendar.notifyBefore30')}</option>
+                  <option value={60}>{t('calendar.notifyBefore60')}</option>
+                </select>
+              </label>
+            )}
             <button className="primary-button add-task" onClick={addTask}>
               <FaPlus /> {t('calendar.addTask')}
             </button>
@@ -229,6 +272,9 @@ export const CalendarWorkspace: React.FC<CalendarWorkspaceProps> = ({
                       {task.notes && <span className="task-note">{task.notes}</span>}
                       <span className="task-time">
                         {formatDate(language, parseISO(task.date), 'h:mm a')}
+                        {task.deadline && (
+                          <> · ⏰ {formatDate(language, parseISO(task.deadline), 'h:mm a')}</>
+                        )}
                       </span>
                     </div>
                     <button
