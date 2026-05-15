@@ -9,7 +9,7 @@ import type { Language, Habit } from './types';
 type HabitsWorkspaceProps = {
   language: Language;
   habits: Habit[];
-  onAddHabit: (name: string) => void;
+  onAddHabit: (name: string, reminderTime?: string) => void;
   onToggleHabitDay: (habitId: string, dateKey: string) => void;
   onDeleteHabit: (habitId: string) => void;
 };
@@ -23,6 +23,7 @@ export const HabitsWorkspace: React.FC<HabitsWorkspaceProps> = ({
 }) => {
   const t = createT(language);
   const [habitDraft, setHabitDraft] = useState('');
+  const [reminderTimeDraft, setReminderTimeDraft] = useState('');
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
 
   const handleHabitResize = (event: React.FormEvent<HTMLTextAreaElement>) => {
@@ -56,18 +57,28 @@ export const HabitsWorkspace: React.FC<HabitsWorkspaceProps> = ({
                 if (event.key === 'Enter' && !event.shiftKey) {
                   event.preventDefault();
                   if (habitDraft.trim()) {
-                    onAddHabit(habitDraft);
+                    onAddHabit(habitDraft, reminderTimeDraft || undefined);
                     setHabitDraft('');
+                    setReminderTimeDraft('');
                   }
                 }
               }}
+            />
+            <input
+              type="time"
+              className="habit-input"
+              style={{ minWidth: 0, flex: '0 0 auto', width: 'auto' }}
+              value={reminderTimeDraft}
+              onChange={event => setReminderTimeDraft(event.target.value)}
+              title={t('habits.reminderTimeLabel')}
             />
             <button
               className="ghost-button"
               onClick={() => {
                 if (!habitDraft.trim()) return;
-                onAddHabit(habitDraft);
+                onAddHabit(habitDraft, reminderTimeDraft || undefined);
                 setHabitDraft('');
+                setReminderTimeDraft('');
               }}
             >
               <FaPlus /> {t('habits.add')}
