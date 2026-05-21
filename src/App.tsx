@@ -17,7 +17,7 @@ import {
   signInAnonymously,
   signOut
 } from 'firebase/auth';
-import { Timestamp, deleteDoc, doc, getDoc, serverTimestamp, setDoc, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { Timestamp, deleteDoc, doc, getDoc, serverTimestamp, setDoc, collection, query, where, getDocs, orderBy, onSnapshot } from 'firebase/firestore';
 import './App.v2.css';
 import { auth, db } from './firebase';
 import { useTelegramWebApp } from './hooks/useTelegramWebApp';
@@ -967,25 +967,40 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!user) return;
-    
-    const fetchTransactions = async () => {
-      try {
-        const q = query(collection(db, 'transactions'), where('userId', '==', user.uid), orderBy('date', 'desc'));
-        const snapshot = await getDocs(q);
-        if (!snapshot.empty) {
-          const cloudTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
-          setTransactions(prev => {
-            const existingIds = new Set(prev.map(t => t.id));
-            const fresh = cloudTransactions.filter(t => !existingIds.has(t.id));
-            return [...fresh, ...prev].sort((a,b) => b.date.localeCompare(a.date));
-          });
-        }
-      } catch (error) {
-        console.warn('Failed to fetch transactions from cloud', error);
-      }
-    };
 
-    fetchTransactions();
+    const q = query(
+      collection(db, 'transactions'),
+      where('userId', '==', user.uid),
+      orderBy('date', 'desc')
+    );
+
+    let unsubscribe: () => void;
+    try {
+      unsubscribe = onSnapshot(
+        q,
+        snapshot => {
+          setTransactions(prev => {
+            const updated = new Map(prev.map(t => [t.id, t]));
+            snapshot.docChanges().forEach(change => {
+              if (change.type === 'removed') {
+                updated.delete(change.doc.id);
+              } else {
+                updated.set(change.doc.id, { id: change.doc.id, ...change.doc.data() } as Transaction);
+              }
+            });
+            return Array.from(updated.values()).sort((a, b) => b.date.localeCompare(a.date));
+          });
+        },
+        error => {
+          console.warn('Transaction onSnapshot error', error);
+        }
+      );
+    } catch (error) {
+      console.warn('Failed to subscribe to transactions', error);
+      return;
+    }
+
+    return () => unsubscribe();
   }, [user]);
 
   useEffect(() => {
