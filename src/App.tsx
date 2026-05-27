@@ -25,15 +25,17 @@ import { useTelegramWebApp } from './hooks/useTelegramWebApp';
 import { AuthScreen } from './components/workspaces/AuthScreen';
 import { DayFlowOverview } from './components/workspaces/DayFlowOverview';
 import { CalendarWorkspace } from './components/workspaces/CalendarWorkspace';
-import { NotesWorkspace } from './components/workspaces/NotesWorkspace';
 import { FinanceWorkspace } from './components/workspaces/FinanceWorkspace';
 import { HabitsWorkspace } from './components/workspaces/HabitsWorkspace';
 import { SettingsPanel } from './components/workspaces/SettingsPanel';
 import { ToastProvider } from './components/ui/Toast';
 import WalletConnect from './components/WalletConnect';
 import SubscriptionPanel from './components/SubscriptionPanel';
+import NotesList from './components/NotesList';
+import NoteEditor from './components/NoteEditor';
 import { Subscription, isSubscriptionActive } from './subscription';
 import './components/Subscription.css';
+import './components/Notes.css';
 
 type Theme = 'dark' | 'light';
 type Language = 'en' | 'ru';
@@ -624,6 +626,8 @@ const App: React.FC = () => {
   const [ratesUpdatedAt, setRatesUpdatedAt] = useState<string | null>(null);
   const [ratesStatus, setRatesStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [activeTab, setActiveTab] = useState<PrimaryTab>('day-flow');
+  const [notesView, setNotesView] = useState<'list' | 'editor'>('list');
+  const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const prevUserId = useRef<string | null>(null);
@@ -1472,7 +1476,13 @@ const App: React.FC = () => {
           <button
             key={tab.id}
             className={`top-tab ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              setActiveTab(tab.id);
+              if (tab.id !== 'notes') {
+                setNotesView('list');
+                setActiveNoteId(null);
+              }
+            }}
           >
             {tab.label}
           </button>
@@ -1507,13 +1517,25 @@ const App: React.FC = () => {
             onTaskDeleted={handleTaskDeleted}
           />
         )}
-        {activeTab === 'notes' && (
-          <NotesWorkspace
+        {activeTab === 'notes' && notesView === 'list' && (
+          <NotesList
+            user={user}
             language={language}
-            notes={notes}
-            noteProjects={noteProjects}
-            onNotesChange={setNotes}
-            onNoteProjectsChange={setNoteProjects}
+            onOpenEditor={(id) => {
+              setActiveNoteId(id);
+              setNotesView('editor');
+            }}
+          />
+        )}
+        {activeTab === 'notes' && notesView === 'editor' && (
+          <NoteEditor
+            noteId={activeNoteId}
+            user={user}
+            language={language}
+            onBack={() => {
+              setNotesView('list');
+              setActiveNoteId(null);
+            }}
           />
         )}
         {activeTab === 'finance' && (

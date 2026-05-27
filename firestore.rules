@@ -105,6 +105,15 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------------------------
+    // /notes/{noteId}
+    // -------------------------------------------------------------------------
+    match /notes/{noteId} {
+      allow read:           if ownsDoc();
+      allow create:         if writesOwnUid();
+      allow update, delete: if ownsDoc();
+    }
+
+    // -------------------------------------------------------------------------
     // Catch-all deny
     // -------------------------------------------------------------------------
     // Any collection not explicitly listed above is denied to authenticated AND
