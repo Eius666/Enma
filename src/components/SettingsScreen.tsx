@@ -254,10 +254,10 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         </button>
       </div>
 
-      {/* ━━━ Group: Payment — WalletConnect + Subscription ━━━ */}
+      {/* ━━━ Group: Payment ━━━ */}
       <div className="sett-group__label">{t.groupPayment}</div>
 
-      {/* Wallet row */}
+      {/* Premium status row — card */}
       <div className="sett-group">
         <div className="sett-row sett-row--tall">
           <div className="sett-row__icon-wrap">
@@ -269,13 +269,11 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <span className="sett-row__value sett-row__value--sub">{subLabel}</span>
           </div>
         </div>
+      </div>
 
-        <div className="sett-row__divider" />
-
-        {/* WalletConnect embedded */}
-        <div className="sett-row--embed">
-          <WalletConnect language={language} />
-        </div>
+      {/* TON Wallet button — standalone, no card wrapper */}
+      <div className="sett-wallet-btn">
+        <WalletConnect language={language} />
       </div>
 
       {/* Subscription panel (full plan picker) */}

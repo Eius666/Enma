@@ -270,68 +270,106 @@
 
 .sett-picker__refresh:active { opacity: 0.7; }
 
-/* ── Embedded WalletConnect row ───────────────── */
+/* ── Standalone TON Wallet button (no card wrapper) ─ */
 
-.sett-row--embed {
-  padding: 0 16px;
+.sett-wallet-btn {
+  margin-top: 10px;
 }
 
-/* Override WalletConnect styles to fit the card */
-.sett-row--embed .wallet-connect {
-  display: flex;
+/* Strip the outer card box from Subscription.css entirely */
+.sett-wallet-btn .wallet-connect {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  display: block;
+}
+
+/* Full-width accent CTA button — no wrapper */
+.sett-wallet-btn .wallet-connect__btn--connect {
+  width: 100%;
+  background: var(--notes-accent, #7B68EE);
+  color: #fff;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 500;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  display: block;
+  text-align: center;
+  transition: opacity 0.18s, transform 0.15s;
+  box-shadow: 0 4px 16px rgba(123, 104, 238, 0.35);
+}
+
+.sett-wallet-btn .wallet-connect__btn--connect:hover {
+  opacity: 0.92;
+  transform: none; /* override Subscription.css translateY */
+  box-shadow: 0 4px 20px rgba(123, 104, 238, 0.45);
+}
+
+.sett-wallet-btn .wallet-connect__btn--connect:active {
+  opacity: 0.82;
+  transform: scale(0.98);
+}
+
+/* Connected state — compact info row */
+.sett-wallet-btn .wallet-connect--connected {
+  background: var(--notes-card-bg) !important;
+  border: 1px solid var(--notes-card-border) !important;
+  border-radius: 12px !important;
+  padding: 12px 16px !important;
+  display: flex !important;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 12px 0;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
-.sett-row--embed .wallet-connect__info {
+.sett-wallet-btn .wallet-connect__info {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
 
-.sett-row--embed .wallet-connect__address {
-  font-size: 13px;
-  color: var(--notes-text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 140px;
-}
-
-.sett-row--embed .wallet-connect__dot {
+.sett-wallet-btn .wallet-connect__dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: #2ecc71;
   flex-shrink: 0;
+  box-shadow: 0 0 5px rgba(46, 204, 113, 0.5);
 }
 
-.sett-row--embed .wallet-connect__btn {
-  padding: 7px 14px;
-  border-radius: 10px;
+.sett-wallet-btn .wallet-connect__address {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--notes-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+
+.sett-wallet-btn .wallet-connect__btn--disconnect {
+  padding: 6px 14px;
+  border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
   border: none;
   cursor: pointer;
   font-family: inherit;
+  background: rgba(255, 71, 87, 0.14);
+  color: #ff4757;
   white-space: nowrap;
   transition: opacity 0.15s;
 }
 
-.sett-row--embed .wallet-connect__btn--connect {
-  background: var(--notes-accent);
-  color: #fff;
-}
-
-.sett-row--embed .wallet-connect__btn--disconnect {
-  background: rgba(255, 71, 87, 0.15);
-  color: #ff4757;
-}
-
-.sett-row--embed .wallet-connect__btn:active { opacity: 0.8; }
+.sett-wallet-btn .wallet-connect__btn--disconnect:active { opacity: 0.75; }
 
 /* ── Subscription panel wrapper ───────────────── */
 
