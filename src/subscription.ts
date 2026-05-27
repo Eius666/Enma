@@ -95,5 +95,5 @@ export const isSubscriptionActive = (subscription: Subscription): boolean => {
   return new Date(subscription.endDate) > new Date();
 };
 
-// ВАЖНО: заменить на реальный кошелёк Enma для приёма платежей!
-export const ENMA_WALLET_ADDRESS = 'EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c';
+// Enma treasury wallet for receiving subscription payments
+export const ENMA_WALLET_ADDRESS = 'UQAmqtbkNs6OYMhQl83f_iesYhBrJJTPa7-wuIZCLEbSDplH';
