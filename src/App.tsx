@@ -970,41 +970,53 @@ const App: React.FC = () => {
     const uid = user?.uid ?? null;
     if (!uid) return;
 
-    // Single-field filter only: avoids requiring a composite index until
-    // the userId+date index finishes building. Client-side sort applied below.
-    const q = query(
-      collection(db, 'transactions'),
-      where('userId', '==', uid)
-    );
+    let mounted = true;
+    let unsubscribe: (() => void) | null = null;
 
-    let unsubscribe: () => void;
-    try {
-      unsubscribe = onSnapshot(
-        q,
-        snapshot => {
-          setTransactions(prev => {
-            const updated = new Map(prev.map(t => [t.id, t]));
-            snapshot.docChanges().forEach(change => {
-              if (change.type === 'removed') {
-                updated.delete(change.doc.id);
-              } else {
-                updated.set(change.doc.id, { id: change.doc.id, ...change.doc.data() } as Transaction);
-              }
-            });
-            // Sort by date descending (client-side)
-            return Array.from(updated.values()).sort((a, b) => b.date.localeCompare(a.date));
-          });
-        },
-        error => {
-          console.warn('Transaction onSnapshot error', error);
-        }
+    // Debounce to avoid Firestore assertion errors on StrictMode double-mount
+    const timer = setTimeout(() => {
+      if (!mounted) return;
+
+      // Single-field filter only: avoids requiring a composite index until
+      // the userId+date index finishes building. Client-side sort applied below.
+      const q = query(
+        collection(db, 'transactions'),
+        where('userId', '==', uid)
       );
-    } catch (error) {
-      console.warn('Failed to subscribe to transactions', error);
-      return;
-    }
 
-    return () => unsubscribe();
+      try {
+        unsubscribe = onSnapshot(
+          q,
+          snapshot => {
+            if (!mounted) return;
+            setTransactions(prev => {
+              const updated = new Map(prev.map(t => [t.id, t]));
+              snapshot.docChanges().forEach(change => {
+                if (change.type === 'removed') {
+                  updated.delete(change.doc.id);
+                } else {
+                  updated.set(change.doc.id, { id: change.doc.id, ...change.doc.data() } as Transaction);
+                }
+              });
+              // Sort by date descending (client-side)
+              return Array.from(updated.values()).sort((a, b) => b.date.localeCompare(a.date));
+            });
+          },
+          error => {
+            if (!mounted) return;
+            console.warn('Transaction onSnapshot error', error);
+          }
+        );
+      } catch (error) {
+        console.warn('Failed to subscribe to transactions', error);
+      }
+    }, 100);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+      if (unsubscribe) unsubscribe();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid ?? null]);
 
@@ -1012,41 +1024,55 @@ const App: React.FC = () => {
   useEffect(() => {
     const uid = user?.uid ?? null;
     if (!uid) return;
-    const q = query(
-      collection(db, 'habits'),
-      where('userId', '==', uid)
-    );
-    let unsub: () => void;
-    try {
-      unsub = onSnapshot(
-        q,
-        snapshot => {
-          setFirestoreHabits(prev => {
-            const map = new Map(prev.map(h => [h.id, h]));
-            snapshot.docChanges().forEach(change => {
-              if (change.type === 'removed') {
-                map.delete(change.doc.id);
-              } else {
-                map.set(change.doc.id, {
-                  id: change.doc.id,
-                  ...change.doc.data()
-                } as HabitDoc);
-              }
-            });
-            return Array.from(map.values()).sort((a, b) => {
-              const ta = (a.createdAt as { seconds?: number })?.seconds ?? 0;
-              const tb = (b.createdAt as { seconds?: number })?.seconds ?? 0;
-              return tb - ta;
-            });
-          });
-        },
-        err => console.warn('Habits onSnapshot error', err)
+
+    let mounted = true;
+    let unsub: (() => void) | null = null;
+
+    const timer = setTimeout(() => {
+      if (!mounted) return;
+      const q = query(
+        collection(db, 'habits'),
+        where('userId', '==', uid)
       );
-    } catch (err) {
-      console.warn('Failed to subscribe to habits', err);
-      return;
-    }
-    return () => unsub();
+      try {
+        unsub = onSnapshot(
+          q,
+          snapshot => {
+            if (!mounted) return;
+            setFirestoreHabits(prev => {
+              const map = new Map(prev.map(h => [h.id, h]));
+              snapshot.docChanges().forEach(change => {
+                if (change.type === 'removed') {
+                  map.delete(change.doc.id);
+                } else {
+                  map.set(change.doc.id, {
+                    id: change.doc.id,
+                    ...change.doc.data()
+                  } as HabitDoc);
+                }
+              });
+              return Array.from(map.values()).sort((a, b) => {
+                const ta = (a.createdAt as { seconds?: number })?.seconds ?? 0;
+                const tb = (b.createdAt as { seconds?: number })?.seconds ?? 0;
+                return tb - ta;
+              });
+            });
+          },
+          err => {
+            if (!mounted) return;
+            console.warn('Habits onSnapshot error', err);
+          }
+        );
+      } catch (err) {
+        console.warn('Failed to subscribe to habits', err);
+      }
+    }, 100);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+      if (unsub) unsub();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid ?? null]);
 
@@ -1054,41 +1080,55 @@ const App: React.FC = () => {
   useEffect(() => {
     const uid = user?.uid ?? null;
     if (!uid) return;
-    const q = query(
-      collection(db, 'tasks'),
-      where('userId', '==', uid)
-    );
-    let unsub: () => void;
-    try {
-      unsub = onSnapshot(
-        q,
-        snapshot => {
-          setDayTasks(prev => {
-            const map = new Map(prev.map(t => [t.id, t]));
-            snapshot.docChanges().forEach(change => {
-              if (change.type === 'removed') {
-                map.delete(change.doc.id);
-              } else {
-                map.set(change.doc.id, {
-                  id: change.doc.id,
-                  ...change.doc.data()
-                } as DayTask);
-              }
-            });
-            return Array.from(map.values()).sort((a, b) => {
-              const ta = (a.createdAt as { seconds?: number })?.seconds ?? 0;
-              const tb = (b.createdAt as { seconds?: number })?.seconds ?? 0;
-              return tb - ta;
-            });
-          });
-        },
-        err => console.warn('DayTasks onSnapshot error', err)
+
+    let mounted = true;
+    let unsub: (() => void) | null = null;
+
+    const timer = setTimeout(() => {
+      if (!mounted) return;
+      const q = query(
+        collection(db, 'tasks'),
+        where('userId', '==', uid)
       );
-    } catch (err) {
-      console.warn('Failed to subscribe to day tasks', err);
-      return;
-    }
-    return () => unsub();
+      try {
+        unsub = onSnapshot(
+          q,
+          snapshot => {
+            if (!mounted) return;
+            setDayTasks(prev => {
+              const map = new Map(prev.map(t => [t.id, t]));
+              snapshot.docChanges().forEach(change => {
+                if (change.type === 'removed') {
+                  map.delete(change.doc.id);
+                } else {
+                  map.set(change.doc.id, {
+                    id: change.doc.id,
+                    ...change.doc.data()
+                  } as DayTask);
+                }
+              });
+              return Array.from(map.values()).sort((a, b) => {
+                const ta = (a.createdAt as { seconds?: number })?.seconds ?? 0;
+                const tb = (b.createdAt as { seconds?: number })?.seconds ?? 0;
+                return tb - ta;
+              });
+            });
+          },
+          err => {
+            if (!mounted) return;
+            console.warn('DayTasks onSnapshot error', err);
+          }
+        );
+      } catch (err) {
+        console.warn('Failed to subscribe to day tasks', err);
+      }
+    }, 100);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+      if (unsub) unsub();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid ?? null]);
 

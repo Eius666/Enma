@@ -148,25 +148,40 @@ const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor }) =
     const uid = user?.uid ?? null;
     if (!uid) { setNotes([]); return; }
 
-    const q = query(
-      collection(db, 'notes'),
-      where('userId', '==', uid),
-      orderBy('updatedAt', 'desc')
-    );
-    const unsub = onSnapshot(
-      q,
-      snap => {
-        const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as FireNote));
-        // Sort client-side: pinned first, then by updatedAt desc (already ordered by query)
-        data.sort((a, b) => {
-          if (a.pinned === b.pinned) return 0;
-          return a.pinned ? -1 : 1;
-        });
-        setNotes(data);
-      },
-      err => console.warn('NotesList onSnapshot error', err)
-    );
-    return unsub;
+    let mounted = true;
+    let unsub: (() => void) | null = null;
+
+    const timer = setTimeout(() => {
+      if (!mounted) return;
+      const q = query(
+        collection(db, 'notes'),
+        where('userId', '==', uid),
+        orderBy('updatedAt', 'desc')
+      );
+      unsub = onSnapshot(
+        q,
+        snap => {
+          if (!mounted) return;
+          const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as FireNote));
+          // Sort client-side: pinned first, then by updatedAt desc (already ordered by query)
+          data.sort((a, b) => {
+            if (a.pinned === b.pinned) return 0;
+            return a.pinned ? -1 : 1;
+          });
+          setNotes(data);
+        },
+        err => {
+          if (!mounted) return;
+          console.warn('NotesList onSnapshot error', err);
+        }
+      );
+    }, 100);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+      if (unsub) unsub();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid ?? null]);
 
