@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { FaSearch, FaPlus, FaArrowUp, FaArrowDown, FaWallet } from 'react-icons/fa';
+import { FaSearch, FaArrowUp, FaArrowDown, FaWallet } from 'react-icons/fa';
 import { isToday, isYesterday, format } from 'date-fns';
 import { ru as ruLocale, enUS } from 'date-fns/locale';
 import type { Transaction, Category, Currency } from '../types/app';
@@ -289,12 +289,15 @@ const FinanceList: React.FC<FinanceListProps> = ({
 
       {/* ── FAB ── */}
       <button
-        className="fin-list__fab"
+        className="fab"
         onClick={() => onOpenEditor(null)}
         type="button"
         aria-label={t.newTx}
       >
-        <FaPlus />
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
       </button>
     </div>
   );

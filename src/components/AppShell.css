@@ -123,30 +123,75 @@ body.theme-light .header-icon-btn:active {
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Global FAB — shared across all sections
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.fab {
+  position: fixed;
+  right: 20px;
+  bottom: 76px;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: #7b68ee;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(123, 104, 238, 0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
+  z-index: 100;
+}
+
+.fab:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 18px rgba(123, 104, 238, 0.5);
+}
+
+.fab:active {
+  transform: scale(0.95);
+  box-shadow: 0 2px 8px rgba(123, 104, 238, 0.3);
+}
+
+.fab svg {
+  width: 24px;
+  height: 24px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+body.theme-light .fab {
+  box-shadow: 0 4px 12px rgba(123, 104, 238, 0.25);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    Bottom navigation bar
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
 .bottom-nav {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
   /* Safe-area bottom padding (iOS notch / home indicator) */
   padding-bottom: var(--tg-safe-area-bottom, env(safe-area-inset-bottom, 0px));
   height: calc(56px + var(--tg-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
   background: rgba(10, 10, 30, 0.88);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
   display: flex;
   align-items: stretch;
   z-index: 300;
+  overflow: hidden;
 }
 
 /* Light theme override */
 .theme-light .bottom-nav {
-  background: rgba(240, 240, 252, 0.92);
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 /* Single tab item */
