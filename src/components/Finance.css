@@ -179,16 +179,26 @@
   border-color: var(--notes-accent);
 }
 
+/* Colored circle icon — background set inline, no emoji */
 .fin-list__item-icon {
   width: 42px;
   height: 42px;
-  border-radius: 12px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.07); /* overridden inline per transaction */
+}
+
+/* Initial letter inside the circle */
+.fin-list__item-initial {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
 }
 
 .fin-list__item-body {
@@ -250,7 +260,21 @@
   animation: finSlideIn 0.25s ease forwards;
 }
 
-.fin-list__empty-icon  { font-size: 48px; margin-bottom: 4px; }
+/* SVG icon wrapper — no emoji */
+.fin-list__empty-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: var(--notes-text-muted);
+  margin-bottom: 8px;
+}
+
 .fin-list__empty-title { font-size: 17px; font-weight: 600; color: var(--notes-text); }
 .fin-list__empty-hint  { font-size: 13px; color: var(--notes-text-secondary); }
 
@@ -420,7 +444,7 @@
 .fin-editor__cat {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 7px;
   padding: 8px 14px;
   border-radius: 20px;
   font-size: 13px;
@@ -430,6 +454,21 @@
   color: var(--notes-text-secondary);
   cursor: pointer;
   transition: all 0.18s;
+}
+
+/* Small colored dot inside category chip — no emoji */
+.fin-editor__cat-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  /* background-color set inline per category */
+}
+
+/* SVG arrow icon inside income/expense toggle */
+.fin-editor__type-icon {
+  font-size: 12px;
+  opacity: 0.85;
 }
 
 .fin-editor__cat--income-active {

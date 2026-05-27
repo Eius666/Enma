@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { FaSearch, FaPlus, FaArrowUp, FaArrowDown } from 'react-icons/fa';
+import { FaSearch, FaPlus, FaArrowUp, FaArrowDown, FaWallet } from 'react-icons/fa';
 import { isToday, isYesterday, format } from 'date-fns';
 import { ru as ruLocale, enUS } from 'date-fns/locale';
 import type { Transaction, Category, Currency } from '../types/app';
-import { getCurrencySymbol } from '../utils/formatCurrency';
+import { PRESET_COLOR_BY_ID } from './FinanceEditor';
 import './Finance.css';
 
 interface FinanceListProps {
@@ -17,31 +17,51 @@ interface FinanceListProps {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+/**
+ * Resolve human-readable category label.
+ * - New transactions store plain name in tx.category (e.g. "Groceries")
+ * - Legacy transactions may have emoji prefix ("🛒 Groceries") — we strip it
+ * - Oldest transactions have no tx.category, only categoryId — resolve via categories[]
+ */
 function resolveCatLabel(tx: Transaction, categories: Category[]): string {
-  if (tx.category) return tx.category;
+  if (tx.category) {
+    const label = tx.category;
+    // Strip legacy emoji prefix: if first non-space token has a high codepoint, remove it
+    const spaceIdx = label.indexOf(' ');
+    if (spaceIdx > 0) {
+      const first = label.slice(0, spaceIdx);
+      if ((first.codePointAt(0) ?? 0) > 127) {
+        return label.slice(spaceIdx + 1).trim();
+      }
+    }
+    return label;
+  }
   const c = categories.find(c => c.id === tx.categoryId);
   return c?.name ?? '';
 }
 
-// Labels from FinanceEditor are formatted as "🛒 Name" – emoji + space + text.
-function catEmoji(label: string, type: 'income' | 'expense'): string {
-  if (!label) return type === 'income' ? '💰' : '💸';
-  const spaceIdx = label.indexOf(' ');
-  if (spaceIdx > 0) {
-    const first = label.slice(0, spaceIdx);
-    if ((first.codePointAt(0) ?? 0) > 127) return first;
+/**
+ * Get category dot color.
+ * 1. Look up by preset ID (new-style transactions)
+ * 2. Deterministic color from category string (legacy)
+ */
+const FALLBACK_COLORS = ['#4CAF50', '#2196F3', '#FF9800', '#E91E63', '#607D8B', '#9C27B0', '#FF5722'];
+
+function getCatColor(tx: Transaction): string {
+  if (tx.categoryId && PRESET_COLOR_BY_ID[tx.categoryId]) {
+    return PRESET_COLOR_BY_ID[tx.categoryId];
   }
-  return type === 'income' ? '💰' : '💸';
+  const key = tx.categoryId || tx.category || '';
+  if (!key) return tx.type === 'income' ? '#4CAF50' : '#FF9800';
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) & 0xffff;
+  return FALLBACK_COLORS[h % FALLBACK_COLORS.length];
 }
 
-function catName(label: string): string {
-  if (!label) return '';
-  const spaceIdx = label.indexOf(' ');
-  if (spaceIdx > 0) {
-    const first = label.slice(0, spaceIdx);
-    if ((first.codePointAt(0) ?? 0) > 127) return label.slice(spaceIdx + 1);
-  }
-  return label;
+/** First letter of the category label (for the colored circle). */
+function getCatInitial(label: string, type: 'income' | 'expense'): string {
+  if (!label) return type === 'income' ? 'I' : 'E';
+  return label.charAt(0).toUpperCase();
 }
 
 function txDateLabel(isoStr: string, language: 'en' | 'ru'): string {
@@ -96,7 +116,6 @@ const FinanceList: React.FC<FinanceListProps> = ({
   onOpenEditor,
 }) => {
   const t = T[language];
-  const sym = getCurrencySymbol(currency);
   const locale = language === 'ru' ? 'ru-RU' : 'en-US';
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -116,7 +135,7 @@ const FinanceList: React.FC<FinanceListProps> = ({
     return { income, expense, balance: income - expense };
   }, [transactions]);
 
-  // ── Category chips (derived) ───────────────────────────────────────────────
+  // ── Category chips (derived from transactions) ─────────────────────────────
   const chips = useMemo(() => {
     const seen = new Set<string>();
     const result: string[] = [t.all];
@@ -130,7 +149,6 @@ const FinanceList: React.FC<FinanceListProps> = ({
     return result;
   }, [transactions, categories, t.all]);
 
-  // Reset active category to "All" when chips change and it's no longer valid
   const safeActiveCategory = chips.includes(activeCategory) ? activeCategory : t.all;
 
   // ── Filtered transactions ──────────────────────────────────────────────────
@@ -217,7 +235,10 @@ const FinanceList: React.FC<FinanceListProps> = ({
       {/* ── Transaction list ── */}
       {isEmpty ? (
         <div className="fin-list__empty">
-          <span className="fin-list__empty-icon">{sym}</span>
+          {/* SVG wallet icon — no emoji */}
+          <span className="fin-list__empty-icon">
+            <FaWallet />
+          </span>
           <span className="fin-list__empty-title">
             {searchQuery ? t.emptySearchTitle : t.emptyTitle}
           </span>
@@ -231,8 +252,8 @@ const FinanceList: React.FC<FinanceListProps> = ({
             <div className="fin-list__section-label">{label}</div>
             {items.map(tx => {
               const catLabel = resolveCatLabel(tx, categories);
-              const emoji = catEmoji(catLabel, tx.type);
-              const name  = catName(catLabel);
+              const color = getCatColor(tx);
+              const initial = getCatInitial(catLabel, tx.type);
               const isIncome = tx.type === 'income';
               return (
                 <button
@@ -241,13 +262,16 @@ const FinanceList: React.FC<FinanceListProps> = ({
                   onClick={() => onOpenEditor(tx.id)}
                   type="button"
                 >
-                  <span className="fin-list__item-icon">{emoji}</span>
+                  {/* Colored circle with initial letter — no emoji */}
+                  <span className="fin-list__item-icon" style={{ backgroundColor: color }}>
+                    <span className="fin-list__item-initial">{initial}</span>
+                  </span>
                   <span className="fin-list__item-body">
                     <span className="fin-list__item-title">
                       {tx.description || (language === 'ru' ? 'Без описания' : 'No description')}
                     </span>
-                    {name && (
-                      <span className="fin-list__item-cat">{name}</span>
+                    {catLabel && (
+                      <span className="fin-list__item-cat">{catLabel}</span>
                     )}
                   </span>
                   <span className="fin-list__item-right">
