@@ -1,0 +1,643 @@
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Habits – Liquid Glass theme
+   Reuses --notes-* variables (defined in Notes.css / :root)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+@keyframes habSlideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes habCheckBounce {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(0.82); }
+  70%  { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   HabitsList
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.hab-list {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 90px;
+}
+
+/* — Summary card — */
+.hab-list__summary {
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  border-radius: 16px;
+  padding: 16px 18px;
+  margin-bottom: 12px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  animation: habSlideIn 0.25s ease forwards;
+}
+
+.hab-list__summary-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--notes-text);
+  margin-bottom: 10px;
+}
+
+.hab-list__summary-text strong {
+  font-weight: 700;
+  color: var(--notes-accent);
+}
+
+.hab-list__progress-wrap {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(123, 104, 238, 0.18);
+  overflow: hidden;
+}
+
+.hab-list__progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--notes-accent);
+  transition: width 0.45s ease;
+  min-width: 0;
+}
+
+/* — Search — */
+.hab-list__search-wrap {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.hab-list__search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--notes-text-muted);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.hab-list__search {
+  width: 100%;
+  padding: 11px 14px 11px 40px;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  border-radius: 12px;
+  color: var(--notes-text);
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: border-color 0.2s;
+}
+
+.hab-list__search:focus { border-color: var(--notes-accent); }
+.hab-list__search::placeholder { color: var(--notes-text-muted); }
+
+/* — Section label — */
+.hab-list__section-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--notes-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 10px 2px 6px;
+}
+
+/* — Habit row wrapper (for swipe-to-delete) — */
+.hab-list__item-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  margin-bottom: 4px;
+}
+
+/* Delete button revealed by swipe */
+.hab-list__item-delete {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 80px;
+  background: #ff4757;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  border-radius: 0 12px 12px 0;
+}
+
+/* — Habit row — */
+.hab-list__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: transform 0.22s ease, background 0.18s, border-color 0.18s;
+  animation: habSlideIn 0.2s ease both;
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+}
+
+.hab-list__item:hover {
+  background: rgba(123, 104, 238, 0.08);
+  border-color: var(--notes-accent);
+}
+
+/* Colored dot — 24px circle, background-color set inline */
+.hab-list__item-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.hab-list__item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.hab-list__item-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--notes-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.hab-list__item-streak {
+  font-size: 12px;
+  color: var(--notes-text-secondary);
+  margin-top: 2px;
+  display: block;
+}
+
+/* Round checkbox — 28px, SVG checkmark inside */
+.hab-list__item-check {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(123, 104, 238, 0.35);
+  background: transparent;
+  flex-shrink: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.18s, background 0.18s;
+}
+
+.hab-list__item-check:hover {
+  border-color: var(--notes-accent);
+}
+
+.hab-list__item-check--done {
+  background: var(--notes-accent);
+  border-color: var(--notes-accent);
+  animation: habCheckBounce 0.35s ease;
+}
+
+/* SVG check icon inside the checkbox */
+.hab-list__item-check-icon {
+  color: #fff;
+  font-size: 11px;
+}
+
+/* — Empty state — */
+.hab-list__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 60px 20px;
+  text-align: center;
+  animation: habSlideIn 0.25s ease forwards;
+}
+
+/* SVG icon wrapper — no emoji */
+.hab-list__empty-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: var(--notes-text-muted);
+  margin-bottom: 8px;
+}
+
+.hab-list__empty-title { font-size: 17px; font-weight: 600; color: var(--notes-text); }
+.hab-list__empty-hint  { font-size: 13px; color: var(--notes-text-secondary); }
+
+/* — FAB (rounded square, accent color) — */
+.hab-list__fab {
+  position: fixed;
+  bottom: calc(64px + var(--tg-safe-area-bottom, 0px) + 16px);
+  right: clamp(16px, 4vw, 24px);
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--notes-accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  box-shadow: 0 4px 20px rgba(123, 104, 238, 0.45);
+  cursor: pointer;
+  border: none;
+  transition: transform 0.15s, box-shadow 0.15s;
+  z-index: 200;
+}
+
+.hab-list__fab:active {
+  transform: scale(0.93);
+  box-shadow: 0 2px 12px rgba(123, 104, 238, 0.3);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   HabitEditor
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.hab-editor {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 32px;
+  animation: habSlideIn 0.2s ease forwards;
+}
+
+/* — Toolbar — */
+.hab-editor__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+  padding: 0 2px;
+}
+
+.hab-editor__back-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--notes-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px 0;
+}
+
+/* Three-dot menu button */
+.hab-editor__menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--notes-text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px 10px;
+  position: relative;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.hab-editor__menu-btn:hover {
+  background: rgba(123, 104, 238, 0.1);
+}
+
+/* — Dropdown menu — */
+.hab-editor__dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 170px;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  border-radius: 14px;
+  padding: 6px;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  z-index: 300;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28);
+  animation: habSlideIn 0.15s ease forwards;
+}
+
+.hab-editor__dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--notes-text);
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.hab-editor__dropdown-item:hover {
+  background: rgba(123, 104, 238, 0.1);
+}
+
+.hab-editor__dropdown-item--danger {
+  color: #ff4757;
+}
+
+.hab-editor__dropdown-item--danger:hover {
+  background: rgba(255, 71, 87, 0.1);
+}
+
+/* — Title input — large, bold, borderless — */
+.hab-editor__title-input {
+  width: 100%;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--notes-text);
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  padding: 0 2px;
+  margin-bottom: 10px;
+  box-sizing: border-box;
+}
+
+.hab-editor__title-input::placeholder { color: var(--notes-text-muted); }
+
+/* — Description textarea — borderless, auto-resize — */
+.hab-editor__desc-input {
+  width: 100%;
+  font-size: 15px;
+  color: var(--notes-text-secondary);
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  padding: 0 2px;
+  margin-bottom: 22px;
+  resize: none;
+  box-sizing: border-box;
+  min-height: 38px;
+  line-height: 1.55;
+  overflow: hidden;
+}
+
+.hab-editor__desc-input::placeholder { color: var(--notes-text-muted); }
+
+/* — Section label — */
+.hab-editor__section-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--notes-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+  padding: 0 2px;
+}
+
+/* — Repeat segmented control — */
+.hab-editor__repeat-toggle {
+  display: flex;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  border-radius: 14px;
+  padding: 4px;
+  margin-bottom: 14px;
+  gap: 4px;
+}
+
+.hab-editor__repeat-btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.18s;
+  background: transparent;
+  color: var(--notes-text-secondary);
+}
+
+.hab-editor__repeat-btn--active {
+  background: var(--notes-accent);
+  color: #fff;
+}
+
+/* — Day selector buttons — round circles — */
+.hab-editor__days {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.hab-editor__day-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--notes-card-border);
+  background: var(--notes-card-bg);
+  color: var(--notes-text-secondary);
+  cursor: pointer;
+  transition: all 0.18s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hab-editor__day-btn--active {
+  background: var(--notes-accent);
+  border-color: var(--notes-accent);
+  color: #fff;
+}
+
+/* — Color picker — horizontal scroll row of 32px circles — */
+.hab-editor__colors-wrap {
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-bottom: 22px;
+}
+
+.hab-editor__colors-wrap::-webkit-scrollbar { display: none; }
+
+.hab-editor__colors {
+  display: flex;
+  gap: 14px;
+  padding-bottom: 4px;
+}
+
+.hab-editor__color-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+  transition: transform 0.15s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.hab-editor__color-btn:active {
+  transform: scale(0.88);
+}
+
+/* White ring outline around selected color */
+.hab-editor__color-btn--selected::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  pointer-events: none;
+}
+
+/* — Reminder / field wrapper — */
+.hab-editor__field-wrap {
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.hab-editor__field-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--notes-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.hab-editor__time-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--notes-text);
+  font-size: 15px;
+  font-family: inherit;
+  box-sizing: border-box;
+  color-scheme: dark;
+}
+
+/* — Stats row — */
+.hab-editor__stats {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.hab-editor__stat-card {
+  flex: 1;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  border-radius: 14px;
+  padding: 12px 10px;
+  text-align: center;
+}
+
+.hab-editor__stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--notes-accent);
+  display: block;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.hab-editor__stat-label {
+  font-size: 11px;
+  color: var(--notes-text-muted);
+  display: block;
+  font-weight: 500;
+}
+
+/* — Heatmap — 4 rows × 7 columns = 28 days — */
+.hab-editor__heatmap {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 20px;
+}
+
+.hab-editor__heatmap-cell {
+  aspect-ratio: 1;
+  border-radius: 5px;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+}
+
+.hab-editor__heatmap-cell--done {
+  background: var(--notes-accent);
+  border-color: var(--notes-accent);
+  opacity: 0.82;
+}
+
+.hab-editor__heatmap-cell--today {
+  border-color: var(--notes-accent) !important;
+  border-width: 2px !important;
+}
+
+/* — Save button — */
+.hab-editor__save-btn {
+  width: 100%;
+  padding: 16px;
+  background: var(--notes-accent);
+  border: none;
+  border-radius: 16px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 14px;
+  transition: opacity 0.18s, transform 0.15s;
+  font-family: inherit;
+}
+
+.hab-editor__save-btn:active {
+  opacity: 0.85;
+  transform: scale(0.98);
+}
+
+.hab-editor__save-btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}

@@ -114,6 +114,16 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------------------------
+    // /habits/{habitId}
+    // -------------------------------------------------------------------------
+    // Flat collection; every document carries a userId field.
+    match /habits/{habitId} {
+      allow read:           if ownsDoc();
+      allow create:         if writesOwnUid();
+      allow update, delete: if ownsDoc();
+    }
+
+    // -------------------------------------------------------------------------
     // Catch-all deny
     // -------------------------------------------------------------------------
     // Any collection not explicitly listed above is denied to authenticated AND

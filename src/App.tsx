@@ -27,7 +27,8 @@ import { DayFlowOverview } from './components/workspaces/DayFlowOverview';
 import { CalendarWorkspace } from './components/workspaces/CalendarWorkspace';
 import FinanceList from './components/FinanceList';
 import FinanceEditor from './components/FinanceEditor';
-import { HabitsWorkspace } from './components/workspaces/HabitsWorkspace';
+import HabitsList, { HabitDoc } from './components/HabitsList';
+import HabitEditor from './components/HabitEditor';
 import { SettingsPanel } from './components/workspaces/SettingsPanel';
 import { ToastProvider } from './components/ui/Toast';
 import WalletConnect from './components/WalletConnect';
@@ -38,6 +39,7 @@ import { Subscription, isSubscriptionActive } from './subscription';
 import './components/Subscription.css';
 import './components/Notes.css';
 import './components/Finance.css';
+import './components/Habits.css';
 
 type Theme = 'dark' | 'light';
 type Language = 'en' | 'ru';
@@ -632,6 +634,9 @@ const App: React.FC = () => {
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [financeView, setFinanceView] = useState<'list' | 'editor'>('list');
   const [activeTransactionId, setActiveTransactionId] = useState<string | null>(null);
+  const [habitsView, setHabitsView] = useState<'list' | 'editor'>('list');
+  const [activeHabitId, setActiveHabitId] = useState<string | null>(null);
+  const [firestoreHabits, setFirestoreHabits] = useState<HabitDoc[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const prevUserId = useRef<string | null>(null);
@@ -988,6 +993,46 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, [user]);
 
+  // ── Firestore habits onSnapshot ───────────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    const q = query(
+      collection(db, 'habits'),
+      where('userId', '==', user.uid)
+    );
+    let unsub: () => void;
+    try {
+      unsub = onSnapshot(
+        q,
+        snapshot => {
+          setFirestoreHabits(prev => {
+            const map = new Map(prev.map(h => [h.id, h]));
+            snapshot.docChanges().forEach(change => {
+              if (change.type === 'removed') {
+                map.delete(change.doc.id);
+              } else {
+                map.set(change.doc.id, {
+                  id: change.doc.id,
+                  ...change.doc.data()
+                } as HabitDoc);
+              }
+            });
+            return Array.from(map.values()).sort((a, b) => {
+              const ta = (a.createdAt as { seconds?: number })?.seconds ?? 0;
+              const tb = (b.createdAt as { seconds?: number })?.seconds ?? 0;
+              return tb - ta;
+            });
+          });
+        },
+        err => console.warn('Habits onSnapshot error', err)
+      );
+    } catch (err) {
+      console.warn('Failed to subscribe to habits', err);
+      return;
+    }
+    return () => unsub();
+  }, [user]);
+
   useEffect(() => {
     if (!user) return;
     if (transactionsBackfillRef.current) return;
@@ -1189,18 +1234,6 @@ const App: React.FC = () => {
     });
   }, [habits, user, scheduleHabitReminder]);
 
-  const addHabit = (title: string, reminderTime?: string) => {
-    if (!title.trim()) return;
-    const newHabit: Habit = {
-      id: createId(),
-      title: title.trim(),
-      history: {},
-      reminderTime,
-    };
-    setHabits(prev => [...prev, newHabit]);
-    if (reminderTime) scheduleHabitReminder(newHabit);
-  };
-
   const toggleHabitDay = (habitId: string, dateKey: string) => {
     setHabits(prev =>
       prev.map(habit =>
@@ -1216,12 +1249,6 @@ const App: React.FC = () => {
       )
     );
   };
-
-  const deleteHabit = (habitId: string) => {
-    setHabits(prev => prev.filter(habit => habit.id !== habitId));
-  };
-
-
 
   const deleteReminderFromFirestore = useCallback(
     async (reminderId: string) => {
@@ -1462,6 +1489,10 @@ const App: React.FC = () => {
                 setFinanceView('list');
                 setActiveTransactionId(null);
               }
+              if (tab.id !== 'habits') {
+                setHabitsView('list');
+                setActiveHabitId(null);
+              }
             }}
           >
             {tab.label}
@@ -1551,13 +1582,32 @@ const App: React.FC = () => {
             }}
           />
         )}
-        {activeTab === 'habits' && (
-          <HabitsWorkspace
+        {activeTab === 'habits' && habitsView === 'list' && (
+          <HabitsList
             language={language}
-            habits={habits}
-            onAddHabit={addHabit}
-            onToggleHabitDay={toggleHabitDay}
-            onDeleteHabit={deleteHabit}
+            user={user}
+            habits={firestoreHabits}
+            onOpenEditor={(id) => {
+              setActiveHabitId(id);
+              setHabitsView('editor');
+              window.scrollTo({ top: 0, behavior: 'auto' });
+            }}
+          />
+        )}
+        {activeTab === 'habits' && habitsView === 'editor' && (
+          <HabitEditor
+            habitId={activeHabitId}
+            initialHabit={
+              activeHabitId
+                ? firestoreHabits.find(h => h.id === activeHabitId) ?? null
+                : null
+            }
+            user={user}
+            language={language}
+            onBack={() => {
+              setHabitsView('list');
+              setActiveHabitId(null);
+            }}
           />
         )}
         {activeTab === 'settings' && (
