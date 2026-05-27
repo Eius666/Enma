@@ -967,13 +967,14 @@ const App: React.FC = () => {
   const transactionsBackfillRef = useRef(false);
 
   useEffect(() => {
-    if (!user) return;
+    const uid = user?.uid ?? null;
+    if (!uid) return;
 
     // Single-field filter only: avoids requiring a composite index until
     // the userId+date index finishes building. Client-side sort applied below.
     const q = query(
       collection(db, 'transactions'),
-      where('userId', '==', user.uid)
+      where('userId', '==', uid)
     );
 
     let unsubscribe: () => void;
@@ -1004,14 +1005,16 @@ const App: React.FC = () => {
     }
 
     return () => unsubscribe();
-  }, [user]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid ?? null]);
 
   // ── Firestore habits onSnapshot ───────────────────────────────────────────────
   useEffect(() => {
-    if (!user) return;
+    const uid = user?.uid ?? null;
+    if (!uid) return;
     const q = query(
       collection(db, 'habits'),
-      where('userId', '==', user.uid)
+      where('userId', '==', uid)
     );
     let unsub: () => void;
     try {
@@ -1044,14 +1047,16 @@ const App: React.FC = () => {
       return;
     }
     return () => unsub();
-  }, [user]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid ?? null]);
 
   // ── Firestore day-tasks onSnapshot ────────────────────────────────────────────
   useEffect(() => {
-    if (!user) return;
+    const uid = user?.uid ?? null;
+    if (!uid) return;
     const q = query(
       collection(db, 'tasks'),
-      where('userId', '==', user.uid)
+      where('userId', '==', uid)
     );
     let unsub: () => void;
     try {
@@ -1084,7 +1089,8 @@ const App: React.FC = () => {
       return;
     }
     return () => unsub();
-  }, [user]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid ?? null]);
 
   useEffect(() => {
     if (!user) return;

@@ -145,11 +145,12 @@ const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor }) =
   const longPressNoteId = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!user) { setNotes([]); return; }
+    const uid = user?.uid ?? null;
+    if (!uid) { setNotes([]); return; }
 
     const q = query(
       collection(db, 'notes'),
-      where('userId', '==', user.uid),
+      where('userId', '==', uid),
       orderBy('updatedAt', 'desc')
     );
     const unsub = onSnapshot(
@@ -166,7 +167,8 @@ const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor }) =
       err => console.warn('NotesList onSnapshot error', err)
     );
     return unsub;
-  }, [user]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid ?? null]);
 
   // Derive categories from notes + defaults
   const categories = useMemo(() => {
