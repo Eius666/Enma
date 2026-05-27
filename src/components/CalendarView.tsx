@@ -143,6 +143,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
+    <>
     <div className="cal-view">
 
       {/* ── Month navigation ── */}
@@ -283,19 +284,21 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         </div>
       )}
 
-      {/* ── FAB — SVG plus icon, creates task for selected date ── */}
-      <button
-        className="fab"
-        onClick={() => onOpenEditor(null, selectedDate)}
-        type="button"
-        aria-label={t.newTask}
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
-      </button>
     </div>
+
+    {/* FAB — outside animated container so position:fixed isn't affected by transform */}
+    <button
+      className="fab"
+      onClick={() => onOpenEditor(null, selectedDate)}
+      type="button"
+      aria-label={t.newTask}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+        <line x1="12" y1="5" x2="12" y2="19" />
+        <line x1="5" y1="12" x2="19" y2="12" />
+      </svg>
+    </button>
+    </>
   );
 };
 

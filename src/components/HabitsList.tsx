@@ -268,6 +268,7 @@ const HabitsList: React.FC<HabitsListProps> = ({
   const isEmpty = filteredActive.length === 0 && filteredArchived.length === 0;
 
   return (
+    <>
     <div className="hab-list" onClick={() => swipedId && setSwipedId(null)}>
 
       {/* ── Progress summary ── */}
@@ -325,19 +326,21 @@ const HabitsList: React.FC<HabitsListProps> = ({
         </>
       )}
 
-      {/* ── FAB — SVG plus icon, no emoji ── */}
-      <button
-        className="fab"
-        onClick={() => onOpenEditor(null)}
-        type="button"
-        aria-label={t.newHabit}
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
-      </button>
     </div>
+
+    {/* FAB — outside animated container so position:fixed isn't affected by transform */}
+    <button
+      className="fab"
+      onClick={() => onOpenEditor(null)}
+      type="button"
+      aria-label={t.newHabit}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+        <line x1="12" y1="5" x2="12" y2="19" />
+        <line x1="5" y1="12" x2="19" y2="12" />
+      </svg>
+    </button>
+    </>
   );
 };
 
