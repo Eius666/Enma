@@ -16,7 +16,7 @@ import {
   signInAnonymously,
   signOut
 } from 'firebase/auth';
-import { Timestamp, deleteDoc, doc, getDoc, serverTimestamp, setDoc, collection, query, where, getDocs, orderBy, onSnapshot, limit } from 'firebase/firestore';
+import { Timestamp, doc, getDoc, serverTimestamp, setDoc, collection, query, where, getDocs, orderBy, onSnapshot, limit } from 'firebase/firestore';
 import './App.v2.css';
 import { auth, db } from './firebase';
 import { useTelegramWebApp } from './hooks/useTelegramWebApp';
@@ -24,7 +24,7 @@ import { useTelegramWebApp } from './hooks/useTelegramWebApp';
 import { AuthScreen } from './components/workspaces/AuthScreen';
 import DayList, { DayTask } from './components/DayList';
 import DayTaskEditor from './components/DayTaskEditor';
-import { CalendarWorkspace } from './components/workspaces/CalendarWorkspace';
+import CalendarView from './components/CalendarView';
 import FinanceList from './components/FinanceList';
 import FinanceEditor from './components/FinanceEditor';
 import HabitsList, { HabitDoc } from './components/HabitsList';
@@ -41,6 +41,7 @@ import './components/Notes.css';
 import './components/Finance.css';
 import './components/Habits.css';
 import './components/Day.css';
+import './components/Calendar.css';
 
 type Theme = 'dark' | 'light';
 type Language = 'en' | 'ru';
@@ -168,7 +169,7 @@ const saveProfile = (uid: string, data: UserProfile) => {
   localStorage.setItem(getProfileStorageKey(uid), JSON.stringify(data));
 };
 
-const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
 
 const THEME_STORAGE_KEY = 'enma.theme';
 const LANGUAGE_STORAGE_KEY = 'enma.language';
@@ -641,6 +642,9 @@ const App: React.FC = () => {
   const [dayView, setDayView] = useState<'list' | 'editor'>('list');
   const [activeDayTaskId, setActiveDayTaskId] = useState<string | null>(null);
   const [dayTasks, setDayTasks] = useState<DayTask[]>([]);
+  const [calView, setCalView] = useState<'calendar' | 'editor'>('calendar');
+  const [activeCalTaskId, setActiveCalTaskId] = useState<string | null>(null);
+  const [calPreDate, setCalPreDate] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const prevUserId = useRef<string | null>(null);
@@ -1250,103 +1254,6 @@ const App: React.FC = () => {
     });
   }, [habits, user, scheduleHabitReminder]);
 
-  const deleteReminderFromFirestore = useCallback(
-    async (reminderId: string) => {
-      if (!user) return;
-      try {
-        await deleteDoc(doc(db, 'reminders', reminderId));
-      } catch (error) {
-        console.warn('Failed to delete reminder from Firestore', error);
-      }
-    },
-    [user]
-  );
-
-  const handleTaskAdded = useCallback(
-    async (task: CalendarTask) => {
-      if (!task.deadline || !user || !telegram?.initDataUnsafe?.user?.id) return;
-      const notifyBefore = task.notifyBefore ?? 15;
-      const scheduledMs = new Date(task.deadline).getTime() - notifyBefore * 60 * 1000 - 30_000;
-      const scheduledAt = new Date(scheduledMs);
-      if (scheduledAt <= new Date()) return;
-      const reminderId = `task-deadline-${task.id}`;
-      const telegramText =
-        language === 'ru'
-          ? `⏰ Напоминание: «${task.title}» через ${notifyBefore} мин`
-          : `⏰ Reminder: «${task.title}» in ${notifyBefore} min`;
-      try {
-        await setDoc(doc(db, 'reminders', reminderId), {
-          id: reminderId,
-          userId: user.uid,
-          chatId: telegram.initDataUnsafe.user.id,
-          type: 'task_deadline',
-          taskId: task.id,
-          title: task.title,
-          notifyBefore,
-          scheduledAt: Timestamp.fromDate(scheduledAt),
-          status: 'pending',
-          telegramText,
-          language,
-          updatedAt: serverTimestamp(),
-          createdAt: serverTimestamp(),
-        });
-      } catch (error) {
-        console.warn('Failed to write task deadline reminder', error);
-      }
-    },
-    [user, telegram, language]
-  );
-
-  const handleTaskDeleted = useCallback(
-    async (taskId: string) => {
-      if (!user) return;
-      try {
-        await deleteDoc(doc(db, 'reminders', `task-deadline-${taskId}`));
-      } catch (error) {
-        console.warn('Failed to delete task deadline reminder', error);
-      }
-    },
-    [user]
-  );
-
-  const addReminder = (date: Date, title: string, time: string, notes?: string) => {
-    if (!title.trim()) return;
-    const reminder: Reminder = {
-      id: createId(),
-      title: title.trim(),
-      date: date.toISOString(),
-      time,
-      notes: notes?.trim() || undefined,
-      done: false,
-      notified: false
-    };
-    setReminders(prev => [...prev, reminder]);
-    persistReminderToFirestore(reminder, { isNew: true, status: 'pending' });
-  };
-
-  const toggleReminder = (id: string) => {
-    setReminders(prev =>
-      prev.map(reminder =>
-        reminder.id === id
-          ? (() => {
-              const next = {
-                ...reminder,
-                done: !reminder.done,
-                notified: reminder.done ? false : reminder.notified
-              };
-              persistReminderToFirestore(next);
-              return next;
-            })()
-          : reminder
-      )
-    );
-  };
-
-  const deleteReminder = (id: string) => {
-    setReminders(prev => prev.filter(reminder => reminder.id !== id));
-    deleteReminderFromFirestore(id);
-  };
-
   useEffect(() => {
     loadExchangeRates();
   }, [loadExchangeRates]);
@@ -1478,6 +1385,11 @@ const App: React.FC = () => {
                 setDayView('list');
                 setActiveDayTaskId(null);
               }
+              if (tab.id !== 'calendar') {
+                setCalView('calendar');
+                setActiveCalTaskId(null);
+                setCalPreDate(null);
+              }
               if (tab.id !== 'notes') {
                 setNotesView('list');
                 setActiveNoteId(null);
@@ -1530,17 +1442,35 @@ const App: React.FC = () => {
             }}
           />
         )}
-        {activeTab === 'calendar' && (
-          <CalendarWorkspace
+        {activeTab === 'calendar' && calView === 'calendar' && (
+          <CalendarView
             language={language}
-            tasks={tasks}
-            reminders={reminders}
-            onTasksChange={setTasks}
-            onAddReminder={addReminder}
-            onToggleReminder={toggleReminder}
-            onDeleteReminder={deleteReminder}
-            onTaskAdded={handleTaskAdded}
-            onTaskDeleted={handleTaskDeleted}
+            user={user}
+            tasks={dayTasks}
+            onOpenEditor={(id, date) => {
+              setActiveCalTaskId(id);
+              setCalPreDate(date ?? null);
+              setCalView('editor');
+              window.scrollTo({ top: 0, behavior: 'auto' });
+            }}
+          />
+        )}
+        {activeTab === 'calendar' && calView === 'editor' && (
+          <DayTaskEditor
+            taskId={activeCalTaskId}
+            initialTask={
+              activeCalTaskId
+                ? dayTasks.find(t => t.id === activeCalTaskId) ?? null
+                : null
+            }
+            initialDate={calPreDate ?? undefined}
+            user={user}
+            language={language}
+            onBack={() => {
+              setCalView('calendar');
+              setActiveCalTaskId(null);
+              setCalPreDate(null);
+            }}
           />
         )}
         {activeTab === 'notes' && notesView === 'list' && (

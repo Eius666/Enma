@@ -18,6 +18,7 @@ import './Day.css';
 interface DayTaskEditorProps {
   taskId: string | null;          // null = new task
   initialTask?: DayTask | null;
+  initialDate?: string;           // pre-selected date for new tasks (YYYY-MM-DD)
   user: User | null;
   language: 'en' | 'ru';
   onBack: () => void;
@@ -81,6 +82,7 @@ const PRIORITY_ACTIVE_CLASS: Record<DayTask['priority'], string> = {
 const DayTaskEditor: React.FC<DayTaskEditorProps> = ({
   taskId,
   initialTask,
+  initialDate,
   user,
   language,
   onBack,
@@ -90,7 +92,7 @@ const DayTaskEditor: React.FC<DayTaskEditorProps> = ({
 
   const [title,       setTitle]       = useState('');
   const [description, setDescription] = useState('');
-  const [date,        setDate]        = useState(todayStr());
+  const [date,        setDate]        = useState(() => initialDate ?? todayStr());
   const [time,        setTime]        = useState('');
   const [priority,    setPriority]    = useState<DayTask['priority']>('medium');
   const [saving,      setSaving]      = useState(false);

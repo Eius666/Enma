@@ -1,0 +1,386 @@
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   CalendarView – Liquid Glass theme
+   Reuses --notes-* variables (defined in Notes.css / :root)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+@keyframes calSlideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes calCheckBounce {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(0.82); }
+  70%  { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Container
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.cal-view {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 90px;
+  animation: calSlideIn 0.25s ease forwards;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Month navigation
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.cal-view__month-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 2px;
+  margin-bottom: 14px;
+}
+
+/* SVG icon nav buttons */
+.cal-view__nav-btn {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  color: var(--notes-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.18s;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.cal-view__nav-btn:active {
+  background: rgba(123, 104, 238, 0.15);
+}
+
+/* Month + year label */
+.cal-view__month-label {
+  flex: 1;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--notes-text);
+}
+
+/* "Today" accent chip */
+.cal-view__today-btn {
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: var(--notes-accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+  font-family: inherit;
+}
+
+.cal-view__today-btn:active { opacity: 0.8; }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Weekday headers
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.cal-view__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 4px;
+}
+
+.cal-view__weekday {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--notes-text-muted);
+  padding: 4px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Calendar grid
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.cal-view__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+  margin-bottom: 20px;
+}
+
+/* Single day cell */
+.cal-view__cell {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s;
+  position: relative;
+}
+
+.cal-view__cell:hover {
+  background: rgba(123, 104, 238, 0.08);
+}
+
+/* Day number */
+.cal-view__cell-num {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--notes-text);
+  line-height: 1;
+}
+
+/* Dimmed for other-month days */
+.cal-view__cell--other-month .cal-view__cell-num {
+  opacity: 0.22;
+}
+
+/* Today — accent background + white number */
+.cal-view__cell--today {
+  background: var(--notes-accent) !important;
+  border-radius: 10px;
+}
+
+.cal-view__cell--today .cal-view__cell-num {
+  color: #fff;
+  font-weight: 700;
+}
+
+/* Selected day (not today) — semi-transparent ring */
+.cal-view__cell--selected {
+  background: rgba(123, 104, 238, 0.14);
+  outline: 1.5px solid var(--notes-accent);
+  outline-offset: -1px;
+}
+
+/* Priority dots row */
+.cal-view__cell-dots {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  height: 5px;
+}
+
+/* Single 5px dot — background set inline per priority */
+.cal-view__cell-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Selected-day heading
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.cal-view__day-label {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--notes-text);
+  padding: 0 2px;
+  margin-bottom: 10px;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Task list for selected day
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.cal-view__task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Task row button */
+.cal-view__task {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+  box-sizing: border-box;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.cal-view__task:hover {
+  background: rgba(123, 104, 238, 0.08);
+  border-color: var(--notes-accent);
+}
+
+.cal-view__task--completed {
+  opacity: 0.52;
+}
+
+/* Priority strip — 4px wide colored bar, no emoji */
+.cal-view__task-priority {
+  width: 4px;
+  height: 32px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* Round 28px checkbox */
+.cal-view__task-check {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(123, 104, 238, 0.35);
+  background: transparent;
+  flex-shrink: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.18s, background 0.18s;
+}
+
+.cal-view__task-check:hover {
+  border-color: var(--notes-accent);
+}
+
+.cal-view__task-check--done {
+  background: var(--notes-accent);
+  border-color: var(--notes-accent);
+  animation: calCheckBounce 0.35s ease;
+}
+
+/* SVG check icon inside checkbox */
+.cal-view__task-check-icon {
+  color: #fff;
+  font-size: 11px;
+}
+
+/* Text body */
+.cal-view__task-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.cal-view__task-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--notes-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.cal-view__task--completed .cal-view__task-title {
+  text-decoration: line-through;
+}
+
+.cal-view__task-desc {
+  font-size: 12px;
+  color: var(--notes-text-secondary);
+  margin-top: 2px;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Time on the right */
+.cal-view__task-time {
+  font-size: 12px;
+  color: var(--notes-text-muted);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Empty state
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.cal-view__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 36px 20px;
+  text-align: center;
+}
+
+/* SVG icon wrapper — no emoji */
+.cal-view__empty-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  color: var(--notes-text-muted);
+  margin-bottom: 6px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.cal-view__empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--notes-text);
+}
+
+.cal-view__empty-hint {
+  font-size: 13px;
+  color: var(--notes-text-secondary);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   FAB (rounded square)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.cal-view__fab {
+  position: fixed;
+  bottom: calc(64px + var(--tg-safe-area-bottom, 0px) + 16px);
+  right: clamp(16px, 4vw, 24px);
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--notes-accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  box-shadow: 0 4px 20px rgba(123, 104, 238, 0.45);
+  cursor: pointer;
+  border: none;
+  transition: transform 0.15s, box-shadow 0.15s;
+  z-index: 200;
+  font-family: inherit;
+}
+
+.cal-view__fab:active {
+  transform: scale(0.93);
+  box-shadow: 0 2px 12px rgba(123, 104, 238, 0.3);
+}
