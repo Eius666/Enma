@@ -106,6 +106,22 @@
   color: #ff4757;
 }
 
+/* ── Light theme overrides ────────────────────── */
+
+/* Header icon buttons: swap invisible white-on-white hover to dark-on-light */
+body.theme-light .header-icon-btn {
+  color: var(--notes-text-secondary, #6c6f92);
+}
+
+body.theme-light .header-icon-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--notes-text, #1b1d3a);
+}
+
+body.theme-light .header-icon-btn:active {
+  background: rgba(0, 0, 0, 0.09);
+}
+
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    Bottom navigation bar
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */

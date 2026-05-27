@@ -269,6 +269,10 @@ body.theme-light .subscription-panel__plan-card--selected {
   width: fit-content;
 }
 
+body.theme-light .subscription-panel__periods {
+  background: rgba(0, 0, 0, 0.06);
+}
+
 .subscription-panel__period-btn {
   border: none;
   background: transparent;
@@ -418,6 +422,10 @@ body.theme-light .subscription-panel__currency-btn {
   background: rgba(255, 255, 255, 0.06);
   color: var(--text-secondary);
   box-shadow: none;
+}
+
+body.theme-light .subscription-panel__pay-btn--current {
+  background: rgba(0, 0, 0, 0.06);
 }
 
 /* Responsive */

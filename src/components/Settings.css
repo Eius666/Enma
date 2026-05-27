@@ -73,6 +73,10 @@
   background: rgba(255, 255, 255, 0.05);
 }
 
+body.theme-light .sett-row:not(.sett-row--danger):active {
+  background: rgba(0, 0, 0, 0.05);
+}
+
 /* Taller row variant for embedded content */
 .sett-row--tall {
   min-height: 52px;
@@ -242,6 +246,10 @@
 
 .sett-picker__option:active {
   background: rgba(255, 255, 255, 0.05);
+}
+
+body.theme-light .sett-picker__option:active {
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .sett-picker__option--active {

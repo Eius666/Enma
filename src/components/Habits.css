@@ -515,7 +515,7 @@
   transform: scale(0.88);
 }
 
-/* White ring outline around selected color */
+/* Ring outline around selected color */
 .hab-editor__color-btn--selected::after {
   content: '';
   position: absolute;
@@ -523,6 +523,10 @@
   border-radius: 50%;
   border: 2px solid #fff;
   pointer-events: none;
+}
+
+body.theme-light .hab-editor__color-btn--selected::after {
+  border-color: rgba(0, 0, 0, 0.3);
 }
 
 /* — Reminder / field wrapper — */
@@ -556,6 +560,10 @@
   font-family: inherit;
   box-sizing: border-box;
   color-scheme: dark;
+}
+
+body.theme-light .hab-editor__time-input {
+  color-scheme: light;
 }
 
 /* — Stats row — */

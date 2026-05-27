@@ -466,6 +466,11 @@
   color-scheme: dark;
 }
 
+body.theme-light .day-editor__date-input,
+body.theme-light .day-editor__time-input {
+  color-scheme: light;
+}
+
 /* — Priority chip row — */
 .day-editor__priority-row {
   display: flex;
