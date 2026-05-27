@@ -1,8 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   format,
   parseISO,
-  compareAsc,
   setHours,
   setMinutes
 } from 'date-fns';
@@ -23,7 +22,8 @@ import { auth, db } from './firebase';
 import { useTelegramWebApp } from './hooks/useTelegramWebApp';
 
 import { AuthScreen } from './components/workspaces/AuthScreen';
-import { DayFlowOverview } from './components/workspaces/DayFlowOverview';
+import DayList, { DayTask } from './components/DayList';
+import DayTaskEditor from './components/DayTaskEditor';
 import { CalendarWorkspace } from './components/workspaces/CalendarWorkspace';
 import FinanceList from './components/FinanceList';
 import FinanceEditor from './components/FinanceEditor';
@@ -40,6 +40,7 @@ import './components/Subscription.css';
 import './components/Notes.css';
 import './components/Finance.css';
 import './components/Habits.css';
+import './components/Day.css';
 
 type Theme = 'dark' | 'light';
 type Language = 'en' | 'ru';
@@ -637,6 +638,9 @@ const App: React.FC = () => {
   const [habitsView, setHabitsView] = useState<'list' | 'editor'>('list');
   const [activeHabitId, setActiveHabitId] = useState<string | null>(null);
   const [firestoreHabits, setFirestoreHabits] = useState<HabitDoc[]>([]);
+  const [dayView, setDayView] = useState<'list' | 'editor'>('list');
+  const [activeDayTaskId, setActiveDayTaskId] = useState<string | null>(null);
+  const [dayTasks, setDayTasks] = useState<DayTask[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const prevUserId = useRef<string | null>(null);
@@ -1033,6 +1037,46 @@ const App: React.FC = () => {
     return () => unsub();
   }, [user]);
 
+  // ── Firestore day-tasks onSnapshot ────────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    const q = query(
+      collection(db, 'tasks'),
+      where('userId', '==', user.uid)
+    );
+    let unsub: () => void;
+    try {
+      unsub = onSnapshot(
+        q,
+        snapshot => {
+          setDayTasks(prev => {
+            const map = new Map(prev.map(t => [t.id, t]));
+            snapshot.docChanges().forEach(change => {
+              if (change.type === 'removed') {
+                map.delete(change.doc.id);
+              } else {
+                map.set(change.doc.id, {
+                  id: change.doc.id,
+                  ...change.doc.data()
+                } as DayTask);
+              }
+            });
+            return Array.from(map.values()).sort((a, b) => {
+              const ta = (a.createdAt as { seconds?: number })?.seconds ?? 0;
+              const tb = (b.createdAt as { seconds?: number })?.seconds ?? 0;
+              return tb - ta;
+            });
+          });
+        },
+        err => console.warn('DayTasks onSnapshot error', err)
+      );
+    } catch (err) {
+      console.warn('Failed to subscribe to day tasks', err);
+      return;
+    }
+    return () => unsub();
+  }, [user]);
+
   useEffect(() => {
     if (!user) return;
     if (transactionsBackfillRef.current) return;
@@ -1103,34 +1147,6 @@ const App: React.FC = () => {
       console.warn('Failed to sync Telegram user', error);
     });
   }, [user, telegram]);
-
-  const upcomingTasks = useMemo(() => {
-    const today = new Date();
-    return [...tasks]
-      .filter(task => compareAsc(parseISO(task.date), today) >= 0)
-      .sort((a, b) => compareAsc(parseISO(a.date), parseISO(b.date)))
-      .slice(0, 3);
-  }, [tasks]);
-
-  const latestNote = useMemo(() => {
-    return [...notes].sort(
-      (a, b) => compareAsc(parseISO(b.updatedAt), parseISO(a.updatedAt))
-    )[0];
-  }, [notes]);
-
-  const financeSummary = useMemo(() => {
-    const income = transactions
-      .filter(tx => tx.type === 'income')
-      .reduce((acc, tx) => acc + tx.amount, 0);
-    const expenses = transactions
-      .filter(tx => tx.type === 'expense')
-      .reduce((acc, tx) => acc + tx.amount, 0);
-    return {
-      income,
-      expenses,
-      balance: income - expenses
-    };
-  }, [transactions]);
 
   const toggleTheme = () => {
     setHasManualTheme(true);
@@ -1233,22 +1249,6 @@ const App: React.FC = () => {
       if (habit.reminderTime) scheduleHabitReminder(habit);
     });
   }, [habits, user, scheduleHabitReminder]);
-
-  const toggleHabitDay = (habitId: string, dateKey: string) => {
-    setHabits(prev =>
-      prev.map(habit =>
-        habit.id === habitId
-          ? {
-              ...habit,
-              history: {
-                ...habit.history,
-                [dateKey]: !habit.history[dateKey]
-              }
-            }
-          : habit
-      )
-    );
-  };
 
   const deleteReminderFromFirestore = useCallback(
     async (reminderId: string) => {
@@ -1376,13 +1376,6 @@ const App: React.FC = () => {
     loadSubscription();
   }, [user]);
 
-  const upcomingReminders = useMemo(() => {
-    return [...reminders]
-      .filter(reminder => !reminder.done && compareAsc(new Date(reminder.date), new Date()) >= 0)
-      .sort((a, b) => compareAsc(new Date(a.date + 'T' + a.time), new Date(b.date + 'T' + b.time)))
-      .slice(0, 4);
-  }, [reminders]);
-
   const convertAmount = (amount: number) => amount * (rates[currency] ?? 1);
   const convertToBase = (amount: number) => amount / (rates[currency] ?? 1);
 
@@ -1481,6 +1474,10 @@ const App: React.FC = () => {
             className={`top-tab ${activeTab === tab.id ? 'active' : ''}`}
             onClick={() => {
               setActiveTab(tab.id);
+              if (tab.id !== 'day-flow') {
+                setDayView('list');
+                setActiveDayTaskId(null);
+              }
               if (tab.id !== 'notes') {
                 setNotesView('list');
                 setActiveNoteId(null);
@@ -1501,18 +1498,36 @@ const App: React.FC = () => {
       </nav>
 
       <main className="main-content">
-        {activeTab === 'day-flow' && (
-          <DayFlowOverview
+        {activeTab === 'day-flow' && dayView === 'list' && (
+          <DayList
             language={language}
+            user={user}
             currency={currency}
             convertAmount={convertAmount}
-            upcomingTasks={upcomingTasks}
-            financeSummary={financeSummary}
-            latestNote={latestNote}
-            reminders={upcomingReminders}
-            onToggleReminder={toggleReminder}
-            habits={habits}
-            onToggleHabitDay={toggleHabitDay}
+            firestoreHabits={firestoreHabits}
+            transactions={transactions}
+            tasks={dayTasks}
+            onOpenEditor={(id) => {
+              setActiveDayTaskId(id);
+              setDayView('editor');
+              window.scrollTo({ top: 0, behavior: 'auto' });
+            }}
+          />
+        )}
+        {activeTab === 'day-flow' && dayView === 'editor' && (
+          <DayTaskEditor
+            taskId={activeDayTaskId}
+            initialTask={
+              activeDayTaskId
+                ? dayTasks.find(t => t.id === activeDayTaskId) ?? null
+                : null
+            }
+            user={user}
+            language={language}
+            onBack={() => {
+              setDayView('list');
+              setActiveDayTaskId(null);
+            }}
           />
         )}
         {activeTab === 'calendar' && (

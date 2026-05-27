@@ -1,0 +1,543 @@
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Day – Liquid Glass theme
+   Reuses --notes-* variables (defined in Notes.css / :root)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+@keyframes daySlideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes dayCheckBounce {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(0.82); }
+  70%  { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   DayList
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.day-list {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 90px;
+}
+
+/* — Header card — */
+.day-list__header {
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  border-radius: 16px;
+  padding: 18px 18px 16px;
+  margin-bottom: 10px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  animation: daySlideIn 0.25s ease forwards;
+}
+
+.day-list__date {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--notes-text);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.day-list__subtitle {
+  font-size: 14px;
+  color: var(--notes-text-secondary);
+  display: block;
+}
+
+/* — Mini-summary row (3 equal cards) — */
+.day-list__summary {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  animation: daySlideIn 0.22s ease forwards;
+}
+
+.day-list__summary-card {
+  flex: 1;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  border-radius: 10px;
+  padding: 8px 6px;
+  text-align: center;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.day-list__summary-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--notes-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: block;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.day-list__summary-value {
+  font-size: 16px;
+  font-weight: 700;
+  display: block;
+  color: var(--notes-accent);
+}
+
+.day-list__summary-value--expense {
+  color: #ff4757;
+}
+
+/* — Search — */
+.day-list__search-wrap {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.day-list__search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--notes-text-muted);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.day-list__search {
+  width: 100%;
+  padding: 11px 14px 11px 40px;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  border-radius: 12px;
+  color: var(--notes-text);
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: border-color 0.2s;
+}
+
+.day-list__search:focus { border-color: var(--notes-accent); }
+.day-list__search::placeholder { color: var(--notes-text-muted); }
+
+/* — Section label — */
+.day-list__section-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--notes-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 10px 2px 6px;
+}
+
+/* — Task row wrapper (for swipe) — */
+.day-list__item-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  margin-bottom: 4px;
+}
+
+/* Swipe-revealed action buttons */
+.day-list__item-actions {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+}
+
+.day-list__item-action-btn {
+  width: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  color: #fff;
+}
+
+.day-list__item-action-btn--edit {
+  background: var(--notes-accent);
+}
+
+.day-list__item-action-btn--delete {
+  background: #ff4757;
+  border-radius: 0 12px 12px 0;
+}
+
+/* — Task row — */
+.day-list__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: transform 0.22s ease, background 0.18s, border-color 0.18s;
+  animation: daySlideIn 0.2s ease both;
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+}
+
+.day-list__item:hover {
+  background: rgba(123, 104, 238, 0.08);
+  border-color: var(--notes-accent);
+}
+
+.day-list__item--completed {
+  opacity: 0.52;
+}
+
+/* Priority indicator — 4px wide colored strip on the left */
+.day-list__item-priority {
+  width: 4px;
+  height: 32px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* Round checkbox — 28px */
+.day-list__item-check {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(123, 104, 238, 0.35);
+  background: transparent;
+  flex-shrink: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.18s, background 0.18s;
+}
+
+.day-list__item-check:hover {
+  border-color: var(--notes-accent);
+}
+
+.day-list__item-check--done {
+  background: var(--notes-accent);
+  border-color: var(--notes-accent);
+  animation: dayCheckBounce 0.35s ease;
+}
+
+/* SVG check icon inside checkbox */
+.day-list__item-check-icon {
+  color: #fff;
+  font-size: 11px;
+}
+
+/* Task body */
+.day-list__item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.day-list__item-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--notes-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.day-list__item--completed .day-list__item-title {
+  text-decoration: line-through;
+}
+
+.day-list__item-desc {
+  font-size: 12px;
+  color: var(--notes-text-secondary);
+  margin-top: 2px;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Time label on the right */
+.day-list__item-time {
+  font-size: 12px;
+  color: var(--notes-text-muted);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* — Empty state — */
+.day-list__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 60px 20px;
+  text-align: center;
+  animation: daySlideIn 0.25s ease forwards;
+}
+
+/* SVG icon wrapper — no emoji */
+.day-list__empty-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: var(--notes-text-muted);
+  margin-bottom: 8px;
+}
+
+.day-list__empty-title { font-size: 17px; font-weight: 600; color: var(--notes-text); }
+.day-list__empty-hint  { font-size: 13px; color: var(--notes-text-secondary); }
+
+/* — FAB (rounded square) — */
+.day-list__fab {
+  position: fixed;
+  bottom: calc(64px + var(--tg-safe-area-bottom, 0px) + 16px);
+  right: clamp(16px, 4vw, 24px);
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--notes-accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  box-shadow: 0 4px 20px rgba(123, 104, 238, 0.45);
+  cursor: pointer;
+  border: none;
+  transition: transform 0.15s, box-shadow 0.15s;
+  z-index: 200;
+}
+
+.day-list__fab:active {
+  transform: scale(0.93);
+  box-shadow: 0 2px 12px rgba(123, 104, 238, 0.3);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   DayTaskEditor
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.day-editor {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 32px;
+  animation: daySlideIn 0.2s ease forwards;
+}
+
+/* — Toolbar — */
+.day-editor__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+  padding: 0 2px;
+}
+
+.day-editor__back-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--notes-accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px 0;
+}
+
+.day-editor__del-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #ff4757;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px 10px;
+}
+
+/* — Title — borderless, 22px bold — */
+.day-editor__title-input {
+  width: 100%;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--notes-text);
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  padding: 0 2px;
+  margin-bottom: 10px;
+  box-sizing: border-box;
+}
+
+.day-editor__title-input::placeholder { color: var(--notes-text-muted); }
+
+/* — Description — borderless, auto-resize — */
+.day-editor__desc-input {
+  width: 100%;
+  font-size: 15px;
+  color: var(--notes-text-secondary);
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  padding: 0 2px;
+  margin-bottom: 22px;
+  resize: none;
+  box-sizing: border-box;
+  min-height: 38px;
+  line-height: 1.55;
+  overflow: hidden;
+}
+
+.day-editor__desc-input::placeholder { color: var(--notes-text-muted); }
+
+/* — Section label — */
+.day-editor__section-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--notes-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+  padding: 0 2px;
+}
+
+/* — Field wrapper (date, time) — */
+.day-editor__field-wrap {
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.day-editor__field-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--notes-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.day-editor__date-input,
+.day-editor__time-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--notes-text);
+  font-size: 15px;
+  font-family: inherit;
+  box-sizing: border-box;
+  color-scheme: dark;
+}
+
+/* — Priority chip row — */
+.day-editor__priority-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.day-editor__priority-chip {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 8px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  color: var(--notes-text-secondary);
+  cursor: pointer;
+  transition: all 0.18s;
+}
+
+/* Colored priority dot inside chip — no emoji */
+.day-editor__priority-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.day-editor__priority-chip--high-active {
+  background: rgba(255, 71, 87, 0.16);
+  border-color: #ff4757;
+  color: #ff4757;
+}
+
+.day-editor__priority-chip--medium-active {
+  background: rgba(255, 193, 7, 0.16);
+  border-color: #ffc107;
+  color: #ffc107;
+}
+
+.day-editor__priority-chip--low-active {
+  background: rgba(46, 204, 113, 0.16);
+  border-color: #2ecc71;
+  color: #2ecc71;
+}
+
+/* — Save button — */
+.day-editor__save-btn {
+  width: 100%;
+  padding: 16px;
+  background: var(--notes-accent);
+  border: none;
+  border-radius: 16px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 14px;
+  transition: opacity 0.18s, transform 0.15s;
+  font-family: inherit;
+}
+
+.day-editor__save-btn:active {
+  opacity: 0.85;
+  transform: scale(0.98);
+}
+
+.day-editor__save-btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
