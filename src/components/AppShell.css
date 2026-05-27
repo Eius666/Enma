@@ -1,0 +1,210 @@
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   AppShell — compact header bar + bottom navigation
+   No emoji anywhere; all icons are SVG (react-icons)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Header bar — compact single row
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  gap: 8px;
+  /* Fully transparent — sits on app background */
+  background: transparent;
+  flex-shrink: 0;
+}
+
+/* — Left side: avatar + greeting — */
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+/* 24px circle with accent background, first 2 letters of name */
+.header-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--notes-accent, #7B68EE);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+/* Greeting "Hi, name" */
+.header-greeting {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--notes-text, #fff);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+/* — Right side: email + icon buttons — */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Small email label — no box, just text */
+.header-email {
+  font-size: 11px;
+  color: var(--notes-text-muted, rgba(255,255,255,0.4));
+  max-width: 100px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Small 28px circular icon buttons */
+.header-icon-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: var(--notes-text-secondary, rgba(255,255,255,0.6));
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+  flex-shrink: 0;
+}
+
+.header-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--notes-text, #fff);
+}
+
+.header-icon-btn:active {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Sign-out button — red tint on hover */
+.header-icon-btn--danger:hover {
+  background: rgba(255, 71, 87, 0.14);
+  color: #ff4757;
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Bottom navigation bar
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  /* Safe-area bottom padding (iOS notch / home indicator) */
+  padding-bottom: var(--tg-safe-area-bottom, env(safe-area-inset-bottom, 0px));
+  height: calc(56px + var(--tg-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
+  background: rgba(10, 10, 30, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: stretch;
+  z-index: 300;
+}
+
+/* Light theme override */
+.theme-light .bottom-nav {
+  background: rgba(240, 240, 252, 0.92);
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* Single tab item */
+.bottom-nav__item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px 4px 0;
+  transition: transform 0.15s;
+  color: rgba(255, 255, 255, 0.38);
+  font-family: inherit;
+}
+
+.theme-light .bottom-nav__item {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+.bottom-nav__item:active {
+  transform: scale(0.88);
+}
+
+/* Active tab — accent color */
+.bottom-nav__item--active {
+  color: var(--notes-accent, #7B68EE);
+}
+
+/* SVG icon — 20px */
+.bottom-nav__icon {
+  font-size: 20px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Text label — 10px below icon */
+.bottom-nav__label {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 56px;
+}
+
+/* Active dot indicator under icon (optional accent flourish) */
+.bottom-nav__item--active .bottom-nav__icon::after {
+  content: '';
+  display: block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--notes-accent, #7B68EE);
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Main content — push above bottom nav
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.app-main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px 80px;
+}

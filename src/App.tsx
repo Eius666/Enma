@@ -9,6 +9,12 @@ import { enUS, ru } from 'date-fns/locale';
 import {
   FaMoon,
   FaSun,
+  FaCog,
+  FaSignOutAlt,
+  FaCalendarAlt,
+  FaStickyNote,
+  FaChartLine,
+  FaCheckCircle,
 } from 'react-icons/fa';
 import {
   User,
@@ -29,10 +35,8 @@ import FinanceList from './components/FinanceList';
 import FinanceEditor from './components/FinanceEditor';
 import HabitsList, { HabitDoc } from './components/HabitsList';
 import HabitEditor from './components/HabitEditor';
-import { SettingsPanel } from './components/workspaces/SettingsPanel';
 import { ToastProvider } from './components/ui/Toast';
-import WalletConnect from './components/WalletConnect';
-import SubscriptionPanel from './components/SubscriptionPanel';
+import SettingsScreen from './components/SettingsScreen';
 import NotesList from './components/NotesList';
 import NoteEditor from './components/NoteEditor';
 import { Subscription, isSubscriptionActive } from './subscription';
@@ -42,6 +46,7 @@ import './components/Finance.css';
 import './components/Habits.css';
 import './components/Day.css';
 import './components/Calendar.css';
+import './components/AppShell.css';
 
 type Theme = 'dark' | 'light';
 type Language = 'en' | 'ru';
@@ -1306,6 +1311,19 @@ const App: React.FC = () => {
     }
   };
 
+  // First 2 letters of display name for the avatar circle
+  const avatarInitials = (userDisplayName as string).slice(0, 2).toUpperCase();
+
+  // Centralised tab-switch handler — resets sub-views
+  const handleTabSwitch = (tabId: PrimaryTab) => {
+    setActiveTab(tabId);
+    if (tabId !== 'day-flow')  { setDayView('list');      setActiveDayTaskId(null); }
+    if (tabId !== 'calendar')  { setCalView('calendar');  setActiveCalTaskId(null); setCalPreDate(null); }
+    if (tabId !== 'notes')     { setNotesView('list');    setActiveNoteId(null); }
+    if (tabId !== 'finance')   { setFinanceView('list');  setActiveTransactionId(null); }
+    if (tabId !== 'habits')    { setHabitsView('list');   setActiveHabitId(null); }
+  };
+
   if (authLoading) {
     return (
       <div className={`auth-screen theme-${theme}`}>
@@ -1327,89 +1345,53 @@ const App: React.FC = () => {
     );
   }
 
-  const referenceDate = new Date();
-
   return (
     <ToastProvider>
     <div className={`app-shell theme-${theme}`}>
-      <header className="hero-card">
-        <div className="hero-intro">
-          <span className="app-mark">Enma</span>
-          <h1>
-            {t('greeting', { name: userDisplayName })}
-          </h1>
-          <p>{t('heroSubtitle')}</p>
-          <a
-            className="refresh-link"
-            href="https://eius666.github.io/Enma/"
-            target="_blank"
-            rel="noreferrer"
-          >
-            {t('productionRefreshed', {
-              date: formatDate(language, referenceDate, 'MMM dd, yyyy p')
-            })}
-          </a>
-          <span className="hero-email">{userEmail}</span>
+
+      {/* ── Compact header bar ── */}
+      <header className="header-bar">
+        <div className="header-left">
+          {/* Avatar circle — first 2 letters, no emoji */}
+          <div className="header-avatar" aria-hidden="true">{avatarInitials}</div>
+          <span className="header-greeting">
+            {language === 'ru' ? `Привет, ${userDisplayName}` : `Hi, ${userDisplayName}`}
+          </span>
         </div>
-        <div className="hero-actions">
-          <div className="hero-actions-left">
-            <button className="sign-out-button" onClick={handleSignOut}>
-              {t('signOut')}
-            </button>
-          </div>
+        <div className="header-right">
+          {/* Email — small text, no box */}
+          <span className="header-email">{userEmail}</span>
+          {/* Settings gear — SVG, no emoji */}
           <button
-            className="theme-toggle"
+            className={`header-icon-btn${activeTab === 'settings' ? ' header-icon-btn--active' : ''}`}
+            onClick={() => handleTabSwitch('settings')}
+            aria-label="Settings"
+            type="button"
+          >
+            <FaCog />
+          </button>
+          {/* Theme toggle — SVG sun/moon, no emoji */}
+          <button
+            className="header-icon-btn"
             onClick={toggleTheme}
             aria-label={t('toggleThemeAria')}
+            type="button"
           >
             {theme === 'dark' ? <FaSun /> : <FaMoon />}
+          </button>
+          {/* Sign out — SVG icon only, no text */}
+          <button
+            className="header-icon-btn header-icon-btn--danger"
+            onClick={handleSignOut}
+            aria-label={t('signOut')}
+            type="button"
+          >
+            <FaSignOutAlt />
           </button>
         </div>
       </header>
 
-      <nav className="top-tabs" aria-label="Primary navigation">
-        {([
-          { id: 'day-flow', label: t('tabDayFlow') },
-          { id: 'calendar', label: t('tabCalendar') },
-          { id: 'notes', label: t('tabNotes') },
-          { id: 'finance', label: t('tabFinance') },
-          { id: 'habits', label: t('tabHabits') },
-          { id: 'settings', label: t('tabSettings') }
-        ] as const).map(tab => (
-          <button
-            key={tab.id}
-            className={`top-tab ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab(tab.id);
-              if (tab.id !== 'day-flow') {
-                setDayView('list');
-                setActiveDayTaskId(null);
-              }
-              if (tab.id !== 'calendar') {
-                setCalView('calendar');
-                setActiveCalTaskId(null);
-                setCalPreDate(null);
-              }
-              if (tab.id !== 'notes') {
-                setNotesView('list');
-                setActiveNoteId(null);
-              }
-              if (tab.id !== 'finance') {
-                setFinanceView('list');
-                setActiveTransactionId(null);
-              }
-              if (tab.id !== 'habits') {
-                setHabitsView('list');
-                setActiveHabitId(null);
-              }
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </nav>
-
-      <main className="main-content">
+      <main className="app-main">
         {activeTab === 'day-flow' && dayView === 'list' && (
           <DayList
             language={language}
@@ -1556,26 +1538,46 @@ const App: React.FC = () => {
           />
         )}
         {activeTab === 'settings' && (
-          <>
-            <SettingsPanel
-              language={language}
-              onLanguageChange={updateLanguage}
-              currency={currency}
-              onCurrencyChange={updateCurrency}
-              ratesUpdatedAt={ratesUpdatedAt}
-              ratesStatus={ratesStatus}
-              onRefreshRates={() => loadExchangeRates(true)}
-            />
-            <WalletConnect language={language} />
-            <SubscriptionPanel
-              language={language}
-              user={user}
-              subscription={subscription}
-              onSubscriptionChange={setSubscription}
-            />
-          </>
+          <SettingsScreen
+            language={language}
+            theme={theme}
+            currency={currency}
+            user={user}
+            subscription={subscription}
+            ratesStatus={ratesStatus}
+            ratesUpdatedAt={ratesUpdatedAt}
+            onLanguageChange={updateLanguage}
+            onCurrencyChange={(c) => updateCurrency(c as Currency)}
+            onThemeToggle={toggleTheme}
+            onRefreshRates={() => loadExchangeRates(true)}
+            onSubscriptionChange={setSubscription}
+            onSignOut={handleSignOut}
+          />
         )}
       </main>
+
+      {/* ── Bottom navigation bar (5 tabs; Settings via header gear) ── */}
+      <nav className="bottom-nav" aria-label="Primary navigation">
+        {([
+          { id: 'day-flow',  icon: <FaSun />,         label: language === 'ru' ? 'День'      : 'Day'      },
+          { id: 'calendar',  icon: <FaCalendarAlt />,  label: language === 'ru' ? 'Календарь' : 'Calendar' },
+          { id: 'notes',     icon: <FaStickyNote />,   label: language === 'ru' ? 'Заметки'   : 'Notes'    },
+          { id: 'finance',   icon: <FaChartLine />,    label: language === 'ru' ? 'Финансы'   : 'Finance'  },
+          { id: 'habits',    icon: <FaCheckCircle />,  label: language === 'ru' ? 'Привычки'  : 'Habits'   },
+        ] as const).map(tab => (
+          <button
+            key={tab.id}
+            className={`bottom-nav__item${activeTab === tab.id ? ' bottom-nav__item--active' : ''}`}
+            onClick={() => handleTabSwitch(tab.id)}
+            type="button"
+          >
+            {/* SVG icon — no emoji */}
+            <span className="bottom-nav__icon">{tab.icon}</span>
+            <span className="bottom-nav__label">{tab.label}</span>
+          </button>
+        ))}
+      </nav>
+
     </div>
     </ToastProvider>
   );

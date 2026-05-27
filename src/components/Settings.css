@@ -1,0 +1,348 @@
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   SettingsScreen — iOS-style settings
+   No emoji; icons are SVG (react-icons)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+@keyframes settSlideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Container ────────────────────────────────── */
+
+.sett-screen {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 24px;
+  animation: settSlideIn 0.22s ease forwards;
+}
+
+/* ── Title ────────────────────────────────────── */
+
+.sett-screen__title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--notes-text);
+  padding: 0 4px;
+  margin-bottom: 20px;
+}
+
+/* ── Group label (section header) ─────────────── */
+
+.sett-group__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--notes-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0 4px;
+  margin-bottom: 6px;
+  margin-top: 18px;
+}
+
+/* ── Card group ───────────────────────────────── */
+
+.sett-group {
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  border-radius: 16px;
+  overflow: hidden;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* ── Row ──────────────────────────────────────── */
+
+.sett-row {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 10px 16px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+  box-sizing: border-box;
+  gap: 12px;
+}
+
+.sett-row:not(.sett-row--danger):active {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Taller row variant for embedded content */
+.sett-row--tall {
+  min-height: 52px;
+  align-items: flex-start;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  cursor: default;
+}
+
+/* Danger row (sign out) */
+.sett-row--danger {
+  cursor: pointer;
+}
+
+.sett-row--danger:active {
+  background: rgba(255, 71, 87, 0.08);
+}
+
+/* Icon wrapper — 28px rounded square with subtle bg */
+.sett-row__icon-wrap {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: rgba(123, 104, 238, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sett-row__icon-wrap--danger {
+  background: rgba(255, 71, 87, 0.18);
+}
+
+/* SVG icon inside wrap */
+.sett-row__icon {
+  font-size: 14px;
+  color: var(--notes-accent);
+}
+
+.sett-row__icon--accent {
+  color: #ffc107;
+}
+
+.sett-row__icon-wrap--danger .sett-row__icon {
+  color: #ff4757;
+}
+
+/* Row label */
+.sett-row__label {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--notes-text);
+}
+
+.sett-row__label--danger {
+  color: #ff4757;
+}
+
+/* Right-side value */
+.sett-row__value {
+  font-size: 14px;
+  color: var(--notes-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.sett-row__value--sub {
+  display: block;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+/* Chevron icon */
+.sett-row__chevron {
+  font-size: 11px;
+  color: var(--notes-text-muted);
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+
+/* Row body — flex column for stacked label+value */
+.sett-row__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Thin divider between rows */
+.sett-row__divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 0 16px;
+}
+
+.theme-light .sett-row__divider {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+/* ── Toggle pill ──────────────────────────────── */
+
+.sett-toggle {
+  width: 40px;
+  height: 24px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.22s;
+}
+
+.sett-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  transition: transform 0.22s, background 0.22s;
+}
+
+.sett-toggle--on {
+  background: var(--notes-accent);
+}
+
+.sett-toggle--on::after {
+  transform: translateX(16px);
+  background: #fff;
+}
+
+.theme-light .sett-toggle {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.theme-light .sett-toggle::after {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+/* ── Expandable picker ────────────────────────── */
+
+.sett-picker {
+  background: var(--notes-card-bg);
+  border-top: 1px solid var(--notes-card-border);
+  padding: 6px 0;
+}
+
+.sett-picker__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 11px 16px 11px 56px; /* indent under icon wrap */
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  color: var(--notes-text);
+  font-family: inherit;
+  text-align: left;
+  transition: background 0.14s;
+}
+
+.sett-picker__option:active {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sett-picker__option--active {
+  color: var(--notes-accent);
+  font-weight: 600;
+}
+
+.sett-picker__option-sub {
+  font-size: 12px;
+  color: var(--notes-text-muted);
+  margin-left: auto;
+}
+
+.sett-picker__refresh {
+  width: 100%;
+  padding: 8px 16px 8px 56px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--notes-accent);
+  font-family: inherit;
+  text-align: left;
+  transition: opacity 0.15s;
+}
+
+.sett-picker__refresh:active { opacity: 0.7; }
+
+/* ── Embedded WalletConnect row ───────────────── */
+
+.sett-row--embed {
+  padding: 0 16px;
+}
+
+/* Override WalletConnect styles to fit the card */
+.sett-row--embed .wallet-connect {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 0;
+}
+
+.sett-row--embed .wallet-connect__info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sett-row--embed .wallet-connect__address {
+  font-size: 13px;
+  color: var(--notes-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.sett-row--embed .wallet-connect__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2ecc71;
+  flex-shrink: 0;
+}
+
+.sett-row--embed .wallet-connect__btn {
+  padding: 7px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+
+.sett-row--embed .wallet-connect__btn--connect {
+  background: var(--notes-accent);
+  color: #fff;
+}
+
+.sett-row--embed .wallet-connect__btn--disconnect {
+  background: rgba(255, 71, 87, 0.15);
+  color: #ff4757;
+}
+
+.sett-row--embed .wallet-connect__btn:active { opacity: 0.8; }
+
+/* ── Subscription panel wrapper ───────────────── */
+
+.sett-subscription-wrap {
+  margin-top: 16px;
+}
+
+/* Neutralize the old SubscriptionPanel outer chrome */
+.sett-subscription-wrap .subscription-panel {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
