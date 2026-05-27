@@ -3,13 +3,20 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
+import { TonConnectUIProvider } from '@tonconnect/ui-react';
+
+const TONCONNECT_MANIFEST_URL =
+  process.env.REACT_APP_TONCONNECT_MANIFEST ||
+  'https://enma-silk.vercel.app/tonconnect-manifest.json';
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
 root.render(
   <React.StrictMode>
-    <App />
+    <TonConnectUIProvider manifestUrl={TONCONNECT_MANIFEST_URL}>
+      <App />
+    </TonConnectUIProvider>
   </React.StrictMode>
 );
 

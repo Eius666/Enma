@@ -17,7 +17,7 @@ import {
   signInAnonymously,
   signOut
 } from 'firebase/auth';
-import { Timestamp, deleteDoc, doc, getDoc, serverTimestamp, setDoc, collection, query, where, getDocs, orderBy, onSnapshot } from 'firebase/firestore';
+import { Timestamp, deleteDoc, doc, getDoc, serverTimestamp, setDoc, collection, query, where, getDocs, orderBy, onSnapshot, limit } from 'firebase/firestore';
 import './App.v2.css';
 import { auth, db } from './firebase';
 import { useTelegramWebApp } from './hooks/useTelegramWebApp';
@@ -30,6 +30,10 @@ import { FinanceWorkspace } from './components/workspaces/FinanceWorkspace';
 import { HabitsWorkspace } from './components/workspaces/HabitsWorkspace';
 import { SettingsPanel } from './components/workspaces/SettingsPanel';
 import { ToastProvider } from './components/ui/Toast';
+import WalletConnect from './components/WalletConnect';
+import SubscriptionPanel from './components/SubscriptionPanel';
+import { Subscription, isSubscriptionActive } from './subscription';
+import './components/Subscription.css';
 
 type Theme = 'dark' | 'light';
 type Language = 'en' | 'ru';
@@ -633,6 +637,7 @@ const App: React.FC = () => {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
 
   const t = (key: TranslationKey, params?: Record<string, string | number>) =>
     translate(language, key, params);
@@ -1339,6 +1344,31 @@ const App: React.FC = () => {
     loadExchangeRates();
   }, [loadExchangeRates]);
 
+  useEffect(() => {
+    if (!user) {
+      setSubscription(null);
+      return;
+    }
+    const loadSubscription = async () => {
+      try {
+        const q = query(
+          collection(db, 'subscriptions'),
+          where('userId', '==', user.uid),
+          orderBy('updatedAt', 'desc'),
+          limit(1)
+        );
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+          const sub = snapshot.docs[0].data() as Subscription;
+          if (isSubscriptionActive(sub)) setSubscription(sub);
+        }
+      } catch (error) {
+        console.warn('Failed to load subscription', error);
+      }
+    };
+    loadSubscription();
+  }, [user]);
+
   const upcomingReminders = useMemo(() => {
     return [...reminders]
       .filter(reminder => !reminder.done && compareAsc(new Date(reminder.date), new Date()) >= 0)
@@ -1511,15 +1541,24 @@ const App: React.FC = () => {
           />
         )}
         {activeTab === 'settings' && (
-          <SettingsPanel
-            language={language}
-            onLanguageChange={updateLanguage}
-            currency={currency}
-            onCurrencyChange={updateCurrency}
-            ratesUpdatedAt={ratesUpdatedAt}
-            ratesStatus={ratesStatus}
-            onRefreshRates={() => loadExchangeRates(true)}
-          />
+          <>
+            <SettingsPanel
+              language={language}
+              onLanguageChange={updateLanguage}
+              currency={currency}
+              onCurrencyChange={updateCurrency}
+              ratesUpdatedAt={ratesUpdatedAt}
+              ratesStatus={ratesStatus}
+              onRefreshRates={() => loadExchangeRates(true)}
+            />
+            <WalletConnect language={language} />
+            <SubscriptionPanel
+              language={language}
+              user={user}
+              subscription={subscription}
+              onSubscriptionChange={setSubscription}
+            />
+          </>
         )}
       </main>
     </div>

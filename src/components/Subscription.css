@@ -1,0 +1,449 @@
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   WalletConnect
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.wallet-connect {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 16px;
+}
+
+.wallet-connect--connected {
+  border-color: rgba(0, 136, 204, 0.35);
+  background: rgba(0, 136, 204, 0.06);
+}
+
+.wallet-connect__info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.wallet-connect__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+}
+
+.wallet-connect__address {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wallet-connect__btn {
+  border: none;
+  border-radius: 12px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform var(--transition-base), box-shadow var(--transition-base),
+    background var(--transition-base);
+  white-space: nowrap;
+}
+
+.wallet-connect__btn--connect {
+  width: 100%;
+  background: linear-gradient(135deg, #0088cc, #006aab);
+  color: #fff;
+  padding: 12px 20px;
+  font-size: 15px;
+  border-radius: 14px;
+}
+
+.wallet-connect__btn--connect:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(0, 136, 204, 0.35);
+}
+
+.wallet-connect__btn--disconnect {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.wallet-connect__btn--disconnect:hover {
+  background: rgba(255, 88, 88, 0.12);
+  color: #ff7a7a;
+  border-color: rgba(255, 88, 88, 0.3);
+}
+
+body.theme-light .wallet-connect {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+body.theme-light .wallet-connect--connected {
+  background: rgba(0, 136, 204, 0.06);
+  border-color: rgba(0, 136, 204, 0.3);
+}
+
+body.theme-light .wallet-connect__btn--disconnect {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: var(--text-secondary);
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   SubscriptionPanel
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.subscription-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+}
+
+body.theme-light .subscription-panel {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(143, 150, 220, 0.28);
+  box-shadow: 0 16px 40px rgba(143, 150, 220, 0.16);
+}
+
+/* Header */
+.subscription-panel__header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.subscription-panel__title {
+  font-size: clamp(20px, 5vw, 26px);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  background: linear-gradient(135deg, #c9a8ff, #7c5cff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.subscription-panel__subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Active subscription banner */
+.subscription-panel__active {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.subscription-panel__active-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+}
+
+/* Plan cards */
+.subscription-panel__plans {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.subscription-panel__plan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--transition-base), background var(--transition-base),
+    transform var(--transition-base), box-shadow var(--transition-base);
+}
+
+.subscription-panel__plan-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(124, 92, 255, 0.4);
+  background: rgba(124, 92, 255, 0.06);
+}
+
+.subscription-panel__plan-card--selected {
+  border-color: rgba(124, 92, 255, 0.7);
+  background: rgba(124, 92, 255, 0.12);
+  box-shadow: 0 8px 24px rgba(124, 92, 255, 0.2);
+}
+
+.subscription-panel__plan-card--active {
+  border-color: rgba(34, 197, 94, 0.6);
+  background: rgba(34, 197, 94, 0.06);
+}
+
+.subscription-panel__plan-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.subscription-panel__plan-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: rgba(34, 197, 94, 0.18);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  width: fit-content;
+}
+
+.subscription-panel__plan-features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.subscription-panel__plan-features li {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.subscription-panel__plan-features li::before {
+  content: '✓';
+  font-size: 11px;
+  color: rgba(124, 92, 255, 0.8);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+body.theme-light .subscription-panel__plan-card {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(143, 150, 220, 0.2);
+}
+
+body.theme-light .subscription-panel__plan-card--selected {
+  background: rgba(124, 92, 255, 0.06);
+  border-color: rgba(124, 92, 255, 0.5);
+}
+
+/* Period toggle */
+.subscription-panel__periods {
+  display: inline-flex;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 6px;
+  border-radius: 999px;
+  width: fit-content;
+}
+
+.subscription-panel__period-btn {
+  border: none;
+  background: transparent;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-base), color var(--transition-base);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.subscription-panel__period-btn--active {
+  background: rgba(124, 92, 255, 0.28);
+  color: var(--text-primary);
+}
+
+.subscription-panel__save-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(130, 247, 199, 0.2);
+  color: #82f7c7;
+  border: 1px solid rgba(130, 247, 199, 0.4);
+}
+
+body.theme-light .subscription-panel__save-badge {
+  color: #16a349;
+  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+/* Price display */
+.subscription-panel__price {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.subscription-panel__price-amount {
+  font-size: clamp(24px, 6vw, 32px);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.subscription-panel__price-period {
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+
+/* Currency selector */
+.subscription-panel__currencies {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.subscription-panel__currency-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.subscription-panel__currency-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.subscription-panel__currency-btn {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color var(--transition-base), background var(--transition-base),
+    color var(--transition-base);
+}
+
+.subscription-panel__currency-btn:hover:not(:disabled) {
+  border-color: rgba(124, 92, 255, 0.5);
+  color: var(--text-primary);
+  background: rgba(124, 92, 255, 0.08);
+}
+
+.subscription-panel__currency-btn--active {
+  border-color: rgba(124, 92, 255, 0.7);
+  background: rgba(124, 92, 255, 0.18);
+  color: var(--text-primary);
+}
+
+.subscription-panel__currency-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+body.theme-light .subscription-panel__currency-btn {
+  border-color: rgba(143, 150, 220, 0.25);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+/* Pay button */
+.subscription-panel__pay-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 14px 24px;
+  border: none;
+  border-radius: 16px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.9), rgba(80, 50, 200, 0.85));
+  color: #fff;
+  transition: transform var(--transition-base), box-shadow var(--transition-base),
+    opacity var(--transition-base);
+  box-shadow: 0 8px 24px rgba(124, 92, 255, 0.3);
+  letter-spacing: 0.02em;
+}
+
+.subscription-panel__pay-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(124, 92, 255, 0.45);
+}
+
+.subscription-panel__pay-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.subscription-panel__pay-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.subscription-panel__pay-btn--current {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  box-shadow: none;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .subscription-panel {
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .subscription-panel__plans {
+    grid-template-columns: 1fr;
+  }
+
+  .subscription-panel__periods {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .subscription-panel__period-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .subscription-panel__currencies {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
