@@ -385,10 +385,18 @@ body.theme-light .sett-picker__option:active {
   margin-top: 16px;
 }
 
-/* Neutralize the old SubscriptionPanel outer chrome */
+/* Neutralize the old SubscriptionPanel outer chrome in dark theme.
+   Do NOT override padding — the panel needs its own 20px internal spacing. */
 .sett-subscription-wrap .subscription-panel {
   background: transparent;
   border: none;
-  padding: 0;
   margin: 0;
+}
+
+/* In light theme the body.theme-light selector wins on background/border
+   (higher specificity), so explicitly restore those here too */
+body.theme-light .sett-subscription-wrap .subscription-panel {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(143, 150, 220, 0.25);
+  box-shadow: 0 8px 32px rgba(143, 150, 220, 0.14);
 }
