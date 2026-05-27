@@ -25,7 +25,8 @@ import { useTelegramWebApp } from './hooks/useTelegramWebApp';
 import { AuthScreen } from './components/workspaces/AuthScreen';
 import { DayFlowOverview } from './components/workspaces/DayFlowOverview';
 import { CalendarWorkspace } from './components/workspaces/CalendarWorkspace';
-import { FinanceWorkspace } from './components/workspaces/FinanceWorkspace';
+import FinanceList from './components/FinanceList';
+import FinanceEditor from './components/FinanceEditor';
 import { HabitsWorkspace } from './components/workspaces/HabitsWorkspace';
 import { SettingsPanel } from './components/workspaces/SettingsPanel';
 import { ToastProvider } from './components/ui/Toast';
@@ -36,6 +37,7 @@ import NoteEditor from './components/NoteEditor';
 import { Subscription, isSubscriptionActive } from './subscription';
 import './components/Subscription.css';
 import './components/Notes.css';
+import './components/Finance.css';
 
 type Theme = 'dark' | 'light';
 type Language = 'en' | 'ru';
@@ -628,6 +630,8 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<PrimaryTab>('day-flow');
   const [notesView, setNotesView] = useState<'list' | 'editor'>('list');
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
+  const [financeView, setFinanceView] = useState<'list' | 'editor'>('list');
+  const [activeTransactionId, setActiveTransactionId] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const prevUserId = useRef<string | null>(null);
@@ -903,18 +907,6 @@ const App: React.FC = () => {
     [user]
   );
 
-  const deleteTransactionFromFirestore = useCallback(
-    async (id: string) => {
-      if (!user) return;
-      try {
-        await deleteDoc(doc(db, 'transactions', id));
-      } catch (error) {
-        console.warn('Failed to delete transaction from Firestore', error);
-      }
-    },
-    [user]
-  );
-
   const persistReminderToFirestore = useCallback(
     async (reminder: Reminder, options?: { isNew?: boolean; status?: 'pending' | 'done' }) => {
       if (!user) {
@@ -956,31 +948,14 @@ const App: React.FC = () => {
   const remindersBackfillRef = useRef(false);
   const transactionsBackfillRef = useRef(false);
 
-  const refreshTransactionsFromFirestore = useCallback(async () => {
-    if (!user) return;
-    try {
-      const q = query(collection(db, 'transactions'), where('userId', '==', user.uid), orderBy('date', 'desc'));
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        const cloudTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
-        setTransactions(cloudTransactions);
-        alert(`✅ Загружено ${cloudTransactions.length} транзакций из облака`);
-      } else {
-        alert('ℹ️ Нет транзакций в облачной базе');
-      }
-    } catch (error) {
-      console.warn('Failed to fetch transactions from cloud', error);
-      alert('❌ Ошибка загрузки из облака');
-    }
-  }, [user]);
-
   useEffect(() => {
     if (!user) return;
 
+    // Single-field filter only: avoids requiring a composite index until
+    // the userId+date index finishes building. Client-side sort applied below.
     const q = query(
       collection(db, 'transactions'),
-      where('userId', '==', user.uid),
-      orderBy('date', 'desc')
+      where('userId', '==', user.uid)
     );
 
     let unsubscribe: () => void;
@@ -997,6 +972,7 @@ const App: React.FC = () => {
                 updated.set(change.doc.id, { id: change.doc.id, ...change.doc.data() } as Transaction);
               }
             });
+            // Sort by date descending (client-side)
             return Array.from(updated.values()).sort((a, b) => b.date.localeCompare(a.date));
           });
         },
@@ -1482,6 +1458,10 @@ const App: React.FC = () => {
                 setNotesView('list');
                 setActiveNoteId(null);
               }
+              if (tab.id !== 'finance') {
+                setFinanceView('list');
+                setActiveTransactionId(null);
+              }
             }}
           >
             {tab.label}
@@ -1538,19 +1518,37 @@ const App: React.FC = () => {
             }}
           />
         )}
-        {activeTab === 'finance' && (
-          <FinanceWorkspace
+        {activeTab === 'finance' && financeView === 'list' && (
+          <FinanceList
+            language={language}
+            currency={currency}
+            convertAmount={convertAmount}
+            categories={categories}
+            transactions={transactions}
+            onOpenEditor={(id) => {
+              setActiveTransactionId(id);
+              setFinanceView('editor');
+              window.scrollTo({ top: 0, behavior: 'auto' });
+            }}
+          />
+        )}
+        {activeTab === 'finance' && financeView === 'editor' && (
+          <FinanceEditor
+            transactionId={activeTransactionId}
+            initialTransaction={
+              activeTransactionId
+                ? transactions.find(tx => tx.id === activeTransactionId) ?? null
+                : null
+            }
+            user={user}
             language={language}
             currency={currency}
             convertAmount={convertAmount}
             convertToBase={convertToBase}
-            categories={categories}
-            onCategoriesChange={setCategories}
-            transactions={transactions}
-            onTransactionsChange={setTransactions}
-            onPersistTransaction={persistTransactionToFirestore}
-            onDeleteTransaction={deleteTransactionFromFirestore}
-            onRefreshTransactions={refreshTransactionsFromFirestore}
+            onBack={() => {
+              setFinanceView('list');
+              setActiveTransactionId(null);
+            }}
           />
         )}
         {activeTab === 'habits' && (

@@ -63,6 +63,9 @@ export type Transaction = {
   categoryId: string;
   description: string;
   date: string;
+  // Set by new FinanceEditor – human-readable "🛒 Groceries" string.
+  // Legacy transactions populated via categoryId lookup instead.
+  category?: string;
 };
 
 // Client-side habit shape: history keyed by YYYY-MM-DD date strings.
