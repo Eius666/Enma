@@ -129,7 +129,7 @@ body.theme-light .header-icon-btn:active {
 .fab {
   position: fixed;
   right: 20px;
-  bottom: 84px;
+  bottom: 88px;
   width: 52px;
   height: 52px;
   border-radius: 14px;
@@ -171,7 +171,7 @@ body.theme-light .fab {
 
 .bottom-nav {
   position: fixed;
-  bottom: 16px;
+  bottom: 20px;
   left: 8px;
   right: 8px;
   /* Safe-area bottom padding (iOS notch / home indicator) */
