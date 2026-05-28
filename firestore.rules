@@ -87,21 +87,24 @@ service cloud.firestore {
     }
 
     // -------------------------------------------------------------------------
-    // /subscriptions/{subscriptionId}
+    // /subscriptions/{userId}
     // -------------------------------------------------------------------------
-    match /subscriptions/{subscriptionId} {
-      allow read:           if ownsDoc();
-      allow create:         if writesOwnUid();
-      allow update, delete: if ownsDoc();
+    // Written exclusively by the server (Admin SDK) on payment confirmation.
+    // Clients may only read their own subscription document.
+    match /subscriptions/{userId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
     }
 
     // -------------------------------------------------------------------------
     // /payments/{paymentId}
     // -------------------------------------------------------------------------
+    // Client may create a pending payment for themselves (no confirmedAt allowed).
+    // Only the server (Admin SDK via api/ton/verify.js) writes status:'confirmed'.
     match /payments/{paymentId} {
-      allow read:           if ownsDoc();
-      allow create:         if writesOwnUid();
-      allow update, delete: if ownsDoc();
+      allow read: if ownsDoc();
+      allow create: if writesOwnUid()
+        && request.resource.data.status == 'pending'
+        && !('confirmedAt' in request.resource.data);
     }
 
     // -------------------------------------------------------------------------
