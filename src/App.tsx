@@ -97,6 +97,10 @@ type Transaction = {
   categoryId: string;
   description: string;
   date: string;
+  category?: string;
+  originalAmount?: number;
+  originalCurrency?: Currency;
+  source?: string;
 };
 
 type Habit = {
@@ -909,6 +913,26 @@ const App: React.FC = () => {
     }, { merge: true }).catch(err => console.warn('Failed to sync user mapping', err));
   }, [user, telegram]);
 
+  // Load currency from Firestore so changes from Telegram bot or other devices sync here.
+  useEffect(() => {
+    const uid = user?.uid;
+    if (!uid) return;
+    const unsubscribe = onSnapshot(
+      doc(db, 'users', uid),
+      snap => {
+        const data = snap.data();
+        if (data?.currency && SUPPORTED_CURRENCIES.includes(data.currency as Currency)) {
+          const firestoreCurrency = data.currency as Currency;
+          setCurrency(firestoreCurrency);
+          try { localStorage.setItem(CURRENCY_STORAGE_KEY, firestoreCurrency); } catch { /* ignore */ }
+        }
+      },
+      err => console.warn('Failed to listen to user currency', err)
+    );
+    return unsubscribe;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]);
+
   const persistTransactionToFirestore = useCallback(
     async (transaction: Transaction) => {
       if (!user) return;
@@ -1216,6 +1240,10 @@ const App: React.FC = () => {
   const updateCurrency = (next: Currency) => {
     if (next === currency) return;
     setCurrency(next);
+    if (user?.uid) {
+      setDoc(doc(db, 'users', user.uid), { currency: next, updatedAt: serverTimestamp() }, { merge: true })
+        .catch(err => console.warn('Failed to sync currency to Firestore', err));
+    }
   };
 
 

@@ -333,6 +333,7 @@ const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor }) =
   const isEmpty = filtered.length === 0;
 
   return (
+    <>
     <div className="notes-list">
       {/* Search */}
       <div className="notes-list__search-wrap">
@@ -399,84 +400,86 @@ const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor }) =
         </div>
       )}
 
-      {/* FAB */}
-      <button
-        className="fab"
-        onClick={() => onOpenEditor(null)}
-        type="button"
-        aria-label={language === 'ru' ? 'Создать заметку' : 'New note'}
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
-      </button>
-
-      {/* Context menu */}
-      {contextNoteId && contextNote && (
-        <div
-          className="notes-context-backdrop"
-          onClick={() => setContextNoteId(null)}
-        >
-          <div className="notes-context-menu" onClick={e => e.stopPropagation()}>
-            <div className="notes-context-menu__title">{t.actions}</div>
-            <button className="notes-context-menu__action" onClick={handlePin} type="button">
-              <FaThumbtack className="notes-context-menu__action-icon" />
-              {contextNote.pinned ? t.unpin : t.pin}
-            </button>
-            <button
-              className="notes-context-menu__action notes-context-menu__action--danger"
-              onClick={handleDelete}
-              type="button"
-            >
-              <FaTrash className="notes-context-menu__action-icon" />
-              {t.delete}
-            </button>
-            <button
-              className="notes-context-menu__cancel"
-              onClick={() => setContextNoteId(null)}
-              type="button"
-            >
-              {t.cancel}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* New category modal */}
-      {showCatModal && (
-        <div className="notes-cat-modal-backdrop" onClick={() => setShowCatModal(false)}>
-          <div className="notes-cat-modal" onClick={e => e.stopPropagation()}>
-            <span className="notes-cat-modal__label">{t.newCategory}</span>
-            <input
-              className="notes-cat-modal__input"
-              type="text"
-              placeholder={t.categoryPlaceholder}
-              value={catDraft}
-              onChange={e => setCatDraft(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAddCategory()}
-              autoFocus
-            />
-            <div className="notes-cat-modal__btns">
-              <button
-                className="notes-cat-modal__btn notes-cat-modal__btn--cancel"
-                onClick={() => { setShowCatModal(false); setCatDraft(''); }}
-                type="button"
-              >
-                <FaTimes /> {t.cancel}
-              </button>
-              <button
-                className="notes-cat-modal__btn notes-cat-modal__btn--confirm"
-                onClick={handleAddCategory}
-                type="button"
-              >
-                {t.newCategory}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
+
+    {/* FAB — outside animated container so position:fixed isn't affected by transform */}
+    <button
+      className="fab"
+      onClick={() => onOpenEditor(null)}
+      type="button"
+      aria-label={language === 'ru' ? 'Создать заметку' : 'New note'}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+        <line x1="12" y1="5" x2="12" y2="19" />
+        <line x1="5" y1="12" x2="19" y2="12" />
+      </svg>
+    </button>
+
+    {/* Context menu */}
+    {contextNoteId && contextNote && (
+      <div
+        className="notes-context-backdrop"
+        onClick={() => setContextNoteId(null)}
+      >
+        <div className="notes-context-menu" onClick={e => e.stopPropagation()}>
+          <div className="notes-context-menu__title">{t.actions}</div>
+          <button className="notes-context-menu__action" onClick={handlePin} type="button">
+            <FaThumbtack className="notes-context-menu__action-icon" />
+            {contextNote.pinned ? t.unpin : t.pin}
+          </button>
+          <button
+            className="notes-context-menu__action notes-context-menu__action--danger"
+            onClick={handleDelete}
+            type="button"
+          >
+            <FaTrash className="notes-context-menu__action-icon" />
+            {t.delete}
+          </button>
+          <button
+            className="notes-context-menu__cancel"
+            onClick={() => setContextNoteId(null)}
+            type="button"
+          >
+            {t.cancel}
+          </button>
+        </div>
+      </div>
+    )}
+
+    {/* New category modal */}
+    {showCatModal && (
+      <div className="notes-cat-modal-backdrop" onClick={() => setShowCatModal(false)}>
+        <div className="notes-cat-modal" onClick={e => e.stopPropagation()}>
+          <span className="notes-cat-modal__label">{t.newCategory}</span>
+          <input
+            className="notes-cat-modal__input"
+            type="text"
+            placeholder={t.categoryPlaceholder}
+            value={catDraft}
+            onChange={e => setCatDraft(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAddCategory()}
+            autoFocus
+          />
+          <div className="notes-cat-modal__btns">
+            <button
+              className="notes-cat-modal__btn notes-cat-modal__btn--cancel"
+              onClick={() => { setShowCatModal(false); setCatDraft(''); }}
+              type="button"
+            >
+              <FaTimes /> {t.cancel}
+            </button>
+            <button
+              className="notes-cat-modal__btn notes-cat-modal__btn--confirm"
+              onClick={handleAddCategory}
+              type="button"
+            >
+              {t.newCategory}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 

@@ -26,4 +26,16 @@ const initAdmin = () => {
 const firebaseAdmin = initAdmin();
 const db = firebaseAdmin.firestore();
 
-module.exports = { admin: firebaseAdmin, db };
+/**
+ * Read the user's selected currency from their Firestore document.
+ * Falls back to 'USD' (the base currency) if the document or field is missing.
+ */
+async function getUserCurrency(userId) {
+  const userDoc = await db.collection('users').doc(userId).get();
+  if (!userDoc.exists) return 'USD';
+  const currency = userDoc.data().currency;
+  const SUPPORTED = ['USD', 'EUR', 'BYN', 'CNY', 'RUB'];
+  return SUPPORTED.includes(currency) ? currency : 'USD';
+}
+
+module.exports = { admin: firebaseAdmin, db, getUserCurrency };

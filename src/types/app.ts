@@ -59,6 +59,7 @@ export type Category = {
 export type Transaction = {
   id: string;
   type: 'income' | 'expense';
+  // Always stored in BASE currency (USD). Use convertAmount() to display in user's currency.
   amount: number;
   categoryId: string;
   description: string;
@@ -66,6 +67,12 @@ export type Transaction = {
   // Set by new FinanceEditor – human-readable "🛒 Groceries" string.
   // Legacy transactions populated via categoryId lookup instead.
   category?: string;
+  // Set by Telegram bot — original amount before base-currency conversion.
+  originalAmount?: number;
+  // Set by Telegram bot — user's selected currency at recording time.
+  originalCurrency?: Currency;
+  // 'telegram-bot' for transactions created via Telegram chat.
+  source?: string;
 };
 
 // Client-side habit shape: history keyed by YYYY-MM-DD date strings.

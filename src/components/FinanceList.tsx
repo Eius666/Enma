@@ -121,8 +121,18 @@ const FinanceList: React.FC<FinanceListProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState(t.all);
 
+  // For summary totals (always in USD base).
   const fmt = (amount: number) =>
     convertAmount(amount).toLocaleString(locale, { style: 'currency', currency });
+
+  // For individual transactions: prefer originalAmount when currencies match to avoid
+  // precision loss from the USD roundtrip (e.g. 500 RUB → 5.56 USD → 499.7 RUB).
+  const fmtTx = (tx: Transaction) => {
+    if (tx.originalCurrency === currency && tx.originalAmount != null) {
+      return tx.originalAmount.toLocaleString(locale, { style: 'currency', currency });
+    }
+    return fmt(tx.amount);
+  };
 
   // ── Summary ────────────────────────────────────────────────────────────────
   const summary = useMemo(() => {
@@ -277,7 +287,7 @@ const FinanceList: React.FC<FinanceListProps> = ({
                   </span>
                   <span className="fin-list__item-right">
                     <span className={`fin-list__item-amount fin-list__item-amount--${tx.type}`}>
-                      {isIncome ? '+' : '−'}{fmt(tx.amount)}
+                      {isIncome ? '+' : '−'}{fmtTx(tx)}
                     </span>
                     <span className="fin-list__item-date">{txTimeLabel(tx.date)}</span>
                   </span>
