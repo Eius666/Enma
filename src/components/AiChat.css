@@ -1,0 +1,264 @@
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   AiChat – Liquid Glass theme
+   Reuses --notes-* variables (defined in Notes.css / :root)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+@keyframes aiSlideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes aiTypingDot {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40%            { transform: scale(1);   opacity: 1; }
+}
+
+/* ── Outer container ────────────────────────────────────────────────────── */
+
+.ai-chat {
+  display: flex;
+  flex-direction: column;
+  height: calc(var(--tg-viewport-height, 100vh) - 64px - 56px - 16px);
+  /* 64px header, 56px bottom nav, 16px padding */
+  overflow: hidden;
+}
+
+/* ── Message list ───────────────────────────────────────────────────────── */
+
+.ai-chat__messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  scrollbar-width: none;
+}
+
+.ai-chat__messages::-webkit-scrollbar { display: none; }
+
+/* ── Empty state ────────────────────────────────────────────────────────── */
+
+.ai-chat__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex: 1;
+  padding: 40px 24px;
+  text-align: center;
+  animation: aiSlideIn 0.25s ease forwards;
+}
+
+.ai-chat__empty-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  color: var(--notes-accent);
+}
+
+.ai-chat__empty-hint {
+  font-size: 14px;
+  color: var(--notes-text-secondary);
+  line-height: 1.5;
+  max-width: 260px;
+  margin: 0;
+}
+
+/* ── Chat bubbles ───────────────────────────────────────────────────────── */
+
+.ai-chat__bubble {
+  max-width: 82%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 15px;
+  line-height: 1.55;
+  animation: aiSlideIn 0.2s ease forwards;
+  position: relative;
+  word-break: break-word;
+}
+
+.ai-chat__bubble--user {
+  align-self: flex-end;
+  background: var(--notes-accent);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.ai-chat__bubble--assistant {
+  align-self: flex-start;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  color: var(--notes-text);
+  border-bottom-left-radius: 4px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.ai-chat__bubble-text {
+  white-space: pre-wrap;
+}
+
+/* Provider debug badge */
+.ai-chat__bubble-provider {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--notes-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 6px;
+  opacity: 0.6;
+}
+
+/* ── Loading bubble ─────────────────────────────────────────────────────── */
+
+.ai-chat__bubble--loading {
+  min-width: 56px;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-chat__typing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ai-chat__typing span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--notes-text-muted);
+  animation: aiTypingDot 1.2s infinite ease-in-out;
+}
+
+.ai-chat__typing span:nth-child(2) { animation-delay: 0.15s; }
+.ai-chat__typing span:nth-child(3) { animation-delay: 0.30s; }
+
+/* ── Input row ──────────────────────────────────────────────────────────── */
+
+.ai-chat__input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 0 4px;
+  border-top: 1px solid var(--notes-card-border);
+  flex-shrink: 0;
+}
+
+.ai-chat__input {
+  flex: 1;
+  padding: 11px 14px;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  border-radius: 14px;
+  color: var(--notes-text);
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+  resize: none;
+  box-sizing: border-box;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: border-color 0.18s;
+  max-height: 120px;
+  overflow-y: auto;
+  line-height: 1.5;
+}
+
+.ai-chat__input:focus { border-color: var(--notes-accent); }
+.ai-chat__input::placeholder { color: var(--notes-text-muted); }
+.ai-chat__input:disabled { opacity: 0.5; }
+
+.ai-chat__send-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--notes-accent);
+  border: none;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.18s, transform 0.15s;
+}
+
+.ai-chat__send-btn:active  { transform: scale(0.93); }
+.ai-chat__send-btn:disabled { opacity: 0.38; cursor: not-allowed; transform: none; }
+
+/* ── Paywall ─────────────────────────────────────────────────────────────── */
+
+.ai-chat--paywall {
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 24px;
+  text-align: center;
+  animation: aiSlideIn 0.25s ease forwards;
+}
+
+.ai-chat__paywall-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  color: var(--notes-text-muted);
+}
+
+.ai-chat__paywall-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--notes-text);
+  margin: 0;
+}
+
+.ai-chat__paywall-hint {
+  font-size: 13px;
+  color: var(--notes-text-secondary);
+  line-height: 1.5;
+  max-width: 260px;
+  margin: 0;
+}
+
+.ai-chat__paywall-btn {
+  margin-top: 4px;
+  padding: 13px 28px;
+  background: var(--notes-accent);
+  border: none;
+  border-radius: 14px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.18s, transform 0.15s;
+}
+
+.ai-chat__paywall-btn:active {
+  opacity: 0.85;
+  transform: scale(0.97);
+}
+
+/* ── Light theme overrides ──────────────────────────────────────────────── */
+
+body.theme-light .ai-chat__bubble--assistant {
+  background: rgba(255, 255, 255, 0.75);
+}
