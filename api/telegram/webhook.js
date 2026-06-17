@@ -61,6 +61,25 @@ const sendTelegramMessage = async (token, chatId, text) => {
   });
 };
 
+const APP_URL = process.env.REACT_APP_URL || 'https://enma-silk.vercel.app';
+
+const sendSubscriptionPrompt = async (token, chatId) => {
+  await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: 'Для использования AI-ассистента необходима подписка',
+      reply_markup: {
+        inline_keyboard: [[{
+          text: 'Оформить подписку',
+          url: `${APP_URL}/#settings`,
+        }]],
+      },
+    })
+  });
+};
+
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 /**
@@ -196,10 +215,7 @@ module.exports = async (req, res) => {
       const { active } = await checkSubscription(userId);
 
       if (!active) {
-        await sendTelegramMessage(
-          token, chatId,
-          'Для использования AI-ассистента оформите подписку в приложении'
-        );
+        await sendSubscriptionPrompt(token, chatId);
         res.status(200).json({ ok: true });
         return;
       }
