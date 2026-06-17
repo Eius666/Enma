@@ -10,17 +10,22 @@ const { db } = require('../firebaseAdmin');
  * @returns {Promise<{ active: boolean, plan: string }>}
  */
 // Comma-separated list of Telegram user IDs that bypass subscription checks.
+// IDs are stored as strings so number/string comparisons always work.
 const ADMIN_IDS = new Set(
   (process.env.ADMIN_TELEGRAM_IDS || '')
     .split(',')
-    .map(s => s.trim())
+    .map(id => String(id).trim())
     .filter(Boolean)
 );
 
 async function checkSubscription(userId) {
   if (!userId) return { active: false, plan: 'none' };
 
-  if (ADMIN_IDS.has(String(userId))) {
+  const userIdStr = String(userId);
+  const isAdmin   = ADMIN_IDS.has(userIdStr);
+  console.log('[subscription] userId:', userId, 'type:', typeof userId, 'isAdmin:', isAdmin);
+
+  if (isAdmin) {
     console.log('[subscription] admin access granted:', userId);
     return { active: true, plan: 'admin' };
   }
