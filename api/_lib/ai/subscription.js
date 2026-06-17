@@ -17,6 +17,8 @@ const ADMIN_IDS = new Set(
     .map(id => String(id).trim())
     .filter(Boolean)
 );
+console.log('[subscription] ADMIN_TELEGRAM_IDS env:', process.env.ADMIN_TELEGRAM_IDS);
+console.log('[subscription] ADMIN_IDS set:', [...ADMIN_IDS]);
 
 async function checkSubscription(userId) {
   if (!userId) return { active: false, plan: 'none' };
