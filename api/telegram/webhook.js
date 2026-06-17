@@ -198,7 +198,7 @@ module.exports = async (req, res) => {
       if (!active) {
         await sendTelegramMessage(
           token, chatId,
-          '🔒 Для использования AI-ассистента оформите подписку в приложении Enma.'
+          'Для использования AI-ассистента оформите подписку в приложении'
         );
         res.status(200).json({ ok: true });
         return;
@@ -216,7 +216,7 @@ module.exports = async (req, res) => {
         await sendTelegramMessage(token, chatId, response);
       } catch (aiErr) {
         console.error('[webhook] AI error:', aiErr);
-        await sendTelegramMessage(token, chatId, '⚠️ AI-ассистент временно недоступен. Попробуйте позже.');
+        await sendTelegramMessage(token, chatId, 'Извините, временно не могу обработать запрос. Попробуйте позже.');
       }
     }
 

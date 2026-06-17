@@ -15,7 +15,6 @@ import {
   FaStickyNote,
   FaChartLine,
   FaCheckCircle,
-  FaRobot,
 } from 'react-icons/fa';
 import {
   User,
@@ -38,7 +37,6 @@ import HabitsList, { HabitDoc } from './components/HabitsList';
 import HabitEditor from './components/HabitEditor';
 import { ToastProvider } from './components/ui/Toast';
 import SettingsScreen from './components/SettingsScreen';
-import AiChat from './components/AiChat';
 import NotesList from './components/NotesList';
 import NoteEditor from './components/NoteEditor';
 import { Subscription, isSubscriptionActive } from './subscription';
@@ -53,7 +51,7 @@ import './components/AppShell.css';
 type Theme = 'dark' | 'light';
 type Language = 'en' | 'ru';
 type Currency = 'RUB' | 'USD' | 'EUR' | 'BYN' | 'CNY';
-type PrimaryTab = 'day-flow' | 'calendar' | 'notes' | 'finance' | 'habits' | 'settings' | 'ai-chat';
+type PrimaryTab = 'day-flow' | 'calendar' | 'notes' | 'finance' | 'habits' | 'settings';
 
 type CalendarTask = {
   id: string;
@@ -1613,13 +1611,6 @@ const App: React.FC = () => {
             }}
           />
         )}
-        {activeTab === 'ai-chat' && (
-          <AiChat
-            user={user}
-            language={language}
-            onGoToSubscription={() => handleTabSwitch('settings')}
-          />
-        )}
         {activeTab === 'settings' && (
           <SettingsScreen
             language={language}
@@ -1647,7 +1638,6 @@ const App: React.FC = () => {
           { id: 'notes',     icon: <FaStickyNote />,   label: language === 'ru' ? 'Заметки'   : 'Notes'    },
           { id: 'finance',   icon: <FaChartLine />,    label: language === 'ru' ? 'Финансы'   : 'Finance'  },
           { id: 'habits',    icon: <FaCheckCircle />,  label: language === 'ru' ? 'Привычки'  : 'Habits'   },
-          { id: 'ai-chat',   icon: <FaRobot />,        label: language === 'ru' ? 'AI'        : 'AI'       },
         ] as const).map(tab => (
           <button
             key={tab.id}
