@@ -73,7 +73,7 @@ const sendSubscriptionPrompt = async (token, chatId) => {
       reply_markup: {
         inline_keyboard: [[{
           text: 'Оформить подписку',
-          url: `${APP_URL}/#settings`,
+          web_app: { url: `${APP_URL}/#settings` },
         }]],
       },
     })
