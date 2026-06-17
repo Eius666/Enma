@@ -1,55 +1,19 @@
 'use strict';
 
-const { admin, db, getUserCurrency } = require('../_lib/firebaseAdmin');
-const { verifyWebhookSignature }     = require('../_lib/verifyWebhookSig');
-const { rateLimit, getClientIp }     = require('../_lib/rateLimit');
-const { checkSubscription }          = require('../_lib/ai/subscription');
-const { routeMessage }               = require('../_lib/ai/router');
-const { buildSystemPrompt }          = require('../_lib/ai/systemPrompt');
+const { db, getUserCurrency }                      = require('../_lib/firebaseAdmin');
+const { verifyWebhookSignature }                   = require('../_lib/verifyWebhookSig');
+const { rateLimit, getClientIp }                   = require('../_lib/rateLimit');
+const { checkSubscription }                        = require('../_lib/ai/subscription');
+const { routeMessage }                             = require('../_lib/ai/router');
+const { buildSystemPrompt }                        = require('../_lib/ai/systemPrompt');
+const { markdownToTelegramHtml, splitHtmlMessage } = require('../_lib/ai/markdownToTelegramHtml');
+const { parseTransaction }                         = require('../_lib/ai/parseTransaction');
+const { saveTransaction }                          = require('../_lib/ai/saveTransaction');
 
 const TELEGRAM_API = 'https://api.telegram.org';
 
-const RATE_LIMIT_MAX      = 100;
+const RATE_LIMIT_MAX       = 100;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-
-// ── Server-side exchange rates cache ────────────────────────────────────────
-const BASE_CURRENCY       = 'USD';
-const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'BYN', 'CNY', 'RUB'];
-const RATES_TTL_MS        = 60 * 60 * 1000; // 1 hour
-
-let ratesCache = { rates: { USD: 1 }, fetchedAt: 0 };
-
-async function getExchangeRates(forceRefresh = false) {
-  if (!forceRefresh && ratesCache.fetchedAt && Date.now() - ratesCache.fetchedAt < RATES_TTL_MS) {
-    return ratesCache.rates;
-  }
-  try {
-    const resp = await fetch(`https://api.exchangerate-api.com/v4/latest/${BASE_CURRENCY}`);
-    if (!resp.ok) throw new Error(`Rates API returned ${resp.status}`);
-    const data = await resp.json();
-    const rates = { USD: 1 };
-    for (const c of SUPPORTED_CURRENCIES) {
-      if (c !== BASE_CURRENCY && data.rates[c]) rates[c] = data.rates[c];
-    }
-    ratesCache = { rates, fetchedAt: Date.now() };
-    return rates;
-  } catch (err) {
-    console.error('[webhook] Failed to fetch exchange rates:', err);
-    return ratesCache.rates;
-  }
-}
-
-function convertToBase(amount, userCurrency, rates) {
-  if (userCurrency === BASE_CURRENCY) return amount;
-  const rate = rates[userCurrency];
-  if (!rate) {
-    console.warn(`[webhook] Unknown currency rate for ${userCurrency}, saving raw amount`);
-    return amount;
-  }
-  return amount / rate;
-}
-
-const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', BYN: 'Br', CNY: '¥', RUB: '₽' };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -57,7 +21,7 @@ const sendTelegramMessage = async (token, chatId, text) => {
   await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text })
+    body: JSON.stringify({ chat_id: chatId, text }),
   });
 };
 
@@ -76,40 +40,24 @@ const sendSubscriptionPrompt = async (token, chatId) => {
           web_app: { url: `${APP_URL}/#settings` },
         }]],
       },
-    })
+    }),
   });
 };
 
-const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-/**
- * Basic NLP Parser for transactions.
- * Examples:
- *   "100 coffee"    → amount: 100, desc: "coffee", type: "expense"
- *   "+500 gift"     → amount: 500, desc: "gift",   type: "income"
- *   "зарплата 1000" → amount: 1000, desc: "зарплата", type: "income"
- */
-const parseTransaction = (text) => {
-  const clean = text.trim();
-  const numMatch = clean.match(/(\d+(?:[.,]\d+)?)/);
-  if (!numMatch) return null;
-
-  const amount = parseFloat(numMatch[1].replace(',', '.'));
-  if (!isFinite(amount) || amount <= 0 || amount > 1_000_000_000) return null;
-
-  const rawDescription = clean.replace(numMatch[1], '').trim() || 'No description';
-  const description = rawDescription.slice(0, 500);
-
-  let type = 'expense';
-  if (
-    clean.startsWith('+') ||
-    clean.toLowerCase().includes('доход') ||
-    clean.toLowerCase().includes('income')
-  ) {
-    type = 'income';
+const sendTelegramHtml = async (token, chatId, htmlText, plainFallback) => {
+  const chunks = splitHtmlMessage(htmlText);
+  for (const chunk of chunks) {
+    const resp = await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text: chunk, parse_mode: 'HTML' }),
+    });
+    if (!resp.ok) {
+      // Telegram rejected the HTML markup — fall back to plain text
+      await sendTelegramMessage(token, chatId, plainFallback.slice(0, 4096));
+      return;
+    }
   }
-
-  return { amount, description, type };
 };
 
 // ── Main handler ─────────────────────────────────────────────────────────────
@@ -150,7 +98,7 @@ module.exports = async (req, res) => {
   const text = String(message.text).slice(0, 4096);
 
   try {
-    // 1. Look up user by chatId from Firestore.
+    // 1. Look up user by chatId from Firestore
     const userQuery = await db.collection('users').where('chatId', '==', chatId).limit(1).get();
     if (userQuery.empty) {
       await sendTelegramMessage(
@@ -161,84 +109,61 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const userId = userQuery.docs[0].id; // always from Firestore, never from request body
+    const userId = userQuery.docs[0].id;
 
     // 2. Handle /start command
     if (text.startsWith('/start')) {
       await sendTelegramMessage(
         token, chatId,
-        'Привет! Я Enma. Ты можешь записывать расходы прямо здесь.\n' +
-        'Пример: "150 кофе" или "+200 кешбэк"\n\n' +
-        'А ещё — задавай любые вопросы, я AI-ассистент с подпиской.'
+        'Привет! Я Enma — AI-ассистент для финансов и продуктивности.\n' +
+        'Задавай любые вопросы или скажи что хочешь записать — я помогу!\n\n' +
+        'Для AI-функций необходима подписка.'
       );
       res.status(200).json({ ok: true });
       return;
     }
 
-    // 3. Try to parse as a financial transaction
-    const parsed = parseTransaction(text);
+    // 3. All messages go through AI (subscription required)
+    const { active } = await checkSubscription(userId);
+    if (!active) {
+      await sendSubscriptionPrompt(token, chatId);
+      res.status(200).json({ ok: true });
+      return;
+    }
 
-    if (parsed) {
-      // ── Save transaction ─────────────────────────────────────────────────
-      const [userCurrency, rates] = await Promise.all([
-        getUserCurrency(userId),
-        getExchangeRates(),
-      ]);
+    const userCurrency = await getUserCurrency(userId);
+    const firstName    = message.from?.first_name || '';
+    const systemPrompt = buildSystemPrompt({ currency: userCurrency, name: firstName });
 
-      const amountInBase = convertToBase(parsed.amount, userCurrency, rates);
-      const transactionId = createId();
-      const transaction = {
-        id:               transactionId,
-        userId,
-        type:             parsed.type,
-        amount:           amountInBase,
-        originalAmount:   parsed.amount,
-        originalCurrency: userCurrency,
-        categoryId:       'cat-default',
-        description:      parsed.description,
-        date:             new Date().toISOString(),
-        updatedAt:        admin.firestore.FieldValue.serverTimestamp(),
-        source:           'telegram-bot',
-      };
-
-      await db.collection('transactions').doc(transactionId).set(transaction);
-
-      const symbol    = CURRENCY_SYMBOLS[userCurrency] || userCurrency;
-      const typeLabel = parsed.type === 'income' ? 'Доход' : 'Расход';
-      await sendTelegramMessage(
-        token, chatId,
-        `✅ Записано: ${typeLabel} ${parsed.amount}${symbol} — ${parsed.description}`
+    try {
+      const { response } = await routeMessage(
+        [{ role: 'user', content: text }],
+        systemPrompt
       );
 
-    } else {
-      // ── AI response (requires active subscription) ────────────────────
-      const { active } = await checkSubscription(userId);
+      const parsed = parseTransaction(response);
+      let displayText = response;
 
-      if (!active) {
-        await sendSubscriptionPrompt(token, chatId);
-        res.status(200).json({ ok: true });
-        return;
+      if (parsed) {
+        displayText = parsed.cleanResponse;
+        try {
+          await saveTransaction(userId, parsed.transaction);
+        } catch (saveErr) {
+          console.error('[webhook] transaction save failed:', saveErr);
+          displayText += '\n\n(не удалось сохранить транзакцию)';
+        }
       }
 
-      const userCurrency = await getUserCurrency(userId);
-      const firstName    = message.from?.first_name || '';
-      const systemPrompt = buildSystemPrompt({ currency: userCurrency, name: firstName });
-
-      try {
-        const { response } = await routeMessage(
-          [{ role: 'user', content: text }],
-          systemPrompt
-        );
-        await sendTelegramMessage(token, chatId, response);
-      } catch (aiErr) {
-        console.error('[webhook] AI error:', aiErr);
-        await sendTelegramMessage(token, chatId, 'Извините, временно не могу обработать запрос. Попробуйте позже.');
-      }
+      const htmlText = markdownToTelegramHtml(displayText);
+      await sendTelegramHtml(token, chatId, htmlText, displayText);
+    } catch (aiErr) {
+      console.error('[webhook] AI error:', aiErr);
+      await sendTelegramMessage(token, chatId, 'Извините, временно не могу обработать запрос. Попробуйте позже.');
     }
 
     res.status(200).json({ ok: true });
   } catch (error) {
     console.error('❌ Webhook error:', error);
-    res.status(200).json({ ok: true }); // Always 200 to Telegram
+    res.status(200).json({ ok: true });
   }
 };
