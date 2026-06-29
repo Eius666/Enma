@@ -3,7 +3,7 @@
 const { db, getUserCurrency }                      = require('../_lib/firebaseAdmin');
 const { verifyWebhookSignature }                   = require('../_lib/verifyWebhookSig');
 const { rateLimit, getClientIp }                   = require('../_lib/rateLimit');
-const { checkSubscription }                        = require('../_lib/ai/subscription');
+const { checkSubscription, getTrialUsed, incrementTrialUsed, TRIAL_LIMIT } = require('../_lib/ai/subscription');
 const { routeMessage }                             = require('../_lib/ai/router');
 const { buildSystemPrompt }                        = require('../_lib/ai/systemPrompt');
 const { markdownToTelegramHtml, splitHtmlMessage } = require('../_lib/ai/markdownToTelegramHtml');
@@ -27,19 +27,35 @@ const sendTelegramMessage = async (token, chatId, text) => {
 
 const APP_URL = process.env.REACT_APP_URL || 'https://enma-silk.vercel.app';
 
+const SUBSCRIPTION_KEYBOARD = (appUrl) => ({
+  inline_keyboard: [[{
+    text: 'Оформить подписку',
+    web_app: { url: `${appUrl}/#settings` },
+  }]],
+});
+
+// Shown when the user has never started a trial or has an active sub check fail
 const sendSubscriptionPrompt = async (token, chatId) => {
   await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       chat_id: chatId,
-      text: 'Для использования AI-ассистента необходима подписка',
-      reply_markup: {
-        inline_keyboard: [[{
-          text: 'Оформить подписку',
-          web_app: { url: `${APP_URL}/#settings` },
-        }]],
-      },
+      text: 'Для использования AI-ассистента необходима подписка.',
+      reply_markup: SUBSCRIPTION_KEYBOARD(APP_URL),
+    }),
+  });
+};
+
+// Shown when all trial requests are exhausted
+const sendTrialExhaustedPrompt = async (token, chatId) => {
+  await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: `У вас закончились пробные запросы (${TRIAL_LIMIT}/${TRIAL_LIMIT}).\nОформите подписку, чтобы продолжить пользоваться AI-ассистентом Enma.`,
+      reply_markup: SUBSCRIPTION_KEYBOARD(APP_URL),
     }),
   });
 };
@@ -117,18 +133,26 @@ module.exports = async (req, res) => {
         token, chatId,
         'Привет! Я Enma — AI-ассистент для финансов и продуктивности.\n' +
         'Задавай любые вопросы или скажи что хочешь записать — я помогу!\n\n' +
-        'Для AI-функций необходима подписка.'
+        `У тебя есть ${TRIAL_LIMIT} бесплатных пробных запроса. Для неограниченного доступа нужна подписка.`
       );
       res.status(200).json({ ok: true });
       return;
     }
 
-    // 3. All messages go through AI (subscription required)
+    // 3. Access gate: active subscription OR remaining trial requests
     const { active } = await checkSubscription(userId);
+
+    let usingTrial = false;
+    let trialUsed  = 0;
+
     if (!active) {
-      await sendSubscriptionPrompt(token, chatId);
-      res.status(200).json({ ok: true });
-      return;
+      trialUsed = await getTrialUsed(userId);
+      if (trialUsed >= TRIAL_LIMIT) {
+        await sendTrialExhaustedPrompt(token, chatId);
+        res.status(200).json({ ok: true });
+        return;
+      }
+      usingTrial = true;
     }
 
     const userCurrency = await getUserCurrency(userId);
@@ -156,6 +180,18 @@ module.exports = async (req, res) => {
 
       const htmlText = markdownToTelegramHtml(displayText);
       await sendTelegramHtml(token, chatId, htmlText, displayText);
+
+      // Increment counter and notify user only after a successful response
+      if (usingTrial) {
+        await incrementTrialUsed(userId);
+        const used      = trialUsed + 1;
+        const remaining = TRIAL_LIMIT - used;
+        if (remaining > 0) {
+          await sendTelegramMessage(token, chatId, `💬 Пробный запрос ${used} из ${TRIAL_LIMIT}`);
+        } else {
+          await sendTrialExhaustedPrompt(token, chatId);
+        }
+      }
     } catch (aiErr) {
       console.error('[webhook] AI error:', aiErr);
       await sendTelegramMessage(token, chatId, 'Извините, временно не могу обработать запрос. Попробуйте позже.');

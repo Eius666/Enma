@@ -1,6 +1,8 @@
 'use strict';
 
-const { db } = require('../firebaseAdmin');
+const { admin, db } = require('../firebaseAdmin');
+
+const TRIAL_LIMIT = 5;
 
 /**
  * Check whether a user has an active subscription.
@@ -47,4 +49,18 @@ async function checkSubscription(userId) {
   return { active: Boolean(isActive), plan: isActive ? (sub.plan || 'pro') : 'none' };
 }
 
-module.exports = { checkSubscription };
+async function getTrialUsed(userId) {
+  const userDoc = await db.collection('users').doc(userId).get();
+  if (!userDoc.exists) return 0;
+  const val = userDoc.data().trialUsed;
+  return typeof val === 'number' && val > 0 ? Math.floor(val) : 0;
+}
+
+async function incrementTrialUsed(userId) {
+  await db.collection('users').doc(userId).set(
+    { trialUsed: admin.firestore.FieldValue.increment(1) },
+    { merge: true }
+  );
+}
+
+module.exports = { checkSubscription, getTrialUsed, incrementTrialUsed, TRIAL_LIMIT };
