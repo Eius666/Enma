@@ -76,6 +76,14 @@ const sendTelegramHtml = async (token, chatId, htmlText, plainFallback) => {
   }
 };
 
+// Keywords that suggest the user wants to record a transaction.
+// Used to let trial-exhausted users still log expenses/income for free.
+const TXN_INTENT_RE = /потратил|заплатил|купил|потрачено|расход|трат[ау]|получил|заработал|доход|зарплат|запис[ьи]|запиши|внёс|занёс/i;
+
+function looksLikeTransaction(text) {
+  return /\d/.test(text) && TXN_INTENT_RE.test(text);
+}
+
 // ── Main handler ─────────────────────────────────────────────────────────────
 
 module.exports = async (req, res) => {
@@ -139,20 +147,26 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // 3. Access gate: active subscription OR remaining trial requests
+    // 3. Access gate: active subscription OR remaining trial requests OR free transaction
     const { active } = await checkSubscription(userId);
 
-    let usingTrial = false;
-    let trialUsed  = 0;
+    let usingTrial      = false;
+    let trialUsed       = 0;
+    let freeTransaction = false; // trial exhausted but message looks like a txn recording
 
     if (!active) {
       trialUsed = await getTrialUsed(userId);
       if (trialUsed >= TRIAL_LIMIT) {
-        await sendTrialExhaustedPrompt(token, chatId);
-        res.status(200).json({ ok: true });
-        return;
+        if (looksLikeTransaction(text)) {
+          freeTransaction = true; // pass through; AI may produce [ENMA_TXN]
+        } else {
+          await sendTrialExhaustedPrompt(token, chatId);
+          res.status(200).json({ ok: true });
+          return;
+        }
+      } else {
+        usingTrial = true;
       }
-      usingTrial = true;
     }
 
     const userCurrency = await getUserCurrency(userId);
@@ -181,8 +195,9 @@ module.exports = async (req, res) => {
       const htmlText = markdownToTelegramHtml(displayText);
       await sendTelegramHtml(token, chatId, htmlText, displayText);
 
-      // Increment counter and notify user only after a successful response
-      if (usingTrial) {
+      // Transactions are free — only count pure AI replies against the trial.
+      // freeTransaction users already exhausted their trial, so never increment them.
+      if (usingTrial && !parsed) {
         await incrementTrialUsed(userId);
         const used      = trialUsed + 1;
         const remaining = TRIAL_LIMIT - used;
