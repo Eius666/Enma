@@ -4,7 +4,8 @@ const { db, getUserCurrency }                      = require('../_lib/firebaseAd
 const { verifyWebhookSignature }                   = require('../_lib/verifyWebhookSig');
 const { rateLimit, getClientIp }                   = require('../_lib/rateLimit');
 const { checkSubscription, getTrialUsed, incrementTrialUsed, TRIAL_LIMIT } = require('../_lib/ai/subscription');
-const { routeMessage }                             = require('../_lib/ai/router');
+const { routeMessageWithTools }                    = require('../_lib/ai/router');
+const { TOOL_DEFINITIONS, executeTool }            = require('../_lib/ai/tools');
 const { buildSystemPrompt }                        = require('../_lib/ai/systemPrompt');
 const { markdownToTelegramHtml, splitHtmlMessage } = require('../_lib/ai/markdownToTelegramHtml');
 const { parseTransaction }                         = require('../_lib/ai/parseTransaction');
@@ -147,36 +148,43 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // 3. Access gate: active subscription OR remaining trial requests OR free transaction
-    const { active } = await checkSubscription(userId);
+    // 3. Access gate.
+    // Transaction recording is always free — check intent BEFORE subscription/trial.
+    const isTransactionRequest = looksLikeTransaction(text);
 
-    let usingTrial      = false;
-    let trialUsed       = 0;
-    let freeTransaction = false; // trial exhausted but message looks like a txn recording
+    let usingTrial = false;
+    let trialUsed  = 0;
 
-    if (!active) {
-      trialUsed = await getTrialUsed(userId);
-      if (trialUsed >= TRIAL_LIMIT) {
-        if (looksLikeTransaction(text)) {
-          freeTransaction = true; // pass through; AI may produce [ENMA_TXN]
-        } else {
+    if (!isTransactionRequest) {
+      const { active } = await checkSubscription(userId);
+      if (!active) {
+        trialUsed = await getTrialUsed(userId);
+        if (trialUsed >= TRIAL_LIMIT) {
           await sendTrialExhaustedPrompt(token, chatId);
           res.status(200).json({ ok: true });
           return;
         }
-      } else {
         usingTrial = true;
       }
     }
 
     const userCurrency = await getUserCurrency(userId);
     const firstName    = message.from?.first_name || '';
-    const systemPrompt = buildSystemPrompt({ currency: userCurrency, name: firstName });
+    const systemPrompt = buildSystemPrompt({
+      currency: userCurrency,
+      name: firstName,
+      nowIso: new Date().toISOString(),
+    });
+
+    // Tool executor closure — binds userId and Telegram chatId for this request
+    const execFn = (name, input) => executeTool(name, input, { userId, telegramChatId: chatId });
 
     try {
-      const { response } = await routeMessage(
+      const { response } = await routeMessageWithTools(
         [{ role: 'user', content: text }],
-        systemPrompt
+        systemPrompt,
+        TOOL_DEFINITIONS,
+        execFn
       );
 
       const parsed = parseTransaction(response);
