@@ -39,20 +39,25 @@ module.exports = async (req, res) => {
   }
 
   // Set the webhook
+  const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  const body = {
+    url:             targetUrl,
+    allowed_updates: ['message'],
+    drop_pending_updates: true,
+  };
+  if (webhookSecret) body.secret_token = webhookSecret;
+
   const setResp = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      url:             targetUrl,
-      allowed_updates: ['message'],   // only text messages, drops noise
-      drop_pending_updates: true,     // clear the queue so old messages don't flood
-    }),
+    body: JSON.stringify(body),
   });
   const result = await setResp.json();
 
   res.status(200).json({
-    previous_webhook: current,
-    new_webhook:      targetUrl,
-    telegram_response: result,
+    previous_webhook:   current,
+    new_webhook:        targetUrl,
+    secret_token_set:   Boolean(webhookSecret),
+    telegram_response:  result,
   });
 };
