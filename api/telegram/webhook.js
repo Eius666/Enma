@@ -88,56 +88,94 @@ function looksLikeTransaction(text) {
 // ── Main handler ─────────────────────────────────────────────────────────────
 
 module.exports = async (req, res) => {
+  // ── [1] METHOD ───────────────────────────────────────────────────────────────
+  console.error('[WH][1] START method:', req.method, 'body keys:', Object.keys(req.body || {}));
+
   if (req.method !== 'POST') {
+    console.error('[WH][1] ABORT non-POST');
     res.status(405).json({ ok: false, description: 'Method not allowed' });
     return;
   }
 
+  // ── [2] SIGNATURE ────────────────────────────────────────────────────────────
   const sigCheck = verifyWebhookSignature(req);
+  console.error('[WH][2] sig:', sigCheck.ok, sigCheck.reason || '');
   if (!sigCheck.ok) {
-    console.warn('[webhook] Rejected request:', sigCheck.reason);
+    console.error('[WH][2] ABORT sig failed:', sigCheck.reason);
     res.status(200).json({ ok: true });
     return;
   }
 
+  // ── [3] RATE LIMIT ───────────────────────────────────────────────────────────
   const ip = getClientIp(req);
-  if (!await rateLimit(`webhook:${ip}`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS)) {
+  const allowed = await rateLimit(`webhook:${ip}`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+  console.error('[WH][3] rate limit allowed:', allowed, 'ip:', ip);
+  if (!allowed) {
     res.status(200).json({ ok: true });
     return;
   }
 
+  // ── [4] PARSE UPDATE ─────────────────────────────────────────────────────────
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  const { message } = req.body;
+  const update = req.body;
+  const { message } = update;
+
+  // Telegram can send many update types (edited_message, channel_post, etc.)
+  // Log what we actually received so missing-field silent exits are visible.
+  console.error('[WH][4] update_id:', update?.update_id,
+    'has message:', !!message,
+    'has text:', !!message?.text,
+    'has chat:', !!message?.chat,
+    'other keys:', Object.keys(update || {}).filter(k => k !== 'update_id' && k !== 'message'));
 
   if (!message || !message.text || !message.chat) {
+    console.error('[WH][4] ABORT no message/text/chat — update type not supported');
     res.status(200).json({ ok: true });
     return;
   }
 
   const chatId = message.chat.id;
+  console.error('[WH][4] chatId:', chatId, 'type:', typeof chatId);
   if (!Number.isInteger(chatId) || chatId <= 0) {
+    console.error('[WH][4] ABORT invalid chatId:', chatId);
     res.status(200).json({ ok: true });
     return;
   }
 
   const text = String(message.text).slice(0, 4096);
+  console.error('[WH][4] text:', text.slice(0, 80));
 
   try {
-    // 1. Look up user by chatId from Firestore
+    // ── [5] USER LOOKUP ───────────────────────────────────────────────────────
     const userQuery = await db.collection('users').where('chatId', '==', chatId).limit(1).get();
+    console.error('[WH][5] user lookup chatId:', chatId, 'found:', !userQuery.empty);
+
     if (userQuery.empty) {
-      await sendTelegramMessage(
-        token, chatId,
-        '⚠️ Привет! Пожалуйста, сначала открой Мини-Апп (Enma), чтобы мы могли привязать твой аккаунт.'
-      );
-      res.status(200).json({ ok: true });
-      return;
+      // Also try string version — chatId may have been stored as string in Firestore
+      const userQueryStr = await db.collection('users').where('chatId', '==', String(chatId)).limit(1).get();
+      console.error('[WH][5] user lookup chatId as string:', !userQueryStr.empty);
+
+      if (userQueryStr.empty) {
+        console.error('[WH][5] ABORT user not found for chatId:', chatId);
+        await sendTelegramMessage(
+          token, chatId,
+          '⚠️ Привет! Пожалуйста, сначала открой Мини-Апп (Enma), чтобы мы могли привязать твой аккаунт.'
+        );
+        res.status(200).json({ ok: true });
+        return;
+      }
+      // Found with string chatId — use that doc
+      const userId = userQueryStr.docs[0].id;
+      console.error('[WH][5] found user via string chatId, userId:', userId);
+      req._userId = userId; // pass through for the rest of the handler
     }
 
-    const userId = userQuery.docs[0].id;
+    const userId = req._userId || userQuery.docs[0].id;
+    console.error('[WH][5] userId:', userId);
 
-    // 2. Handle /start command
+    // ── [6] /start ────────────────────────────────────────────────────────────
     if (text.startsWith('/start')) {
+      console.error('[WH][6] /start command');
       await sendTelegramMessage(
         token, chatId,
         'Привет! Я Enma — AI-ассистент для финансов и продуктивности.\n' +
@@ -148,18 +186,21 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // 3. Access gate.
-    // Transaction recording is always free — check intent BEFORE subscription/trial.
+    // ── [7] ACCESS GATE ───────────────────────────────────────────────────────
     const isTransactionRequest = looksLikeTransaction(text);
+    console.error('[WH][7] isTransaction:', isTransactionRequest);
 
     let usingTrial = false;
     let trialUsed  = 0;
 
     if (!isTransactionRequest) {
-      const { active } = await checkSubscription(userId);
-      if (!active) {
+      const sub = await checkSubscription(userId);
+      console.error('[WH][7] subscription:', sub);
+      if (!sub.active) {
         trialUsed = await getTrialUsed(userId);
+        console.error('[WH][7] trialUsed:', trialUsed, '/', TRIAL_LIMIT);
         if (trialUsed >= TRIAL_LIMIT) {
+          console.error('[WH][7] ABORT trial exhausted');
           await sendTrialExhaustedPrompt(token, chatId);
           res.status(200).json({ ok: true });
           return;
@@ -168,10 +209,13 @@ module.exports = async (req, res) => {
       }
     }
 
+    // ── [8] CONTEXT ───────────────────────────────────────────────────────────
     const [userCurrency, userTimezone] = await Promise.all([
       getUserCurrency(userId),
       getUserTimezone(userId),
     ]);
+    console.error('[WH][8] currency:', userCurrency, 'timezone:', userTimezone);
+
     const firstName    = message.from?.first_name || '';
     const systemPrompt = buildSystemPrompt({
       currency: userCurrency,
@@ -180,16 +224,18 @@ module.exports = async (req, res) => {
       userTimezone,
     });
 
-    // Tool executor closure — binds userId, Telegram chatId, and timezone for this request
     const execFn = (name, input) => executeTool(name, input, { userId, telegramChatId: chatId, userTimezone });
 
+    // ── [9] AI CALL ───────────────────────────────────────────────────────────
     try {
-      const { response } = await routeMessageWithTools(
+      console.error('[WH][9] AI call start');
+      const { response, model } = await routeMessageWithTools(
         [{ role: 'user', content: text }],
         systemPrompt,
         TOOL_DEFINITIONS,
         execFn
       );
+      console.error('[WH][9] AI response model:', model, 'length:', response?.length, 'preview:', response?.slice(0, 80));
 
       const parsed = parseTransaction(response);
       let displayText = response;
@@ -204,11 +250,12 @@ module.exports = async (req, res) => {
         }
       }
 
+      // ── [10] SEND REPLY ───────────────────────────────────────────────────
+      console.error('[WH][10] sending reply to chatId:', chatId, 'html length:', displayText?.length);
       const htmlText = markdownToTelegramHtml(displayText);
       await sendTelegramHtml(token, chatId, htmlText, displayText);
+      console.error('[WH][10] reply sent');
 
-      // Transactions are free — only count pure AI replies against the trial.
-      // freeTransaction users already exhausted their trial, so never increment them.
       if (usingTrial && !parsed) {
         await incrementTrialUsed(userId);
         const used      = trialUsed + 1;
@@ -220,14 +267,14 @@ module.exports = async (req, res) => {
         }
       }
     } catch (aiErr) {
-      console.error('[webhook] AI error:', aiErr);
+      console.error('[WH][9] AI error:', aiErr.message, 'status:', aiErr.status);
       await sendTelegramMessage(token, chatId, 'Извините, временно не могу обработать запрос. Попробуйте позже.');
     }
 
+    console.error('[WH] END ok');
     res.status(200).json({ ok: true });
   } catch (error) {
-    console.error('[webhook] unhandled error:', error);
-    // Best-effort: tell the user something went wrong so they don't see silence.
+    console.error('[WH] UNHANDLED ERROR:', error.message, error.stack?.slice(0, 300));
     try {
       const chatId = req.body?.message?.chat?.id;
       if (chatId && token) {

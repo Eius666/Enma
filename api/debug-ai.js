@@ -80,6 +80,34 @@ module.exports = async (req, res) => {
     }
   }
 
+  // ── Telegram webhook info ──────────────────────────────────────────────────
+  let telegramInfo = null;
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  if (botToken) {
+    try {
+      const [meResp, whResp] = await Promise.all([
+        fetch(`https://api.telegram.org/bot${botToken}/getMe`),
+        fetch(`https://api.telegram.org/bot${botToken}/getWebhookInfo`),
+      ]);
+      const me = await meResp.json();
+      const wh = await whResp.json();
+      telegramInfo = {
+        bot_username:          me.result?.username,
+        bot_id:                me.result?.id,
+        webhook_url:           wh.result?.url || '(not set)',
+        pending_updates:       wh.result?.pending_update_count ?? 0,
+        last_error_date:       wh.result?.last_error_date
+          ? new Date(wh.result.last_error_date * 1000).toISOString()
+          : null,
+        last_error_message:    wh.result?.last_error_message || null,
+        max_connections:       wh.result?.max_connections,
+        allowed_updates:       wh.result?.allowed_updates,
+      };
+    } catch (err) {
+      telegramInfo = { error: err.message };
+    }
+  }
+
   const anyOk = modelResults.some(r => r.ok);
-  res.status(200).json({ ok: anyOk, env: envReport, models: modelResults });
+  res.status(200).json({ ok: anyOk, env: envReport, models: modelResults, telegram: telegramInfo });
 };
