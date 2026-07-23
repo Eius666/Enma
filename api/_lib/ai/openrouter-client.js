@@ -60,7 +60,10 @@ async function chat(messages, model, systemPrompt) {
     max_tokens: 1024,
   });
 
-  const content = completion.choices?.[0]?.message?.content;
+  const msg     = completion.choices?.[0]?.message;
+  // Some reasoning models (e.g. GLM 5.2) put the answer in `reasoning` when
+  // content is null. Fall back to it so they don't hard-fail.
+  const content = msg?.content ?? msg?.reasoning ?? null;
   if (typeof content !== 'string') {
     console.error('[openrouter] unexpected response from', model, JSON.stringify(completion).slice(0, 300));
     throw new Error('[openrouter] unexpected response from ' + model);
@@ -124,8 +127,9 @@ async function chatWithTools(messages, model, systemPrompt, tools, execFn, maxSt
       continue;
     }
 
-    // Text response
-    const content = message.content;
+    // Text response. Reasoning models may return null content with the answer
+    // in `message.reasoning` — fall back to it before throwing.
+    const content = message.content ?? message.reasoning ?? null;
     if (typeof content !== 'string') {
       console.error('[openrouter:tools] unexpected non-text response from', model, 'finish_reason:', finish_reason, 'content type:', typeof content);
       throw new Error('[openrouter:tools] unexpected non-text response');
