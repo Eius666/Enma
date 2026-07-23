@@ -4,7 +4,9 @@ const OpenAI = require('openai');
 
 const CLAUDE_MODEL  = process.env.OPENROUTER_ANALYTICS_MODEL || 'anthropic/claude-sonnet-4';
 const GEMINI_MODEL  = process.env.OPENROUTER_FALLBACK_MODEL  || 'google/gemini-2.5-flash';
-const TIMEOUT_MS    = 30_000;
+// Keep under Vercel Hobby's 10 s function limit so the error can be caught and
+// reported to the user before the process is killed.
+const TIMEOUT_MS    = 8_000;
 
 let _client = null;
 
@@ -59,7 +61,10 @@ async function chat(messages, model, systemPrompt) {
   });
 
   const content = completion.choices?.[0]?.message?.content;
-  if (typeof content !== 'string') throw new Error('[openrouter] unexpected response from ' + model);
+  if (typeof content !== 'string') {
+    console.error('[openrouter] unexpected response from', model, JSON.stringify(completion).slice(0, 300));
+    throw new Error('[openrouter] unexpected response from ' + model);
+  }
   return content;
 }
 
@@ -121,7 +126,10 @@ async function chatWithTools(messages, model, systemPrompt, tools, execFn, maxSt
 
     // Text response
     const content = message.content;
-    if (typeof content !== 'string') throw new Error('[openrouter:tools] unexpected non-text response');
+    if (typeof content !== 'string') {
+      console.error('[openrouter:tools] unexpected non-text response from', model, 'finish_reason:', finish_reason, 'content type:', typeof content);
+      throw new Error('[openrouter:tools] unexpected non-text response');
+    }
     return content;
   }
 

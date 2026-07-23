@@ -19,26 +19,19 @@ const ADMIN_IDS = new Set(
     .map(id => String(id).trim())
     .filter(Boolean)
 );
-console.log('[subscription] ADMIN_TELEGRAM_IDS env:', process.env.ADMIN_TELEGRAM_IDS);
-console.log('[subscription] ADMIN_IDS set:', [...ADMIN_IDS]);
 
 async function checkSubscription(userId) {
   if (!userId) return { active: false, plan: 'none' };
 
   const userIdStr = String(userId);
-  const isAdmin   = ADMIN_IDS.has(userIdStr);
-  console.log('[subscription] userId:', userId, 'type:', typeof userId, 'isAdmin:', isAdmin);
+  if (ADMIN_IDS.has(userIdStr)) return { active: true, plan: 'admin' };
 
-  if (isAdmin) {
-    console.log('[subscription] admin access granted:', userId);
-    return { active: true, plan: 'admin' };
-  }
-
+  // Two equality filters — no composite index needed (orderBy removed to avoid
+  // requiring a (userId, status, updatedAt) index that is not in firestore.indexes.json).
   const snapshot = await db
     .collection('subscriptions')
     .where('userId', '==', userId)
     .where('status', '==', 'active')
-    .orderBy('updatedAt', 'desc')
     .limit(1)
     .get();
 

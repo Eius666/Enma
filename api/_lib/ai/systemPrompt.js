@@ -1,5 +1,27 @@
 'use strict';
 
+function formatLocalTime(nowIso, timezone) {
+  try {
+    const date  = new Date(nowIso);
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone:     timezone,
+      year:         'numeric',
+      month:        '2-digit',
+      day:          '2-digit',
+      hour:         '2-digit',
+      minute:       '2-digit',
+      timeZoneName: 'longOffset',
+      hour12:       false,
+    }).formatToParts(date);
+    const p = {};
+    parts.forEach(({ type, value }) => { p[type] = value; });
+    const offset = (p.timeZoneName || 'UTC').replace('GMT', '');
+    return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute} (${timezone}, UTC${offset})`;
+  } catch (_) {
+    return nowIso;
+  }
+}
+
 const CURRENCY_NAMES = {
   USD: 'доллар США ($)',
   EUR: 'евро (€)',
@@ -18,13 +40,16 @@ const CURRENCY_SYMBOLS = {
  * @param {{ currency?: string, name?: string }} userContext
  * @returns {string}
  */
-function buildSystemPrompt({ currency = 'RUB', name = '', nowIso = '' } = {}) {
+function buildSystemPrompt({ currency = 'RUB', name = '', nowIso = '', userTimezone = 'Europe/Warsaw' } = {}) {
   const currencyLabel  = CURRENCY_NAMES[currency]  || currency;
   const currencySymbol = CURRENCY_SYMBOLS[currency] || currency;
   const nameGreeting   = name ? ` (пользователя зовут ${name})` : '';
   const nameHint       = name ? ` по имени ${name}` : ' по имени, если оно известно';
 
-  const nowLine = nowIso ? `\nТекущее время (UTC): ${nowIso}. Используй его для расчёта datetime при создании напоминаний и событий.` : '';
+  const localTimeStr = nowIso ? formatLocalTime(nowIso, userTimezone) : '';
+  const nowLine = localTimeStr
+    ? `\nТекущее время пользователя: ${localTimeStr}. При создании напоминаний указывай triggerAt со смещением часового пояса, например: 2026-07-03T19:00:00+02:00.`
+    : '';
 
   return `Ты — Enma, персональный AI-ассистент${nameGreeting}.${nowLine}
 

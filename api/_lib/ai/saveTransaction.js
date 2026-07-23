@@ -63,7 +63,6 @@ async function saveTransaction(userId, { amount, type, category, currency }) {
   };
 
   await db.collection('transactions').doc(id).set(doc);
-  console.log('[saveTransaction] saved:', id, txnType, numAmount, currency, 'for user:', userId);
   return doc;
 }
 

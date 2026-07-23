@@ -34,13 +34,26 @@ module.exports = async (req, res) => {
 
     const results = await Promise.allSettled(
       due.map(async (doc) => {
-        const r    = doc.data();
+        const r = doc.data();
+        let timeLabel = '';
+        if (r.timezone && r.triggerAt) {
+          try {
+            timeLabel = new Intl.DateTimeFormat('ru-RU', {
+              timeZone: r.timezone,
+              hour: '2-digit', minute: '2-digit',
+              hour12: false,
+            }).format(new Date(r.triggerAt));
+          } catch (_) {}
+        }
+        const msgText = timeLabel
+          ? `🔔 Напоминание (${timeLabel}): ${r.text}`
+          : `🔔 Напоминание: ${r.text}`;
         const resp = await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({
             chat_id: r.telegramChatId,
-            text:    `🔔 Напоминание: ${r.text}`,
+            text:    msgText,
           }),
         });
         if (!resp.ok) throw new Error(`Telegram ${resp.status} for reminder ${doc.id}`);

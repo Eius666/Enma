@@ -5,8 +5,8 @@ const openrouter = require('./openrouter-client');
 // All models routed through OpenRouter. IDs are env-configurable so they
 // can be swapped without a code deploy.
 const MODELS = [
-  { id: process.env.OPENROUTER_PRIMARY_MODEL    || 'z-ai/glm-5.2',                name: 'primary'    },
-  { id: process.env.OPENROUTER_FALLBACK_MODEL   || 'anthropic/claude-sonnet-4',   name: 'fallback'   },
+  { id: process.env.OPENROUTER_PRIMARY_MODEL     || 'google/gemini-2.5-flash',    name: 'primary'    },
+  { id: process.env.OPENROUTER_FALLBACK_MODEL    || 'anthropic/claude-sonnet-4',  name: 'fallback'   },
   { id: process.env.OPENROUTER_LAST_RESORT_MODEL || 'google/gemini-2.5-flash',    name: 'last_resort' },
 ];
 
@@ -27,7 +27,7 @@ async function routeMessage(messages, systemPrompt) {
       const response = await openrouter.chat(messages, id, systemPrompt);
       return { response, provider: name, model: id };
     } catch (err) {
-      console.error('[router]', name, '(' + id + ') failed:', err.message);
+      console.error('[router]', name, '(' + id + ') failed — status:', err.status ?? 'N/A', '| msg:', err.message);
       lastError = err;
     }
   }
@@ -54,7 +54,7 @@ async function routeMessageWithTools(messages, systemPrompt, tools, execFn) {
     const response = await openrouter.chatWithTools(messages, TOOLS_MODEL, systemPrompt, tools, execFn);
     return { response, provider: 'tools', model: TOOLS_MODEL };
   } catch (err) {
-    console.error('[router:tools] failed, falling back to plain routing:', err.message);
+    console.error('[router:tools] failed — status:', err.status ?? 'N/A', '| msg:', err.message, '— falling back to plain routing');
     return routeMessage(messages, systemPrompt);
   }
 }

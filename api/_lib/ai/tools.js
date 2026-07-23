@@ -16,7 +16,7 @@ const TOOL_DEFINITIONS = [
         type: 'object',
         properties: {
           text:      { type: 'string', description: 'Текст напоминания' },
-          triggerAt: { type: 'string', description: 'ISO 8601 datetime когда отправить, например 2026-07-03T19:00:00' },
+          triggerAt: { type: 'string', description: 'ISO 8601 datetime со смещением часового пояса пользователя, например 2026-07-03T19:00:00+02:00' },
         },
         required: ['text', 'triggerAt'],
       },
@@ -88,7 +88,7 @@ const TOOL_DEFINITIONS = [
 
 // ── Tool executors ─────────────────────────────────────────────────────────────
 
-async function executeTool(name, input, { userId, telegramChatId }) {
+async function executeTool(name, input, { userId, telegramChatId, userTimezone = 'Europe/Warsaw' }) {
   switch (name) {
     case 'create_reminder': {
       const triggerAt = new Date(input.triggerAt);
@@ -100,10 +100,17 @@ async function executeTool(name, input, { userId, telegramChatId }) {
         telegramChatId,
         text:      String(input.text).slice(0, 1000),
         triggerAt: triggerAt.toISOString(),
+        timezone:  userTimezone,
         sent:      false,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      return { ok: true, message: `Напоминание запланировано на ${triggerAt.toISOString()}` };
+      const localTime = new Intl.DateTimeFormat('ru-RU', {
+        timeZone: userTimezone,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit',
+        hour12: false,
+      }).format(triggerAt);
+      return { ok: true, message: `Напоминание запланировано на ${localTime}` };
     }
 
     case 'create_task': {

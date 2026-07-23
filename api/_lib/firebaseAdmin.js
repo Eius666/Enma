@@ -38,4 +38,12 @@ async function getUserCurrency(userId) {
   return SUPPORTED.includes(currency) ? currency : 'USD';
 }
 
-module.exports = { admin: firebaseAdmin, db, getUserCurrency };
+async function getUserTimezone(userId) {
+  const userDoc = await db.collection('users').doc(userId).get();
+  const DEFAULT_TZ = 'Europe/Warsaw';
+  if (!userDoc.exists) return DEFAULT_TZ;
+  const tz = userDoc.data().timezone;
+  return (typeof tz === 'string' && tz.length > 0) ? tz : DEFAULT_TZ;
+}
+
+module.exports = { admin: firebaseAdmin, db, getUserCurrency, getUserTimezone };

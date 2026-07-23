@@ -1,6 +1,6 @@
 'use strict';
 
-const { db, getUserCurrency }                      = require('../_lib/firebaseAdmin');
+const { db, getUserCurrency, getUserTimezone }      = require('../_lib/firebaseAdmin');
 const { verifyWebhookSignature }                   = require('../_lib/verifyWebhookSig');
 const { rateLimit, getClientIp }                   = require('../_lib/rateLimit');
 const { checkSubscription, getTrialUsed, incrementTrialUsed, TRIAL_LIMIT } = require('../_lib/ai/subscription');
@@ -168,16 +168,20 @@ module.exports = async (req, res) => {
       }
     }
 
-    const userCurrency = await getUserCurrency(userId);
+    const [userCurrency, userTimezone] = await Promise.all([
+      getUserCurrency(userId),
+      getUserTimezone(userId),
+    ]);
     const firstName    = message.from?.first_name || '';
     const systemPrompt = buildSystemPrompt({
       currency: userCurrency,
       name: firstName,
       nowIso: new Date().toISOString(),
+      userTimezone,
     });
 
-    // Tool executor closure — binds userId and Telegram chatId for this request
-    const execFn = (name, input) => executeTool(name, input, { userId, telegramChatId: chatId });
+    // Tool executor closure — binds userId, Telegram chatId, and timezone for this request
+    const execFn = (name, input) => executeTool(name, input, { userId, telegramChatId: chatId, userTimezone });
 
     try {
       const { response } = await routeMessageWithTools(
@@ -222,7 +226,21 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true });
   } catch (error) {
-    console.error('❌ Webhook error:', error);
+    console.error('[webhook] unhandled error:', error);
+    // Best-effort: tell the user something went wrong so they don't see silence.
+    try {
+      const chatId = req.body?.message?.chat?.id;
+      if (chatId && token) {
+        await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: 'Произошла внутренняя ошибка. Попробуй ещё раз через минуту.',
+          }),
+        });
+      }
+    } catch (_) {}
     res.status(200).json({ ok: true });
   }
 };
