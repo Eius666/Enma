@@ -55,25 +55,31 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const now = admin.firestore.Timestamp.now();
+  const nowMs = Date.now();
 
   try {
-    // Requires composite index: content_queue (status ASC, scheduledAt ASC)
+    // Single equality filter only — no composite index needed.
+    // Filter scheduledAt in memory, same pattern as reminders.js.
     const snap = await db.collection('content_queue')
       .where('status', '==', 'approved')
-      .where('scheduledAt', '<=', now)
-      .orderBy('scheduledAt', 'asc')
-      .limit(5)
+      .limit(20)
       .get();
 
-    if (snap.empty) {
+    const dueDocs = snap.docs.filter(d => {
+      const s = d.data().scheduledAt;
+      if (!s) return true; // no scheduledAt = publish immediately
+      const ts = s.toDate ? s.toDate() : new Date(s);
+      return ts <= new Date(nowMs);
+    }).slice(0, 5);
+
+    if (!dueDocs.length) {
       res.status(200).json({ ok: true, published: 0 });
       return;
     }
 
     const results = [];
 
-    for (const docSnap of snap.docs) {
+    for (const docSnap of dueDocs) {
       const docRef = docSnap.ref;
 
       // Claim post in a transaction to prevent double-publish across concurrent invocations
