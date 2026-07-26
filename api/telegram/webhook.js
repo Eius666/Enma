@@ -10,6 +10,7 @@ const { buildSystemPrompt }                        = require('../_lib/ai/systemP
 const { markdownToTelegramHtml, splitHtmlMessage } = require('../_lib/ai/markdownToTelegramHtml');
 const { parseTransaction }                         = require('../_lib/ai/parseTransaction');
 const { saveTransaction }                          = require('../_lib/ai/saveTransaction');
+const { handleCallbackQuery, handleAdminTextMessage, isContentCallback, isAdminChatId } = require('../_lib/content/moderationHandler');
 
 const TELEGRAM_API = 'https://api.telegram.org';
 
@@ -118,6 +119,22 @@ module.exports = async (req, res) => {
   // ── [4] PARSE UPDATE ─────────────────────────────────────────────────────────
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const update = req.body;
+
+  // ── [4a] CALLBACK QUERY (inline button taps) ─────────────────────────────
+  if (update.callback_query) {
+    const cq = update.callback_query;
+    console.error('[WH][4a] callback_query from:', cq.from?.id, 'data:', cq.data);
+    if (isContentCallback(cq.data)) {
+      try {
+        await handleCallbackQuery(token, cq);
+      } catch (err) {
+        console.error('[WH][4a] callback error:', err.message);
+      }
+    }
+    res.status(200).json({ ok: true });
+    return;
+  }
+
   const { message } = update;
 
   // Telegram can send many update types (edited_message, channel_post, etc.)
@@ -172,6 +189,18 @@ module.exports = async (req, res) => {
 
     const userId = req._userId || userQuery.docs[0].id;
     console.error('[WH][5] userId:', userId);
+
+    // ── [5a] ADMIN CONTENT STATE (awaiting edited post text) ─────────────────
+    if (isAdminChatId(chatId)) {
+      const handled = await handleAdminTextMessage(token, chatId, text).catch(err => {
+        console.error('[WH][5a] admin state error:', err.message);
+        return false;
+      });
+      if (handled) {
+        res.status(200).json({ ok: true });
+        return;
+      }
+    }
 
     // ── [6] /start ────────────────────────────────────────────────────────────
     if (text.startsWith('/start')) {

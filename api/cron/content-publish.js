@@ -1,0 +1,163 @@
+'use strict';
+
+// Content publisher — runs every hour (Vercel cron).
+// Takes approved posts with scheduledAt <= now and publishes them to:
+//   1. Telegram channel (TELEGRAM_CONTENT_CHANNEL_ID)
+//   2. Threads (if THREADS_ACCESS_TOKEN + THREADS_USER_ID are set)
+//
+// Retry logic: on failure, reschedules +10 min, up to 3 retries.
+// After 3 failures → status: 'failed', no more retries.
+
+const { db, admin } = require('../_lib/firebaseAdmin');
+const { tgPost }    = require('../_lib/content/adminSender');
+
+function checkAuth(req) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return true;
+  const headerOk = req.headers.authorization === `Bearer ${secret}`;
+  const queryOk  = req.query?.secret === secret;
+  return headerOk || queryOk;
+}
+
+async function publishToTelegram(token, channelId, post) {
+  const text = post.telegramText || post.text || post.idea;
+
+  if (post.imageUrl) {
+    const msg = await tgPost(token, 'sendPhoto', {
+      chat_id: channelId,
+      photo:   post.imageUrl,
+      caption: text.slice(0, 1024),
+    });
+    return msg.message_id;
+  }
+
+  const msg = await tgPost(token, 'sendMessage', {
+    chat_id: channelId,
+    text,
+  });
+  return msg.message_id;
+}
+
+module.exports = async (req, res) => {
+  if (!checkAuth(req)) {
+    res.status(401).json({ ok: false, error: 'unauthorized' });
+    return;
+  }
+
+  const token     = process.env.TELEGRAM_BOT_TOKEN;
+  const channelId = process.env.TELEGRAM_CONTENT_CHANNEL_ID;
+
+  if (!token || !channelId) {
+    res.status(200).json({
+      ok: false,
+      error: 'TELEGRAM_BOT_TOKEN or TELEGRAM_CONTENT_CHANNEL_ID not set — nothing to publish',
+    });
+    return;
+  }
+
+  const now = admin.firestore.Timestamp.now();
+
+  try {
+    // Requires composite index: content_queue (status ASC, scheduledAt ASC)
+    const snap = await db.collection('content_queue')
+      .where('status', '==', 'approved')
+      .where('scheduledAt', '<=', now)
+      .orderBy('scheduledAt', 'asc')
+      .limit(5)
+      .get();
+
+    if (snap.empty) {
+      res.status(200).json({ ok: true, published: 0 });
+      return;
+    }
+
+    const results = [];
+
+    for (const docSnap of snap.docs) {
+      const docRef = docSnap.ref;
+
+      // Claim post in a transaction to prevent double-publish across concurrent invocations
+      const post = await db.runTransaction(async tx => {
+        const latest = await tx.get(docRef);
+        if (!latest.exists) return null;
+        if (latest.data().status !== 'approved') return null;
+        tx.update(docRef, {
+          status:    'publishing',
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return latest.data();
+      });
+
+      if (!post) continue;
+
+      const retryCount = post.retryCount || 0;
+
+      try {
+        // ── Telegram ──────────────────────────────────────────────────────────
+        const telegramMsgId = await publishToTelegram(token, channelId, post);
+
+        // ── Threads (Phase 3) ─────────────────────────────────────────────────
+        let threadsMediaId = null;
+        if (post.platforms?.threads) {
+          try {
+            const threadsClient = require('../_lib/threads-client');
+            if (threadsClient.isConfigured()) {
+              threadsMediaId = await threadsClient.publish(
+                post.threadsText || post.text || post.idea,
+                post.imageUrl || null
+              );
+            }
+          } catch (threadsErr) {
+            console.error('[content-publish] Threads error:', threadsErr.message);
+            // Don't fail the whole publish if Threads fails — Telegram is primary
+          }
+        }
+
+        await docRef.update({
+          status:            'published',
+          telegramMessageId: String(telegramMsgId),
+          threadsMediaId,
+          publishedAt:       admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt:         admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        await db.collection('content_logs').add({
+          event:             'post_published',
+          docId:             docRef.id,
+          telegramMessageId: String(telegramMsgId),
+          threadsMediaId,
+          createdAt:         admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        results.push({ id: docRef.id, ok: true, telegramMsgId });
+      } catch (err) {
+        console.error('[content-publish] publish error:', err.message);
+
+        if (retryCount < 3) {
+          const retryAt = new Date(Date.now() + 10 * 60 * 1000);
+          await docRef.update({
+            status:      'approved',
+            scheduledAt: admin.firestore.Timestamp.fromDate(retryAt),
+            retryCount:  retryCount + 1,
+            lastError:   err.message,
+            updatedAt:   admin.firestore.FieldValue.serverTimestamp(),
+          });
+          results.push({ id: docRef.id, ok: false, retry: retryCount + 1, error: err.message });
+        } else {
+          await docRef.update({
+            status:    'failed',
+            lastError: err.message,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          results.push({ id: docRef.id, ok: false, failed: true, error: err.message });
+        }
+      }
+    }
+
+    const published = results.filter(r => r.ok).length;
+    res.status(200).json({ ok: true, published, total: results.length, results });
+  } catch (err) {
+    console.error('[content-publish] fatal:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+};

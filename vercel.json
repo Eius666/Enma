@@ -1,10 +1,18 @@
 {
   "functions": {
-    "api/telegram/webhook.js": { "maxDuration": 30 },
-    "api/cron/reminders.js":   { "maxDuration": 30 },
-    "api/debug-ai.js":         { "maxDuration": 30 },
-    "api/setup-webhook.js":    { "maxDuration": 15 }
+    "api/telegram/webhook.js":      { "maxDuration": 30 },
+    "api/cron/reminders.js":        { "maxDuration": 30 },
+    "api/cron/content-plan.js":     { "maxDuration": 30 },
+    "api/cron/content-publish.js":  { "maxDuration": 30 },
+    "api/debug-ai.js":              { "maxDuration": 30 },
+    "api/setup-webhook.js":         { "maxDuration": 15 }
   },
+  "crons": [
+    { "path": "/api/cron/content-plan",                "schedule": "0 6 * * *"   },
+    { "path": "/api/cron/content-plan?type=remind",    "schedule": "0 10 * * *"  },
+    { "path": "/api/cron/content-plan?type=weekly_report", "schedule": "0 18 * * 0" },
+    { "path": "/api/cron/content-publish",             "schedule": "0 * * * *"   }
+  ],
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
