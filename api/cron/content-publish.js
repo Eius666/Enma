@@ -96,9 +96,11 @@ module.exports = async (req, res) => {
         // ── Telegram ──────────────────────────────────────────────────────────
         const telegramMsgId = await publishToTelegram(token, channelId, post);
 
-        // ── Threads (Phase 3) ─────────────────────────────────────────────────
+        // ── Threads ────────────────────────────────────────────────────────────
+        // Requires Meta App Review for threads_content_publish permission.
+        // Enable by setting THREADS_ENABLED=true in env once App Review is approved.
         let threadsMediaId = null;
-        if (post.platforms?.threads) {
+        if (post.platforms?.threads && process.env.THREADS_ENABLED === 'true') {
           try {
             const threadsClient = require('../_lib/threads-client');
             if (threadsClient.isConfigured()) {
