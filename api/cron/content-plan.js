@@ -145,6 +145,8 @@ module.exports = async (req, res) => {
         threadsMediaId:    null,
         adminMessageId:    null,
         adminDraftMessageId: null,
+        regenCount:        0,
+        excludedIdeas:     [],
         retryCount:        0,
         createdAt:         admin.firestore.FieldValue.serverTimestamp(),
         updatedAt:         admin.firestore.FieldValue.serverTimestamp(),

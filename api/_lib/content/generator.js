@@ -11,6 +11,10 @@ const CONTENT_SYSTEM_PROMPT = `Ты контент-менеджер для Enma 
 Темы: ИИ, продуктивность, жизнь с нейросетями, финансы без боли, личная эффективность.
 Возвращай только валидный JSON без markdown-блока \`\`\`json.`;
 
+const REGEN_SUFFIX = `\n\nЭТО РЕГЕНЕРАЦИЯ. Предложи РАДИКАЛЬНО другую тему и угол подачи.
+Не вариируй предыдущую идею — предлагай совершенно другой подход, другую эмоцию, другой формат.
+Если раньше был юмор — попробуй практику. Если был мем — попробуй кейс. Удиви.`;
+
 const DAY_NAMES_RU = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
 
 async function llmCall(messages, systemPrompt, timeoutMs = 25_000) {
@@ -55,12 +59,13 @@ async function llmCall(messages, systemPrompt, timeoutMs = 25_000) {
 }
 
 function extractJson(text) {
-  // Strip markdown code fences
   const cleaned = text.replace(/^```(?:json)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
   const match = cleaned.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
   if (!match) throw new Error('No JSON in LLM response: ' + text.slice(0, 200));
   return JSON.parse(match[0]);
 }
+
+// ── Standard idea generation (daily planner) ─────────────────────────────────
 
 async function generateIdeas(date) {
   const dayName = DAY_NAMES_RU[date.getUTCDay()];
@@ -99,6 +104,33 @@ async function generateIdeas(date) {
   return json.ideas;
 }
 
+// ── Regenerate a single idea, excluding already-rejected ones ─────────────────
+// excludedIdeas: string[] — titles/angles of previously rejected ideas
+
+async function regenerateIdea(excludedIdeas = []) {
+  const exclusionBlock = excludedIdeas.length > 0
+    ? `\nУЖЕ ОТВЕРГНУТЫЕ ИДЕИ (не повторять, даже косвенно):\n${excludedIdeas.map((t, i) => `${i + 1}. ${t}`).join('\n')}\n`
+    : '';
+
+  const prompt = `${exclusionBlock}Придумай 1 новую идею для поста в Telegram/Threads для Enma.
+Предложи РАДИКАЛЬНО другую тему: другая эмоция, другой формат, другой угол.
+
+Верни JSON (без обёртки):
+{
+  "title": "Короткое название (макс 60 символов)",
+  "angle": "Угол подачи — что именно говорим и как (1–2 предложения)",
+  "format": "single"
+}`;
+
+  const raw = await llmCall(
+    [{ role: 'user', content: prompt }],
+    CONTENT_SYSTEM_PROMPT + REGEN_SUFFIX
+  );
+  return extractJson(raw);
+}
+
+// ── Generate full post text ───────────────────────────────────────────────────
+
 async function generatePost(idea) {
   const prompt = `Напиши пост для Telegram-канала и Threads на основе этой идеи:
 Тема: "${idea.title}"
@@ -128,4 +160,32 @@ Prompt для DALL-E (на английском, стиль flat illustration и
   return extractJson(raw);
 }
 
-module.exports = { generateIdeas, generatePost, llmCall, extractJson };
+// ── Regenerate post text for an existing idea (text_only mode) ────────────────
+// Returns same shape as generatePost but with a different text angle.
+
+async function regeneratePost(idea) {
+  const prompt = `Напиши НОВЫЙ вариант поста для той же идеи, но с другим текстом и другим крючком:
+Тема: "${idea.title}"
+Угол: "${idea.angle}"
+
+Требование: не повторяй предыдущий текст. Смени крючок, структуру, тон.
+Если раньше был юмор — попробуй конкретный факт. Если вопрос — попробуй утверждение.
+
+Threads-версия (строго 150–280 символов), Telegram-версия (до 500 символов).
+Новый prompt для DALL-E с другой визуальной метафорой.
+
+Верни JSON (без обёртки):
+{
+  "threadsText": "...",
+  "telegramText": "...",
+  "imagePrompt": "..."
+}`;
+
+  const raw = await llmCall(
+    [{ role: 'user', content: prompt }],
+    CONTENT_SYSTEM_PROMPT + REGEN_SUFFIX
+  );
+  return extractJson(raw);
+}
+
+module.exports = { generateIdeas, generatePost, regenerateIdea, regeneratePost, llmCall, extractJson };
