@@ -5,13 +5,13 @@ const { verifyWebhookSignature }                       = require('../_lib/verify
 const { rateLimit, getClientIp }                       = require('../_lib/rateLimit');
 const { checkSubscription, getTrialUsed, incrementTrialUsed, TRIAL_LIMIT } = require('../_lib/ai/subscription');
 const { routeMessageWithTools }                        = require('../_lib/ai/router');
-const { TOOL_DEFINITIONS, executeTool }                = require('../_lib/ai/tools');
 const { buildSystemPrompt }                            = require('../_lib/ai/systemPrompt');
 const { markdownToTelegramHtml, splitHtmlMessage }     = require('../_lib/ai/markdownToTelegramHtml');
 const { parseTransaction }                             = require('../_lib/ai/parseTransaction');
 const { saveTransaction }                              = require('../_lib/ai/saveTransaction');
 const { saveMessage, loadHistory }                     = require('../_lib/ai/chatHistory');
 const { handleCallbackQuery, handleAdminTextMessage, isContentCallback, isAdminChatId } = require('../_lib/content/moderationHandler');
+const { handleTaskCallback, TOOL_DEFINITIONS, executeTool } = require('../_lib/ai/tools');
 const { handleReferralStart, ensureReferralCode }      = require('../_lib/referral/codes');
 const { handleReferralCommand, handleWalletCommand, handleBalanceCommand, checkUserState } = require('../_lib/referral/commands');
 const { processSubscriptionPayment }                   = require('../_lib/referral/earnings');
@@ -184,7 +184,11 @@ module.exports = async (req, res) => {
 
     if (isContentCallback(cq.data)) {
       try { await handleCallbackQuery(token, cq); } catch (err) {
-        console.error('[WH][4a] callback error:', err.message);
+        console.error('[WH][4a] content callback error:', err.message);
+      }
+    } else if (cq.data?.startsWith('task_')) {
+      try { await handleTaskCallback(token, cq); } catch (err) {
+        console.error('[WH][4a] task callback error:', err.message);
       }
     } else if (cq.data === 'wallet_set') {
       // "Указать кошелёк" button from /referral
