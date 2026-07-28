@@ -124,14 +124,15 @@ async function regenerateIdea(excludedIdeas = []) {
 
   const raw = await llmCall(
     [{ role: 'user', content: prompt }],
-    CONTENT_SYSTEM_PROMPT + REGEN_SUFFIX
+    CONTENT_SYSTEM_PROMPT + REGEN_SUFFIX,
+    14_000
   );
   return extractJson(raw);
 }
 
 // ── Generate full post text ───────────────────────────────────────────────────
 
-async function generatePost(idea) {
+async function generatePost(idea, timeoutMs = 14_000) {
   const prompt = `Напиши пост для Telegram-канала и Threads на основе этой идеи:
 Тема: "${idea.title}"
 Угол: "${idea.angle}"
@@ -156,14 +157,14 @@ Prompt для DALL-E (на английском, стиль flat illustration и
   "imagePrompt": "..."
 }`;
 
-  const raw = await llmCall([{ role: 'user', content: prompt }], CONTENT_SYSTEM_PROMPT);
+  const raw = await llmCall([{ role: 'user', content: prompt }], CONTENT_SYSTEM_PROMPT, timeoutMs);
   return extractJson(raw);
 }
 
 // ── Regenerate post text for an existing idea (text_only mode) ────────────────
 // Returns same shape as generatePost but with a different text angle.
 
-async function regeneratePost(idea) {
+async function regeneratePost(idea, timeoutMs = 14_000) {
   const prompt = `Напиши НОВЫЙ вариант поста для той же идеи, но с другим текстом и другим крючком:
 Тема: "${idea.title}"
 Угол: "${idea.angle}"
@@ -183,7 +184,8 @@ Threads-версия (строго 150–280 символов), Telegram-вер�
 
   const raw = await llmCall(
     [{ role: 'user', content: prompt }],
-    CONTENT_SYSTEM_PROMPT + REGEN_SUFFIX
+    CONTENT_SYSTEM_PROMPT + REGEN_SUFFIX,
+    timeoutMs
   );
   return extractJson(raw);
 }

@@ -65,12 +65,15 @@ module.exports = async (req, res) => {
       .limit(20)
       .get();
 
+    const limitParam = parseInt(req.query?.limit, 10);
+    const maxPosts   = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : 5;
+
     const dueDocs = snap.docs.filter(d => {
       const s = d.data().scheduledAt;
       if (!s) return true; // no scheduledAt = publish immediately
       const ts = s.toDate ? s.toDate() : new Date(s);
       return ts <= new Date(nowMs);
-    }).slice(0, 5);
+    }).slice(0, maxPosts);
 
     if (!dueDocs.length) {
       res.status(200).json({ ok: true, published: 0 });

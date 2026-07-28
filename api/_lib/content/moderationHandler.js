@@ -25,6 +25,10 @@ const REGEN_LIMIT = 5;
 // ── Callback routing ──────────────────────────────────────────────────────────
 
 function isContentCallback(data) {
+  // Matches all content pipeline callbacks:
+  //   ci_ — idea actions (approve | regen | skip | retry | newstart)
+  //   cd_ — draft actions (approve | edit | reimg | skip)
+  //   cs_ — post-skip options (regen_full | regen_text | delete)
   return /^c[ids]_[a-z_]+_\S+$/.test(data || '');
 }
 
@@ -83,15 +87,47 @@ async function handleCallbackQuery(token, callbackQuery) {
 
 async function handleIdeaAction(token, chatId, docRef, doc, docId, action, origMessage) {
 
-  // ── Approve ──────────────────────────────────────────────────────────────────
-  if (action === 'approve') {
+  // ── Approve / Retry ────────────────────────────────────────────────────────
+  if (action === 'approve' || action === 'retry') {
     await editOrSend(token, chatId, origMessage?.message_id,
       `⏳ Генерирую пост: «${doc.idea}»…`);
-    await docRef.update({ status: 'generating', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    await docRef.update({
+      status:    'generating',
+      lastError: null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
 
-    const postData = await generatePost({ title: doc.idea, angle: doc.angle });
+    let postData;
+    try {
+      postData = await generatePost({ title: doc.idea, angle: doc.angle }, 14_000);
+    } catch (genErr) {
+      const isTimeout = genErr.name === 'AbortError' || genErr.message.includes('aborted') || genErr.message.includes('timeout');
+      const errText   = isTimeout
+        ? '⚠️ Генерация заняла слишком много времени. Попробуй ещё раз.'
+        : `⚠️ Ошибка генерации: ${genErr.message.slice(0, 120)}`;
+
+      await docRef.update({
+        status:    'failed',
+        lastError: genErr.message,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      await tgPost(token, 'sendMessage', {
+        chat_id: chatId,
+        text: errText,
+        reply_markup: {
+          inline_keyboard: [[
+            { text: '🔄 Попробовать снова', callback_data: `ci_retry_${docId}` },
+            { text: '⏭️ Пропустить',        callback_data: `ci_skip_${docId}`  },
+          ]],
+        },
+      });
+      return;
+    }
+
+    // Text generated. imageUrl is null until image gen is implemented —
+    // still send draft preview (image-less posts publish fine).
     const scheduledAt = nextHourSlot();
-
     await docRef.update({
       status:       'draft',
       text:         postData.threadsText || '',
