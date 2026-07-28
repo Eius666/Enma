@@ -1,7 +1,7 @@
 const { admin, db } = require('../_lib/firebaseAdmin');
 
 const TONCENTER_API = 'https://toncenter.com/api/v2';
-const WALLET_ADDRESS = 'EQAmqtbkNs6OYMhQl83f_iesYhBrJJTPa7-wuIZCLEbSDplH';
+const WALLET_ADDRESS = process.env.TON_PAYMENT_WALLET || 'UQAmqtbkNs6OYMhQl83f_iesYhBrJJTPa7-wuIZCLEbSDplH';
 const TX_LIMIT = 20;
 // Max seconds between payment creation and on-chain confirmation
 const TIME_WINDOW_SEC = 900;
