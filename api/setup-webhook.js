@@ -42,7 +42,7 @@ module.exports = async (req, res) => {
   const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
   const body = {
     url:             targetUrl,
-    allowed_updates: ['message', 'callback_query'],
+    allowed_updates: ['message', 'callback_query', 'pre_checkout_query'],
     drop_pending_updates: true,
   };
   if (webhookSecret) body.secret_token = webhookSecret;

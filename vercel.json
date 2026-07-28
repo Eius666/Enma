@@ -4,6 +4,7 @@
     "api/cron/reminders.js":        { "maxDuration": 30 },
     "api/cron/content-plan.js":     { "maxDuration": 30 },
     "api/cron/content-publish.js":  { "maxDuration": 30 },
+    "api/cron/referral-payouts.js": { "maxDuration": 30 },
     "api/debug-ai.js":              { "maxDuration": 30 },
     "api/setup-webhook.js":         { "maxDuration": 15 }
   },
