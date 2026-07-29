@@ -197,31 +197,57 @@ const TOOL_DEFINITIONS = [
 // ── Tool implementations ──────────────────────────────────────────────────────
 
 async function createReminder(args, userId, chatId, timezone) {
-  const { title, scheduledAt, description } = args;
-  const schedDate = new Date(scheduledAt);
+  console.log('[create_reminder] raw args:', JSON.stringify(args));
 
-  if (isNaN(schedDate.getTime())) return { ok: false, error: 'Неверный формат даты' };
-  if (schedDate <= new Date())    return { ok: false, error: 'Время должно быть в будущем' };
+  const { title, scheduledAt, description } = args;
+  const tz = timezone || DEFAULT_TZ;
+
+  // 1. Try direct parse (ISO 8601 with Z suffix is most reliable)
+  let scheduled = scheduledAt ? new Date(scheduledAt) : null;
+
+  // 2. "YYYY-MM-DD HH:MM" or "YYYY-MM-DDTHH:MM" without Z — LLM forgot Z, treat as UTC
+  if (!scheduled || isNaN(scheduled.getTime())) {
+    const m = (scheduledAt || '').match(/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}:\d{2})/);
+    if (m) scheduled = new Date(`${m[1]}T${m[2]}:00Z`);
+  }
+
+  // 3. Natural language fallback (Russian): "через N минут/часов/дней"
+  if (!scheduled || isNaN(scheduled.getTime())) {
+    const lower = (scheduledAt || '').toLowerCase();
+    const now   = Date.now();
+    const num   = parseInt((lower.match(/\d+/) || ['1'])[0], 10);
+    if      (lower.includes('минут'))                                   scheduled = new Date(now + num * 60_000);
+    else if (lower.includes('час'))                                     scheduled = new Date(now + num * 3_600_000);
+    else if (lower.includes('день') || lower.includes('дня') || lower.includes('дней')) scheduled = new Date(now + num * 86_400_000);
+  }
+
+  if (!scheduled || isNaN(scheduled.getTime())) {
+    console.error('[create_reminder] unparseable scheduledAt:', scheduledAt);
+    return { ok: false, error: `Не удалось распознать время: «${scheduledAt}». Укажи дату и время явно, например: «завтра в 10 утра».` };
+  }
+  if (scheduled <= new Date()) {
+    return { ok: false, error: 'Время должно быть в будущем' };
+  }
 
   const id = createId();
   await db.collection('reminders').doc(id).set({
     userId,
     chatId,
     title,
-    description: description || '',
-    scheduledAt: admin.firestore.Timestamp.fromDate(schedDate),
-    status:      'pending',
+    description:  description || '',
+    scheduledAt:  admin.firestore.Timestamp.fromDate(scheduled),
+    status:       'pending',
     telegramText: `⏰ Напоминание: ${title}`,
-    source:      'telegram-bot',
-    createdAt:   admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt:   admin.firestore.FieldValue.serverTimestamp(),
+    source:       'telegram-bot',
+    createdAt:    admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  const tz     = timezone || DEFAULT_TZ;
   const offset = getUtcOffsetStr(tz);
-  const tStr   = schedDate.toLocaleString('ru-RU', {
+  const tStr   = scheduled.toLocaleString('ru-RU', {
     timeZone: tz, day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
   });
+  console.log('[create_reminder] saved', id, 'scheduledAt:', scheduled.toISOString());
   return { ok: true, message: `✅ Напоминание создано: «${title}» — ${tStr} (${offset})` };
 }
 
