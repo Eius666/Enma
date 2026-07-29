@@ -10,6 +10,7 @@
 
 const { db, admin } = require('../_lib/firebaseAdmin');
 const { tgPost }    = require('../_lib/content/adminSender');
+const { generateImage } = require('../_lib/content/generator');
 
 function checkAuth(req) {
   const secret = process.env.CRON_SECRET;
@@ -66,7 +67,9 @@ module.exports = async (req, res) => {
       .get();
 
     const limitParam = parseInt(req.query?.limit, 10);
-    const maxPosts   = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : 5;
+    // Default 1: image generation takes up to 14s; with maxDuration:30 we can
+    // safely process 1 post (14s image + overhead). Use ?limit=N to override.
+    const maxPosts   = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : 1;
 
     const dueDocs = snap.docs.filter(d => {
       const s = d.data().scheduledAt;
@@ -100,6 +103,23 @@ module.exports = async (req, res) => {
       if (!post) continue;
 
       const retryCount = post.retryCount || 0;
+
+      // ── Stage 2: generate image if prompt exists but imageUrl is missing ──
+      // Runs here (maxDuration:30) not in the webhook callback (10s limit).
+      // On any failure the post still publishes — text only, no image.
+      if (post.imagePrompt && !post.imageUrl) {
+        try {
+          console.error('[content-publish] generating image for doc', docRef.id);
+          await docRef.update({ status: 'generating_image', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+          const imageUrl = await generateImage(post.imagePrompt, 14_000);
+          await docRef.update({ imageUrl, status: 'approved', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+          post = { ...post, imageUrl };
+          console.error('[content-publish] image generated:', imageUrl.slice(0, 60));
+        } catch (imgErr) {
+          console.error('[content-publish] image generation failed:', imgErr.message, '— publishing text only');
+          await docRef.update({ status: 'approved', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+        }
+      }
 
       try {
         // ── Telegram ──────────────────────────────────────────────────────────

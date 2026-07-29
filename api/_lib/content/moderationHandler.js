@@ -90,7 +90,7 @@ async function handleIdeaAction(token, chatId, docRef, doc, docId, action, origM
   // ── Approve / Retry ────────────────────────────────────────────────────────
   if (action === 'approve' || action === 'retry') {
     await editOrSend(token, chatId, origMessage?.message_id,
-      `⏳ Генерирую пост: «${doc.idea}»…`);
+      `⏳ Генерирую текст поста: «${doc.idea}»…`);
     await docRef.update({
       status:    'generating',
       lastError: null,
@@ -99,7 +99,7 @@ async function handleIdeaAction(token, chatId, docRef, doc, docId, action, origM
 
     let postData;
     try {
-      postData = await generatePost({ title: doc.idea, angle: doc.angle }, 14_000);
+      postData = await generatePost({ title: doc.idea, angle: doc.angle }, 8_000);
     } catch (genErr) {
       const isTimeout = genErr.name === 'AbortError' || genErr.message.includes('aborted') || genErr.message.includes('timeout');
       const errText   = isTimeout
@@ -293,7 +293,7 @@ async function handleDraftAction(token, chatId, docRef, doc, docId, action, orig
   }
 
   if (action === 'reimg') {
-    const postData = await regeneratePost({ title: doc.idea, angle: doc.angle });
+    const postData = await regeneratePost({ title: doc.idea, angle: doc.angle }, 8_000);
     await docRef.update({
       imagePrompt: postData.imagePrompt || doc.imagePrompt,
       updatedAt:   admin.firestore.FieldValue.serverTimestamp(),
@@ -381,7 +381,7 @@ async function handlePostSkipAction(token, chatId, docRef, doc, docId, action, o
   if (action === 'regen_text') {
     await tgPost(token, 'sendMessage', { chat_id: chatId, text: '⏳ Генерирую новый текст…' });
 
-    const postData = await regeneratePost({ title: doc.idea, angle: doc.angle });
+    const postData = await regeneratePost({ title: doc.idea, angle: doc.angle }, 8_000);
     const scheduledAt = nextHourSlot();
 
     const newRef = db.collection('content_queue').doc();

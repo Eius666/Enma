@@ -190,4 +190,44 @@ Threads-версия (строго 150–280 символов), Telegram-вер�
   return extractJson(raw);
 }
 
-module.exports = { generateIdeas, generatePost, regenerateIdea, regeneratePost, llmCall, extractJson };
+// ── Generate image from a DALL-E–style prompt ─────────────────────────────────
+// Uses OpenRouter's /v1/images/generations endpoint.
+// Returns a public image URL, or throws on failure.
+
+async function generateImage(imagePrompt, timeoutMs = 14_000) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error('OPENROUTER_API_KEY not set');
+
+  const model = process.env.IMAGE_GEN_MODEL || 'openai/dall-e-3';
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const resp = await fetch('https://openrouter.ai/api/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://enma.app',
+        'X-Title': 'Enma-Content',
+      },
+      body: JSON.stringify({ model, prompt: imagePrompt, n: 1, size: '1024x1024' }),
+      signal: controller.signal,
+    });
+
+    if (!resp.ok) {
+      const err = await resp.text().catch(() => '');
+      throw new Error(`Image API ${resp.status}: ${err.slice(0, 200)}`);
+    }
+
+    const data = await resp.json();
+    const url  = data?.data?.[0]?.url;
+    if (!url) throw new Error('No image URL in response');
+    return url;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+module.exports = { generateIdeas, generatePost, regenerateIdea, regeneratePost, generateImage, llmCall, extractJson };
