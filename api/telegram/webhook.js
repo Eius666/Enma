@@ -1,531 +1,469 @@
 'use strict';
 
-const { db, admin, getUserCurrency, getUserTimezone }  = require('../_lib/firebaseAdmin');
-const { verifyWebhookSignature }                       = require('../_lib/verifyWebhookSig');
-const { rateLimit, getClientIp }                       = require('../_lib/rateLimit');
+const { db, admin }                                        = require('../_lib/firebaseAdmin');
+const { verifyWebhookSignature }                           = require('../_lib/verifyWebhookSig');
+const { rateLimit, getClientIp }                           = require('../_lib/rateLimit');
 const { checkSubscription, getTrialUsed, incrementTrialUsed, TRIAL_LIMIT } = require('../_lib/ai/subscription');
-const { routeMessageWithTools }                        = require('../_lib/ai/router');
-const { buildSystemPrompt }                            = require('../_lib/ai/systemPrompt');
-const { markdownToTelegramHtml, splitHtmlMessage }     = require('../_lib/ai/markdownToTelegramHtml');
-const { parseTransaction }                             = require('../_lib/ai/parseTransaction');
-const { saveTransaction }                              = require('../_lib/ai/saveTransaction');
-const { saveMessage, loadHistory }                     = require('../_lib/ai/chatHistory');
-const { handleCallbackQuery, handleAdminTextMessage, isContentCallback, isAdminChatId } = require('../_lib/content/moderationHandler');
-const { handleTaskCallback, TOOL_DEFINITIONS, executeTool } = require('../_lib/ai/tools');
-const { handleReferralStart, ensureReferralCode }      = require('../_lib/referral/codes');
+const { chatWithTools }                                    = require('../_lib/llm-chat');
+const { generatePost, generateImage }                      = require('../_lib/content/generator');
+const { handleCallbackQuery: handleContentCb, handleAdminTextMessage, isContentCallback, isAdminChatId } = require('../_lib/content/moderationHandler');
+const { handleTaskCallback }                               = require('../_lib/ai/tools');
+const { handleReferralStart, ensureReferralCode }          = require('../_lib/referral/codes');
 const { handleReferralCommand, handleWalletCommand, handleBalanceCommand, checkUserState } = require('../_lib/referral/commands');
-const { processSubscriptionPayment }                   = require('../_lib/referral/earnings');
-const { searchWeb, needsWebSearch, formatSearchResult } = require('../_lib/ai/webSearch');
+const { processSubscriptionPayment }                       = require('../_lib/referral/earnings');
+const { saveMessage, loadHistory }                         = require('../_lib/ai/chatHistory');
 
-const TELEGRAM_API = 'https://api.telegram.org';
+const TG = 'https://api.telegram.org';
 
-const RATE_LIMIT_MAX       = 100;
-const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+// ── Telegram helpers ──────────────────────────────────────────────────────────
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-const sendTelegramMessage = async (token, chatId, text) => {
-  await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
-    method: 'POST',
+async function tg(token, method, body) {
+  const resp = await fetch(`${TG}/bot${token}/${method}`, {
+    method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text }),
+    body:    JSON.stringify(body),
   });
-};
+  return resp.json().catch(() => ({}));
+}
 
-const sendTelegramHtml = async (token, chatId, htmlText, plainFallback) => {
-  const chunks = splitHtmlMessage(htmlText);
-  for (const chunk of chunks) {
-    const resp = await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: chunk, parse_mode: 'HTML' }),
-    });
-    if (!resp.ok) {
-      await sendTelegramMessage(token, chatId, plainFallback.slice(0, 4096));
-      return;
-    }
-  }
-};
+const sendMessage = (token, chatId, text, opts = {}) =>
+  tg(token, 'sendMessage', { chat_id: chatId, text, ...opts });
+
+const editMessage = (token, chatId, messageId, text, opts = {}) =>
+  tg(token, 'editMessageText', { chat_id: chatId, message_id: messageId, text, ...opts });
+
+const sendPhoto = (token, chatId, photo, caption, opts = {}) =>
+  tg(token, 'sendPhoto', { chat_id: chatId, photo, caption, ...opts });
+
+const sendChatAction = (token, chatId, action = 'typing') =>
+  tg(token, 'sendChatAction', { chat_id: chatId, action });
+
+const answerCbQuery = (token, id, text) =>
+  tg(token, 'answerCallbackQuery', { callback_query_id: id, text }).catch(() => {});
+
+// ── Subscription prompt helpers ───────────────────────────────────────────────
 
 const APP_URL = process.env.REACT_APP_URL || 'https://enma-silk.vercel.app';
 
-const SUBSCRIPTION_KEYBOARD = (appUrl) => ({
-  inline_keyboard: [[{
-    text: 'Оформить подписку',
-    web_app: { url: `${appUrl}/#settings` },
-  }]],
+const subscriptionKeyboard = () => ({
+  inline_keyboard: [[{ text: 'Оформить подписку', web_app: { url: `${APP_URL}/#settings` } }]],
 });
 
-const sendSubscriptionPrompt = async (token, chatId) => {
-  await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: 'Для использования AI-ассистента необходима подписка.',
-      reply_markup: SUBSCRIPTION_KEYBOARD(APP_URL),
-    }),
+const sendSubscriptionPrompt = (token, chatId) =>
+  sendMessage(token, chatId, 'Для использования AI-ассистента необходима подписка.', {
+    reply_markup: subscriptionKeyboard(),
   });
-};
 
-const sendTrialExhaustedPrompt = async (token, chatId) => {
-  await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: `У вас закончились пробные запросы (${TRIAL_LIMIT}/${TRIAL_LIMIT}).\nОформите подписку, чтобы продолжить пользоваться AI-ассистентом Enma.`,
-      reply_markup: SUBSCRIPTION_KEYBOARD(APP_URL),
-    }),
+const sendTrialExhaustedPrompt = (token, chatId) =>
+  sendMessage(token, chatId,
+    `У вас закончились пробные запросы (${TRIAL_LIMIT}/${TRIAL_LIMIT}).\n` +
+    'Оформите подписку, чтобы продолжить пользоваться Enma.',
+    { reply_markup: subscriptionKeyboard() }
+  );
+
+// ── /subscribe — Telegram Stars invoice ───────────────────────────────────────
+
+async function handleSubscribeCommand(token, chatId) {
+  const starPrice = parseInt(process.env.STAR_PRICE_MONTHLY, 10) || 1000;
+  await tg(token, 'sendInvoice', {
+    chat_id:     chatId,
+    title:       'Enma Pro — 1 месяц',
+    description: 'Безлимит сообщений, AI-ассистент, финансы, напоминания',
+    payload:     `enma_sub_${chatId}_${Date.now()}`,
+    currency:    'XTR',
+    prices:      [{ label: 'Enma Pro · 1 месяц', amount: starPrice }],
   });
-};
-
-const TXN_INTENT_RE = /потратил|заплатил|купил|потрачено|расход|трат[ау]|получил|заработал|доход|зарплат|запис[ьи]|запиши|внёс|занёс/i;
-function looksLikeTransaction(text) {
-  return /\d/.test(text) && TXN_INTENT_RE.test(text);
 }
 
-// ── Stars payment — activate subscription ────────────────────────────────────
+// ── Stars payment activation ──────────────────────────────────────────────────
 
 async function activateStarsSubscription(token, chatId, userId, payment) {
   const endDate  = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   const paymentId = payment.telegram_payment_charge_id;
 
-  // Create / extend subscription
   await db.collection('subscriptions').doc(userId).set({
-    userId,
-    plan:          'pro',
-    status:        'active',
-    endDate,
-    paymentId,
-    paymentMethod: 'stars',
-    starsAmount:   payment.total_amount,
-    updatedAt:     admin.firestore.FieldValue.serverTimestamp(),
+    userId, plan: 'pro', status: 'active', endDate, paymentId,
+    paymentMethod: 'stars', starsAmount: payment.total_amount,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
 
-  // Log payment
   await db.collection('payments').add({
-    userId,
-    paymentId,
-    method:    'stars',
-    amount:    payment.total_amount,
-    currency:  'XTR',
-    amountUsd: 10,
-    status:    'confirmed',
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    userId, paymentId, method: 'stars',
+    amount: payment.total_amount, currency: 'XTR', amountUsd: 10,
+    status: 'confirmed', createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  // Process referral commission
   await processSubscriptionPayment(userId, 10, paymentId, token).catch(err =>
-    console.error('[WH][stars] referral processing error:', err.message)
+    console.error('[WH][stars] referral error:', err.message)
   );
 
-  await sendTelegramMessage(token, chatId,
-    '🎉 Подписка Enma Pro активирована на 30 дней!\n\nТеперь у тебя безлимит сообщений. Enjoy 🚀'
+  await sendMessage(token, chatId,
+    '🎉 Подписка Enma Pro активирована на 30 дней!\n\nТеперь у тебя безлимит. Enjoy 🚀'
   );
 }
 
-// ── /subscribe command — send Stars invoice ───────────────────────────────────
+// ── Content generation (/generate, /post commands) ───────────────────────────
 
-async function handleSubscribeCommand(token, chatId) {
-  const starPrice = parseInt(process.env.STAR_PRICE_MONTHLY, 10) || 1000;
-
-  await fetch(`${TELEGRAM_API}/bot${token}/sendInvoice`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id:     chatId,
-      title:       'Enma Pro — 1 месяц',
-      description: 'Безлимит сообщений, AI-ассистент, финансы, напоминания',
-      payload:     `enma_sub_${chatId}_${Date.now()}`,
-      currency:    'XTR',
-      prices:      [{ label: 'Enma Pro · 1 месяц', amount: starPrice }],
-    }),
-  });
+function getNextPublishSlot() {
+  const SLOTS = [8, 10, 13];
+  const now   = new Date();
+  const h     = now.getUTCHours();
+  const base  = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  for (const slot of SLOTS) {
+    if (slot > h) { base.setUTCHours(slot, 0, 0, 0); return base; }
+  }
+  base.setUTCDate(base.getUTCDate() + 1);
+  base.setUTCHours(SLOTS[0], 0, 0, 0);
+  return base;
 }
 
-// ── Main handler ─────────────────────────────────────────────────────────────
+const generateKeyboard = (docId) => ({
+  inline_keyboard: [[
+    { text: '✅ Одобрить',        callback_data: `gen:approve:${docId}` },
+    { text: '❌ Отклонить',       callback_data: `gen:reject:${docId}` },
+    { text: '🔄 Перегенерировать', callback_data: `gen:regenerate:${docId}` },
+  ]],
+});
+
+async function handleContentGeneration(docId, chatId, token) {
+  const docRef = db.collection('content_queue').doc(docId);
+
+  // Show spinner
+  const spinnerMsg = await sendMessage(token, chatId, '⏳ Генерирую пост…');
+  const spinnerId  = spinnerMsg?.result?.message_id;
+
+  try {
+    // Stage 1: text (8s timeout)
+    const postData = await generatePost({ title: 'Новый пост', angle: 'Автогенерация' }, 8_000);
+
+    await docRef.update({
+      text:         postData.threadsText  || '',
+      telegramText: postData.telegramText || postData.threadsText || '',
+      imagePrompt:  postData.imagePrompt  || '',
+      status:       'draft',
+      updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const preview = postData.telegramText || postData.threadsText || '(нет текста)';
+
+    // Stage 2: image (14s timeout, non-blocking)
+    let imageUrl = null;
+    if (postData.imagePrompt) {
+      try {
+        imageUrl = await generateImage(postData.imagePrompt, 14_000);
+        if (imageUrl) {
+          await docRef.update({ imageUrl, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+        }
+      } catch (imgErr) {
+        console.error('[WH][gen] image failed:', imgErr.message);
+      }
+    }
+
+    // Send preview
+    if (spinnerId) {
+      await tg(token, 'deleteMessage', { chat_id: chatId, message_id: spinnerId }).catch(() => {});
+    }
+
+    const keyboard = generateKeyboard(docId);
+
+    if (imageUrl) {
+      await sendPhoto(token, chatId, imageUrl, preview.slice(0, 1024), { reply_markup: keyboard });
+    } else {
+      await sendMessage(token, chatId, `📝 Превью поста:\n\n${preview}`, { reply_markup: keyboard });
+    }
+  } catch (err) {
+    console.error('[WH][gen] generation failed:', err.message);
+    if (spinnerId) {
+      await editMessage(token, chatId, spinnerId, `❌ Ошибка генерации: ${err.message}`).catch(() => {});
+    }
+    await docRef.update({ status: 'failed', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+  }
+}
+
+// Callback handler for gen:action:docId callbacks
+async function handleGenerateCallback(token, cq) {
+  const [, action, docId] = cq.data.split(':');
+  const chatId = cq.message?.chat?.id;
+
+  if (!docId || !chatId) { await answerCbQuery(token, cq.id); return; }
+
+  const docRef = db.collection('content_queue').doc(docId);
+
+  if (action === 'approve') {
+    const scheduledAt = getNextPublishSlot();
+    await docRef.update({
+      status:      'approved',
+      scheduledAt: admin.firestore.Timestamp.fromDate(scheduledAt),
+      updatedAt:   admin.firestore.FieldValue.serverTimestamp(),
+    });
+    const msk = scheduledAt.toLocaleString('ru-RU', {
+      timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit',
+      day: 'numeric', month: 'short',
+    });
+    await answerCbQuery(token, cq.id, `✅ Одобрено — публикация в ${msk} МСК`);
+    await tg(token, 'editMessageReplyMarkup', { chat_id: chatId, message_id: cq.message.message_id, reply_markup: { inline_keyboard: [] } }).catch(() => {});
+    await sendMessage(token, chatId, `✅ Пост одобрен! Публикация в ${msk} (МСК).`);
+
+  } else if (action === 'reject') {
+    await docRef.update({ status: 'rejected', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    await answerCbQuery(token, cq.id, '❌ Пост отклонён');
+    await tg(token, 'editMessageReplyMarkup', { chat_id: chatId, message_id: cq.message.message_id, reply_markup: { inline_keyboard: [] } }).catch(() => {});
+    await sendMessage(token, chatId, '❌ Пост отклонён.');
+
+  } else if (action === 'regenerate') {
+    await answerCbQuery(token, cq.id, '🔄 Перегенерирую…');
+    await handleContentGeneration(docId, chatId, token);
+  }
+}
+
+// ── Main handler ──────────────────────────────────────────────────────────────
 
 module.exports = async (req, res) => {
-  // ── [1] METHOD ───────────────────────────────────────────────────────────────
-  console.error('[WH][1] START method:', req.method, 'body keys:', Object.keys(req.body || {}));
-
+  // [1] POST only
   if (req.method !== 'POST') {
-    console.error('[WH][1] ABORT non-POST');
-    res.status(405).json({ ok: false, description: 'Method not allowed' });
+    res.status(405).json({ ok: false });
     return;
   }
 
-  // ── [2] SIGNATURE ────────────────────────────────────────────────────────────
+  // [2] Signature
   const sigCheck = verifyWebhookSignature(req);
-  console.error('[WH][2] sig:', sigCheck.ok, sigCheck.reason || '');
-  if (!sigCheck.ok) {
-    console.error('[WH][2] ABORT sig failed:', sigCheck.reason);
-    res.status(200).json({ ok: true });
-    return;
-  }
+  if (!sigCheck.ok) { res.status(200).json({ ok: true }); return; }
 
-  // ── [3] RATE LIMIT ───────────────────────────────────────────────────────────
+  // [3] Rate limit
   const ip      = getClientIp(req);
-  const allowed = await rateLimit(`webhook:${ip}`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
-  console.error('[WH][3] rate limit allowed:', allowed, 'ip:', ip);
-  if (!allowed) {
-    res.status(200).json({ ok: true });
-    return;
-  }
+  const allowed = await rateLimit(`webhook:${ip}`, 100, 60_000);
+  if (!allowed) { res.status(200).json({ ok: true }); return; }
 
-  // ── [4] PARSE UPDATE ─────────────────────────────────────────────────────────
   const token  = process.env.TELEGRAM_BOT_TOKEN;
   const update = req.body;
 
-  // ── [4a] CALLBACK QUERY ───────────────────────────────────────────────────
-  if (update.callback_query) {
-    const cq = update.callback_query;
-    console.error('[WH][4a] callback_query from:', cq.from?.id, 'data:', cq.data);
-
-    if (isContentCallback(cq.data)) {
-      try { await handleCallbackQuery(token, cq); } catch (err) {
-        console.error('[WH][4a] content callback error:', err.message);
-      }
-    } else if (cq.data?.startsWith('task_')) {
-      try { await handleTaskCallback(token, cq); } catch (err) {
-        console.error('[WH][4a] task callback error:', err.message);
-      }
-    } else if (cq.data === 'wallet_set') {
-      // "Указать кошелёк" button from /referral
-      const chatId = cq.from?.id;
-      if (chatId) {
-        // Look up user
-        const userSnap = await db.collection('users')
-          .where('chatId', '==', chatId).limit(1).get()
-          .catch(() => ({ empty: true }));
-        const userId = userSnap.empty ? null : userSnap.docs[0].id;
-        if (userId) {
-          const { handleWalletCommand: wc } = require('../_lib/referral/commands');
-          await wc(token, chatId, userId).catch(err =>
-            console.error('[WH][4a] wallet_set error:', err.message)
-          );
-        }
-        await fetch(`${TELEGRAM_API}/bot${token}/answerCallbackQuery`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ callback_query_id: cq.id }),
-        }).catch(() => {});
-      }
-    }
-
-    res.status(200).json({ ok: true });
-    return;
-  }
-
-  // ── [4b] PRE_CHECKOUT_QUERY (Stars) ──────────────────────────────────────
-  if (update.pre_checkout_query) {
-    const pcq = update.pre_checkout_query;
-    console.error('[WH][4b] pre_checkout_query id:', pcq.id);
-    await fetch(`${TELEGRAM_API}/bot${token}/answerPreCheckoutQuery`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pre_checkout_query_id: pcq.id, ok: true }),
-    }).catch(err => console.error('[WH][4b] answerPreCheckout error:', err.message));
-    res.status(200).json({ ok: true });
-    return;
-  }
-
-  const { message } = update;
-
-  console.error('[WH][4] update_id:', update?.update_id,
-    'has message:', !!message,
-    'has text:', !!message?.text,
-    'has chat:', !!message?.chat,
-    'has successful_payment:', !!message?.successful_payment,
-    'other keys:', Object.keys(update || {}).filter(k => k !== 'update_id' && k !== 'message'));
-
-  // ── [4c] SUCCESSFUL PAYMENT (Stars) ──────────────────────────────────────
-  if (message?.successful_payment && message?.chat) {
-    const chatId = message.chat.id;
-    console.error('[WH][4c] successful_payment chatId:', chatId);
-    try {
-      const userSnap = await db.collection('users').where('chatId', '==', chatId).limit(1).get();
-      const userId   = userSnap.empty ? null : userSnap.docs[0].id;
-      if (userId) {
-        await activateStarsSubscription(token, chatId, userId, message.successful_payment);
-      } else {
-        console.error('[WH][4c] user not found for chatId:', chatId);
-      }
-    } catch (err) {
-      console.error('[WH][4c] payment activation error:', err.message);
-    }
-    res.status(200).json({ ok: true });
-    return;
-  }
-
-  if (!message || !message.text || !message.chat) {
-    console.error('[WH][4] ABORT no message/text/chat — update type not supported');
-    res.status(200).json({ ok: true });
-    return;
-  }
-
-  const chatId = message.chat.id;
-  console.error('[WH][4] chatId:', chatId, 'type:', typeof chatId);
-  if (!Number.isInteger(chatId) || chatId <= 0) {
-    console.error('[WH][4] ABORT invalid chatId:', chatId);
-    res.status(200).json({ ok: true });
-    return;
-  }
-
-  const text = String(message.text).slice(0, 4096);
-  console.error('[WH][4] text:', text.slice(0, 80));
-
   try {
-    // ── [5] USER LOOKUP ───────────────────────────────────────────────────────
-    const userQuery = await db.collection('users').where('chatId', '==', chatId).limit(1).get();
-    console.error('[WH][5] user lookup chatId:', chatId, 'found:', !userQuery.empty);
+    // ── [4a] CALLBACK QUERY ──────────────────────────────────────────────────
+    if (update.callback_query) {
+      const cq   = update.callback_query;
+      const data = cq.data || '';
 
-    if (userQuery.empty) {
-      const userQueryStr = await db.collection('users').where('chatId', '==', String(chatId)).limit(1).get();
-      console.error('[WH][5] user lookup chatId as string:', !userQueryStr.empty);
-
-      if (userQueryStr.empty) {
-        console.error('[WH][5] ABORT user not found for chatId:', chatId);
-        await sendTelegramMessage(
-          token, chatId,
-          '⚠️ Привет! Пожалуйста, сначала открой Мини-Апп (Enma), чтобы мы могли привязать твой аккаунт.'
+      if (data.startsWith('gen:')) {
+        await handleGenerateCallback(token, cq).catch(err =>
+          console.error('[WH][4a] gen callback error:', err.message)
         );
-        res.status(200).json({ ok: true });
-        return;
+      } else if (isContentCallback(data)) {
+        await handleContentCb(token, cq).catch(err =>
+          console.error('[WH][4a] content callback error:', err.message)
+        );
+      } else if (data.startsWith('task_')) {
+        await handleTaskCallback(token, cq).catch(err =>
+          console.error('[WH][4a] task callback error:', err.message)
+        );
+      } else if (data === 'wallet_set') {
+        const chatId = cq.from?.id;
+        if (chatId) {
+          const snap = await db.collection('users').where('chatId', '==', chatId).limit(1).get().catch(() => ({ empty: true }));
+          const userId = snap.empty ? null : snap.docs[0].id;
+          if (userId) await handleWalletCommand(token, chatId, userId).catch(() => {});
+          await answerCbQuery(token, cq.id);
+        }
+      } else {
+        await answerCbQuery(token, cq.id);
       }
-      req._userId = userQueryStr.docs[0].id;
-    }
 
-    const userId = req._userId || userQuery.docs[0].id;
-    console.error('[WH][5] userId:', userId);
-
-    // ── [5a] ADMIN CONTENT STATE ──────────────────────────────────────────────
-    if (isAdminChatId(chatId)) {
-      const handled = await handleAdminTextMessage(token, chatId, text).catch(err => {
-        console.error('[WH][5a] admin state error:', err.message);
-        return false;
-      });
-      if (handled) {
-        res.status(200).json({ ok: true });
-        return;
-      }
-    }
-
-    // ── [5b] USER STATE MACHINE (wallet setup etc.) ───────────────────────────
-    const stateHandled = await checkUserState(token, chatId, userId, text).catch(err => {
-      console.error('[WH][5b] user state error:', err.message);
-      return false;
-    });
-    if (stateHandled) {
       res.status(200).json({ ok: true });
       return;
     }
 
-    // ── [6] /start ────────────────────────────────────────────────────────────
-    if (text.startsWith('/start')) {
-      console.error('[WH][6] /start command');
+    // ── [4b] PRE_CHECKOUT_QUERY ──────────────────────────────────────────────
+    if (update.pre_checkout_query) {
+      await tg(token, 'answerPreCheckoutQuery', {
+        pre_checkout_query_id: update.pre_checkout_query.id, ok: true,
+      });
+      res.status(200).json({ ok: true });
+      return;
+    }
 
-      // Generate referral code for this user if they don't have one yet
-      await ensureReferralCode(userId).catch(err =>
-        console.error('[WH][6] ensureReferralCode error:', err.message)
+    const { message } = update;
+
+    // ── [4c] SUCCESSFUL PAYMENT ──────────────────────────────────────────────
+    if (message?.successful_payment && message?.chat) {
+      const chatId = message.chat.id;
+      const snap   = await db.collection('users').where('chatId', '==', chatId).limit(1).get();
+      const userId = snap.empty ? null : snap.docs[0].id;
+      if (userId) {
+        await activateStarsSubscription(token, chatId, userId, message.successful_payment);
+      }
+      res.status(200).json({ ok: true });
+      return;
+    }
+
+    if (!message?.text || !message?.chat) {
+      res.status(200).json({ ok: true });
+      return;
+    }
+
+    const chatId = message.chat.id;
+    const text   = String(message.text).slice(0, 4096);
+
+    // ── [5] USER LOOKUP ──────────────────────────────────────────────────────
+    let userQuery = await db.collection('users').where('chatId', '==', chatId).limit(1).get();
+    if (userQuery.empty) {
+      userQuery = await db.collection('users').where('chatId', '==', String(chatId)).limit(1).get();
+    }
+    if (userQuery.empty) {
+      await sendMessage(token, chatId,
+        '⚠️ Привет! Пожалуйста, сначала открой Мини-Апп (Enma), чтобы привязать аккаунт.'
       );
+      res.status(200).json({ ok: true });
+      return;
+    }
+    const userId = userQuery.docs[0].id;
 
-      // Handle referral parameter: /start ref_CODE
+    // ── [5a] ADMIN CONTENT STATE ─────────────────────────────────────────────
+    if (isAdminChatId(chatId)) {
+      const handled = await handleAdminTextMessage(token, chatId, text).catch(() => false);
+      if (handled) { res.status(200).json({ ok: true }); return; }
+    }
+
+    // ── [5b] USER STATE MACHINE (wallet setup) ───────────────────────────────
+    const stateHandled = await checkUserState(token, chatId, userId, text).catch(() => false);
+    if (stateHandled) { res.status(200).json({ ok: true }); return; }
+
+    // ── [6] /start ───────────────────────────────────────────────────────────
+    if (text.startsWith('/start')) {
+      await ensureReferralCode(userId).catch(() => {});
       const param = text.split(' ')[1] || '';
       if (param.startsWith('ref_')) {
-        const code   = param.slice(4).trim();
-        const result = await handleReferralStart(userId, code).catch(err => {
-          console.error('[WH][6] handleReferralStart error:', err.message);
-          return { ok: false };
-        });
+        const result = await handleReferralStart(userId, param.slice(4)).catch(() => ({ ok: false }));
         if (result.ok) {
-          await sendTelegramMessage(
-            token, chatId,
-            `👋 Тебя пригласил ${result.referrerName}. Удачи в работе с Enma!\n\n` +
-            `У тебя есть ${TRIAL_LIMIT} бесплатных запроса. Для безлимита — /subscribe`
+          await sendMessage(token, chatId,
+            `👋 Тебя пригласил ${result.referrerName}.\n\n` +
+            `У тебя ${TRIAL_LIMIT} бесплатных запроса. Для безлимита — /subscribe`
           );
           res.status(200).json({ ok: true });
           return;
         }
       }
-
-      await sendTelegramMessage(
-        token, chatId,
-        'Привет! Я Enma — AI-ассистент для финансов и продуктивности.\n' +
-        'Задавай любые вопросы или скажи что хочешь записать — я помогу!\n\n' +
-        `У тебя есть ${TRIAL_LIMIT} бесплатных пробных запроса.\n` +
-        'Для безлимита — /subscribe\n' +
+      await sendMessage(token, chatId,
+        'Привет! Я Enma — AI-ассистент для финансов и продуктивности.\n\n' +
+        'Что умею:\n' +
+        '💬 Отвечать на вопросы\n' +
+        '🔍 Искать в интернете (погода, курсы, новости)\n' +
+        '⏰ Создавать напоминания\n' +
+        '📋 Вести задачи\n' +
+        '💰 Записывать расходы и доходы\n\n' +
+        `У тебя ${TRIAL_LIMIT} бесплатных запроса.\n` +
+        'Подписка — /subscribe\n' +
         'Реферальная программа — /referral'
       );
       res.status(200).json({ ok: true });
       return;
     }
 
-    // ── [6b] BOT COMMANDS ─────────────────────────────────────────────────────
-
+    // ── [6b] COMMANDS ────────────────────────────────────────────────────────
     if (text === '/subscribe' || text.startsWith('/subscribe ')) {
-      console.error('[WH][6b] /subscribe');
       await handleSubscribeCommand(token, chatId);
       res.status(200).json({ ok: true });
       return;
     }
-
     if (text === '/referral' || text.startsWith('/referral ')) {
-      console.error('[WH][6b] /referral');
       await handleReferralCommand(token, chatId, userId);
       res.status(200).json({ ok: true });
       return;
     }
-
     if (text === '/wallet' || text.startsWith('/wallet ')) {
-      console.error('[WH][6b] /wallet');
       await handleWalletCommand(token, chatId, userId);
       res.status(200).json({ ok: true });
       return;
     }
-
     if (text === '/balance' || text.startsWith('/balance ')) {
-      console.error('[WH][6b] /balance');
       await handleBalanceCommand(token, chatId, userId);
       res.status(200).json({ ok: true });
       return;
     }
-
     if (text === '/cancel') {
-      console.error('[WH][6b] /cancel');
       await db.collection('user_states').doc(String(chatId)).delete().catch(() => {});
-      await sendTelegramMessage(token, chatId, '🚫 Отменено');
+      await sendMessage(token, chatId, '🚫 Отменено');
       res.status(200).json({ ok: true });
       return;
     }
 
-    // ── [7] ACCESS GATE ───────────────────────────────────────────────────────
-    const isTransactionRequest = looksLikeTransaction(text);
-    console.error('[WH][7] isTransaction:', isTransactionRequest);
+    // /generate or /post — content generation (admin only)
+    if (text === '/generate' || text === '/post' || text.startsWith('/generate ') || text.startsWith('/post ')) {
+      if (!isAdminChatId(chatId)) {
+        await sendMessage(token, chatId, '⛔ Только для администраторов.');
+        res.status(200).json({ ok: true });
+        return;
+      }
+      const docRef = db.collection('content_queue').doc();
+      await docRef.set({
+        status:    'generating',
+        chatId,
+        userId,
+        source:    'telegram-command',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      // Fire and don't await — generation is async (up to 22s total)
+      handleContentGeneration(docRef.id, chatId, token).catch(err =>
+        console.error('[WH][gen] unhandled:', err.message)
+      );
+      res.status(200).json({ ok: true });
+      return;
+    }
 
+    // ── [7] ACCESS GATE ──────────────────────────────────────────────────────
+    const sub = await checkSubscription(userId);
     let usingTrial = false;
     let trialUsed  = 0;
-    let subActive  = false;
 
-    if (!isTransactionRequest) {
-      const sub = await checkSubscription(userId);
-      subActive = sub.active;
-      console.error('[WH][7] subscription:', sub);
-      if (!sub.active) {
-        trialUsed = await getTrialUsed(userId);
-        console.error('[WH][7] trialUsed:', trialUsed, '/', TRIAL_LIMIT);
-        if (trialUsed >= TRIAL_LIMIT) {
-          console.error('[WH][7] ABORT trial exhausted');
-          await sendTrialExhaustedPrompt(token, chatId);
-          res.status(200).json({ ok: true });
-          return;
-        }
-        usingTrial = true;
+    if (!sub.active) {
+      trialUsed = await getTrialUsed(userId);
+      if (trialUsed >= TRIAL_LIMIT) {
+        await sendTrialExhaustedPrompt(token, chatId);
+        res.status(200).json({ ok: true });
+        return;
       }
+      usingTrial = true;
     }
 
-    // ── [8] CONTEXT ───────────────────────────────────────────────────────────
-    const [userCurrency, userTimezone] = await Promise.all([
-      getUserCurrency(userId),
-      getUserTimezone(userId),
-    ]);
-    console.error('[WH][8] currency:', userCurrency, 'timezone:', userTimezone);
+    // ── [8] CHAT WITH TOOLS ──────────────────────────────────────────────────
+    await sendChatAction(token, chatId);
 
-    const firstName    = message.from?.first_name || '';
-    const systemPrompt = buildSystemPrompt({
-      currency: userCurrency,
-      name: firstName,
-      nowIso: new Date().toISOString(),
-      userTimezone,
-    });
+    const history = await loadHistory(userId, sub.active).catch(() => []);
 
-    // Load conversation history (more for Pro users)
-    const history = await loadHistory(userId, subActive).catch(() => []);
-    const messages = [...history, { role: 'user', content: text }];
-
-    const execFn = (name, input) => executeTool(name, input, { userId, telegramChatId: chatId, userTimezone });
-
-    // ── [9] AI CALL ───────────────────────────────────────────────────────────
+    let replyText;
     try {
-      let displayText;
-
-      // ── [9a] WEB SEARCH PATH ─────────────────────────────────────────────
-      if (needsWebSearch(text)) {
-        console.error('[WH][9a] web search triggered for text:', text.slice(0, 80));
-        try {
-          const { answer, citations } = await searchWeb(text, subActive);
-          displayText = formatSearchResult(answer, citations);
-          console.error('[WH][9a] search ok, citations:', citations.length);
-        } catch (searchErr) {
-          console.error('[WH][9a] search failed:', searchErr.message, '— falling back to LLM');
-          // Fall back to regular LLM, append disclaimer
-          const { response } = await routeMessageWithTools(messages, systemPrompt, TOOL_DEFINITIONS, execFn);
-          displayText = response + '\n\n(без доступа к интернету)';
-        }
-      } else {
-        // ── [9b] NORMAL LLM + TOOLS PATH ──────────────────────────────────
-        console.error('[WH][9b] AI call start, history length:', history.length);
-        const { response, model } = await routeMessageWithTools(
-          messages,
-          systemPrompt,
-          TOOL_DEFINITIONS,
-          execFn
-        );
-        console.error('[WH][9b] AI response model:', model, 'length:', response?.length, 'preview:', response?.slice(0, 80));
-        displayText = response;
-      }
-
-      const parsed = parseTransaction(displayText);
-      if (parsed) {
-        displayText = parsed.cleanResponse;
-        try {
-          await saveTransaction(userId, parsed.transaction);
-        } catch (saveErr) {
-          console.error('[webhook] transaction save failed:', saveErr);
-          displayText += '\n\n(не удалось сохранить транзакцию)';
-        }
-      }
-
-      // ── [10] SEND REPLY ───────────────────────────────────────────────────
-      console.error('[WH][10] sending reply to chatId:', chatId, 'html length:', displayText?.length);
-      const htmlText = markdownToTelegramHtml(displayText);
-      await sendTelegramHtml(token, chatId, htmlText, displayText);
-      console.error('[WH][10] reply sent');
-
-      // Save message pair to history
-      await Promise.all([
-        saveMessage(userId, 'user', text).catch(() => {}),
-        saveMessage(userId, 'assistant', displayText).catch(() => {}),
-      ]);
-
-      if (usingTrial && !parsed) {
-        await incrementTrialUsed(userId);
-        const used      = trialUsed + 1;
-        const remaining = TRIAL_LIMIT - used;
-        if (remaining > 0) {
-          await sendTelegramMessage(token, chatId, `💬 Пробный запрос ${used} из ${TRIAL_LIMIT}`);
-        } else {
-          await sendTrialExhaustedPrompt(token, chatId);
-        }
-      }
+      const { text: response } = await chatWithTools(text, userId, chatId, history);
+      replyText = response || 'Не удалось получить ответ.';
     } catch (aiErr) {
-      console.error('[WH][9] AI error:', aiErr.message, 'status:', aiErr.status);
-      await sendTelegramMessage(token, chatId, 'Извините, временно не могу обработать запрос. Попробуйте позже.');
+      console.error('[WH][8] chatWithTools error:', aiErr.message);
+      replyText = 'Извините, временно не могу обработать запрос. Попробуйте позже.';
     }
 
-    console.error('[WH] END ok');
+    await sendMessage(token, chatId, replyText, { disable_web_page_preview: true });
+
+    await Promise.all([
+      saveMessage(userId, 'user', text).catch(() => {}),
+      saveMessage(userId, 'assistant', replyText).catch(() => {}),
+    ]);
+
+    if (usingTrial) {
+      await incrementTrialUsed(userId);
+      const used      = trialUsed + 1;
+      const remaining = TRIAL_LIMIT - used;
+      if (remaining > 0) {
+        await sendMessage(token, chatId, `💬 Пробный запрос ${used} из ${TRIAL_LIMIT}`);
+      } else {
+        await sendTrialExhaustedPrompt(token, chatId);
+      }
+    }
+
     res.status(200).json({ ok: true });
-  } catch (error) {
-    console.error('[WH] UNHANDLED ERROR:', error.message, error.stack?.slice(0, 300));
+
+  } catch (err) {
+    console.error('[WH] UNHANDLED:', err.message);
     try {
       const cid = req.body?.message?.chat?.id;
       if (cid && token) {
-        await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: cid, text: 'Произошла внутренняя ошибка. Попробуй ещё раз через минуту.' }),
-        });
+        await sendMessage(token, cid, 'Произошла внутренняя ошибка. Попробуй через минуту.');
       }
     } catch (_) {}
     res.status(200).json({ ok: true });

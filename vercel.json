@@ -1,13 +1,17 @@
 {
   "functions": {
     "api/telegram/webhook.js":      { "maxDuration": 30 },
+    "api/telegram/cron.js":         { "maxDuration": 30 },
     "api/cron/reminders.js":        { "maxDuration": 30 },
     "api/cron/content-plan.js":     { "maxDuration": 30 },
     "api/cron/content-publish.js":  { "maxDuration": 30 },
-    "api/cron/maintenance.js": { "maxDuration": 30 },
+    "api/cron/maintenance.js":      { "maxDuration": 30 },
     "api/debug-ai.js":              { "maxDuration": 30 },
     "api/setup-webhook.js":         { "maxDuration": 15 }
   },
+  "crons": [
+    { "path": "/api/telegram/cron", "schedule": "* * * * *" }
+  ],
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
