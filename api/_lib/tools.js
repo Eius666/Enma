@@ -62,6 +62,101 @@ function localToUtc(dateStr, timeStr, timezone) {
   return new Date(pseudo.getTime() - (tzAsUtcMs - pseudo.getTime()));
 }
 
+// ── Time parsing helpers ──────────────────────────────────────────────────────
+
+function getTodayDateInTz(timezone) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date()); // "YYYY-MM-DD"
+}
+
+function addDaysToDateStr(dateStr, days) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function getLocalTimeStr(date, timezone) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone, hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(date);
+  const p = {};
+  for (const { type, value } of parts) p[type] = value;
+  return `${String(parseInt(p.hour, 10) % 24).padStart(2, '0')}:${p.minute}`;
+}
+
+/**
+ * Parse a human-readable Russian time expression into a UTC Date.
+ * Examples: "через 5 минут", "в 23:30", "завтра в 9 утра", "через 2 часа"
+ */
+function parseRelativeTime(text, timezone) {
+  const tz    = timezone || DEFAULT_TZ;
+  const now   = new Date();
+  const lower = (text || '').toLowerCase().trim();
+
+  // "через N минут/часов/дней/недель"
+  const throughMatch = lower.match(/через\s+(\d+)\s+(минут|минуты|минуту|час|часа|часов|день|дня|дней|недел[юьи])/);
+  if (throughMatch) {
+    const num  = parseInt(throughMatch[1], 10);
+    const unit = throughMatch[2];
+    if (unit.startsWith('мин')) return new Date(now.getTime() + num * 60_000);
+    if (unit.startsWith('час')) return new Date(now.getTime() + num * 3_600_000);
+    if (unit.startsWith('не'))  return new Date(now.getTime() + num * 7 * 86_400_000);
+    return new Date(now.getTime() + num * 86_400_000); // день/дня/дней
+  }
+
+  // Determine day offset
+  let dayOffset   = 0;
+  let explicitDay = false;
+  if      (lower.includes('послезавтра')) { dayOffset = 2; explicitDay = true; }
+  else if (lower.includes('завтра'))      { dayOffset = 1; explicitDay = true; }
+  else if (lower.includes('сегодня'))     { explicitDay = true; }
+
+  // Extract HH:MM — "HH:MM", "HH.MM", or "N утра/вечера/дня/ночи"
+  let h = -1, m = 0;
+  const colonMatch = lower.match(/(\d{1,2})[:\.](\d{2})/);
+  if (colonMatch) {
+    h = parseInt(colonMatch[1], 10);
+    m = parseInt(colonMatch[2], 10);
+    if (/вечер|ночи/.test(lower) && h < 12) h += 12;
+    else if (/утра/.test(lower) && h === 12) h = 0;
+  } else {
+    const bareMatch = lower.match(/(?:^|[\s,])(\d{1,2})\s*(утра|дня|вечера|ночи)/);
+    if (bareMatch) {
+      h = parseInt(bareMatch[1], 10);
+      const period = bareMatch[2];
+      if ((period === 'вечера' || period === 'ночи') && h < 12) h += 12;
+      else if (period === 'утра' && h === 12) h = 0;
+    } else {
+      const simpleMatch = lower.match(/\bв\s+(\d{1,2})\b/);
+      if (simpleMatch) h = parseInt(simpleMatch[1], 10);
+    }
+  }
+
+  if (h >= 0) {
+    const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    let dateStr   = getTodayDateInTz(tz);
+    if (dayOffset > 0) dateStr = addDaysToDateStr(dateStr, dayOffset);
+
+    const utcDate = localToUtc(dateStr, timeStr, tz);
+    // Auto-shift to tomorrow only when no explicit day mentioned and time already passed
+    if (!explicitDay && utcDate <= now) {
+      return localToUtc(addDaysToDateStr(dateStr, 1), timeStr, tz);
+    }
+    return utcDate;
+  }
+
+  // ISO 8601 with Z (or parseable by Date constructor)
+  const direct = new Date(text);
+  if (!isNaN(direct.getTime())) return direct;
+
+  // "YYYY-MM-DD HH:MM" with space — treat bare datetime as UTC
+  const spaceMatch = (text || '').match(/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}:\d{2})/);
+  if (spaceMatch) return new Date(`${spaceMatch[1]}T${spaceMatch[2]}:00Z`);
+
+  return null;
+}
+
 // ── Tool definitions (OpenAI function-calling format) ────────────────────────
 
 const TOOL_DEFINITIONS = [
@@ -73,11 +168,11 @@ const TOOL_DEFINITIONS = [
       parameters: {
         type: 'object',
         properties: {
-          title:       { type: 'string', description: 'Текст напоминания' },
-          scheduledAt: { type: 'string', description: 'Дата и время ISO 8601 UTC (конвертируй из часового пояса пользователя в UTC)' },
-          description: { type: 'string', description: 'Дополнительное описание (опционально)' },
+          title:         { type: 'string', description: 'Текст напоминания' },
+          relative_time: { type: 'string', description: 'Время ТОЧНО как сказал пользователь: "через 5 минут", "в 23:30", "завтра в 9 утра", "через 2 часа". НЕ конвертируй в ISO — передай оригинальную фразу.' },
+          description:   { type: 'string', description: 'Дополнительное описание (опционально)' },
         },
-        required: ['title', 'scheduledAt'],
+        required: ['title', 'relative_time'],
       },
     },
   },
@@ -89,16 +184,16 @@ const TOOL_DEFINITIONS = [
       parameters: {
         type: 'object',
         properties: {
-          title:       { type: 'string', description: 'Название задачи' },
-          date:        { type: 'string', description: 'Дата YYYY-MM-DD' },
-          time:        { type: 'string', description: 'Время HH:MM по часовому поясу пользователя (опционально)' },
-          description: { type: 'string', description: 'Описание (опционально)' },
+          title:         { type: 'string', description: 'Название задачи' },
+          date:          { type: 'string', description: 'Дата YYYY-MM-DD (если известна)' },
+          relative_time: { type: 'string', description: 'Время ТОЧНО как сказал пользователь: "в 14:00", "в 9 утра", "завтра в 10:00". НЕ конвертируй — передай оригинальную фразу.' },
+          description:   { type: 'string', description: 'Описание (опционально)' },
           category: {
             type: 'string',
             enum: ['work', 'personal', 'health', 'study', 'finance', 'other'],
           },
         },
-        required: ['title', 'date'],
+        required: ['title'],
       },
     },
   },
@@ -199,31 +294,14 @@ const TOOL_DEFINITIONS = [
 async function createReminder(args, userId, chatId, timezone) {
   console.log('[create_reminder] raw args:', JSON.stringify(args));
 
-  const { title, scheduledAt, description } = args;
+  const { title, relative_time, description } = args;
   const tz = timezone || DEFAULT_TZ;
 
-  // 1. Try direct parse (ISO 8601 with Z suffix is most reliable)
-  let scheduled = scheduledAt ? new Date(scheduledAt) : null;
-
-  // 2. "YYYY-MM-DD HH:MM" or "YYYY-MM-DDTHH:MM" without Z — LLM forgot Z, treat as UTC
-  if (!scheduled || isNaN(scheduled.getTime())) {
-    const m = (scheduledAt || '').match(/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}:\d{2})/);
-    if (m) scheduled = new Date(`${m[1]}T${m[2]}:00Z`);
-  }
-
-  // 3. Natural language fallback (Russian): "через N минут/часов/дней"
-  if (!scheduled || isNaN(scheduled.getTime())) {
-    const lower = (scheduledAt || '').toLowerCase();
-    const now   = Date.now();
-    const num   = parseInt((lower.match(/\d+/) || ['1'])[0], 10);
-    if      (lower.includes('минут'))                                   scheduled = new Date(now + num * 60_000);
-    else if (lower.includes('час'))                                     scheduled = new Date(now + num * 3_600_000);
-    else if (lower.includes('день') || lower.includes('дня') || lower.includes('дней')) scheduled = new Date(now + num * 86_400_000);
-  }
+  const scheduled = parseRelativeTime(relative_time, tz);
 
   if (!scheduled || isNaN(scheduled.getTime())) {
-    console.error('[create_reminder] unparseable scheduledAt:', scheduledAt);
-    return { ok: false, error: `Не удалось распознать время: «${scheduledAt}». Укажи дату и время явно, например: «завтра в 10 утра».` };
+    console.error('[create_reminder] unparseable relative_time:', relative_time);
+    return { ok: false, error: `Не удалось распознать время: «${relative_time}». Попробуй написать иначе, например: «через 30 минут» или «завтра в 10 утра».` };
   }
   if (scheduled <= new Date()) {
     return { ok: false, error: 'Время должно быть в будущем' };
@@ -252,16 +330,50 @@ async function createReminder(args, userId, chatId, timezone) {
 }
 
 async function createTask(args, userId, chatId, timezone) {
-  const { title, date, time, description, category } = args;
-  const id = createId();
+  console.log('[create_task] raw args:', JSON.stringify(args));
+
+  const { title, date, relative_time, description, category } = args;
   const tz = timezone || DEFAULT_TZ;
+  const id = createId();
+
+  // Parse time from relative_time; if date provided, use it as base date for time-only expressions
+  let taskUtcDate = null;
+  let taskTime    = null; // HH:MM local for display
+  let taskDate    = date || getTodayDateInTz(tz);
+
+  if (relative_time) {
+    // Check if relative_time has a HH:MM pattern but no date keywords → anchor to taskDate
+    const hasDateKeyword = /завтра|сегодня|послезавтра|через\s+\d+\s+(день|дня|дней|недел)/.test(relative_time.toLowerCase());
+    const timeOnlyMatch  = relative_time.match(/(\d{1,2})[:\.](\d{2})/);
+
+    if (!hasDateKeyword && timeOnlyMatch && date) {
+      // "в 14:00" with explicit date → anchor to that date
+      const h = String(parseInt(timeOnlyMatch[1], 10)).padStart(2, '0');
+      const m = String(parseInt(timeOnlyMatch[2], 10)).padStart(2, '0');
+      taskTime    = `${h}:${m}`;
+      taskUtcDate = localToUtc(date, taskTime, tz);
+    } else {
+      taskUtcDate = parseRelativeTime(relative_time, tz);
+      if (taskUtcDate && !isNaN(taskUtcDate.getTime())) {
+        taskTime = getLocalTimeStr(taskUtcDate, tz);
+        // If relative_time implied a different date (e.g. "завтра"), update taskDate
+        if (hasDateKeyword || !date) {
+          taskDate = getTodayDateInTz(tz);
+          // Derive date in user's TZ from the parsed UTC time
+          taskDate = new Intl.DateTimeFormat('en-CA', {
+            timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+          }).format(taskUtcDate);
+        }
+      }
+    }
+  }
 
   await db.collection('tasks').doc(id).set({
     userId,
     chatId,
     title,
-    date,
-    time:        time || null,
+    date:        taskDate,
+    time:        taskTime || null,
     description: description || '',
     category:    category || 'other',
     done:        false,
@@ -270,28 +382,24 @@ async function createTask(args, userId, chatId, timezone) {
     updatedAt:   admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  // Companion reminder using the user's actual timezone for conversion
-  if (time) {
-    const taskDate = localToUtc(date, time, tz);
-    if (taskDate > new Date()) {
-      await db.collection('reminders').doc(createId()).set({
-        userId,
-        chatId,
-        title,
-        description:  description || '',
-        scheduledAt:  admin.firestore.Timestamp.fromDate(taskDate),
-        status:       'pending',
-        telegramText: `📋 Задача: ${title}`,
-        source:       'telegram-bot',
-        taskId:       id,
-        createdAt:    admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
-      });
-    }
+  if (taskUtcDate && !isNaN(taskUtcDate.getTime()) && taskUtcDate > new Date()) {
+    await db.collection('reminders').doc(createId()).set({
+      userId,
+      chatId,
+      title,
+      description:  description || '',
+      scheduledAt:  admin.firestore.Timestamp.fromDate(taskUtcDate),
+      status:       'pending',
+      telegramText: `📋 Задача: ${title}`,
+      source:       'telegram-bot',
+      taskId:       id,
+      createdAt:    admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
+    });
   }
 
-  const timeStr = time ? ` в ${time}` : '';
-  return { ok: true, message: `✅ Задача создана: «${title}» на ${date}${timeStr}` };
+  const timeStr = taskTime ? ` в ${taskTime}` : '';
+  return { ok: true, message: `✅ Задача создана: «${title}» на ${taskDate}${timeStr}` };
 }
 
 async function createTransaction(args, userId, chatId) {
