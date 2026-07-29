@@ -15,6 +15,7 @@ const { handleTaskCallback, TOOL_DEFINITIONS, executeTool } = require('../_lib/a
 const { handleReferralStart, ensureReferralCode }      = require('../_lib/referral/codes');
 const { handleReferralCommand, handleWalletCommand, handleBalanceCommand, checkUserState } = require('../_lib/referral/commands');
 const { processSubscriptionPayment }                   = require('../_lib/referral/earnings');
+const { searchWeb, needsWebSearch, formatSearchResult } = require('../_lib/ai/webSearch');
 
 const TELEGRAM_API = 'https://api.telegram.org';
 
@@ -447,18 +448,35 @@ module.exports = async (req, res) => {
 
     // ── [9] AI CALL ───────────────────────────────────────────────────────────
     try {
-      console.error('[WH][9] AI call start, history length:', history.length);
-      const { response, model } = await routeMessageWithTools(
-        messages,
-        systemPrompt,
-        TOOL_DEFINITIONS,
-        execFn
-      );
-      console.error('[WH][9] AI response model:', model, 'length:', response?.length, 'preview:', response?.slice(0, 80));
+      let displayText;
 
-      const parsed = parseTransaction(response);
-      let displayText = response;
+      // ── [9a] WEB SEARCH PATH ─────────────────────────────────────────────
+      if (needsWebSearch(text)) {
+        console.error('[WH][9a] web search triggered for text:', text.slice(0, 80));
+        try {
+          const { answer, citations } = await searchWeb(text, subActive);
+          displayText = formatSearchResult(answer, citations);
+          console.error('[WH][9a] search ok, citations:', citations.length);
+        } catch (searchErr) {
+          console.error('[WH][9a] search failed:', searchErr.message, '— falling back to LLM');
+          // Fall back to regular LLM, append disclaimer
+          const { response } = await routeMessageWithTools(messages, systemPrompt, TOOL_DEFINITIONS, execFn);
+          displayText = response + '\n\n(без доступа к интернету)';
+        }
+      } else {
+        // ── [9b] NORMAL LLM + TOOLS PATH ──────────────────────────────────
+        console.error('[WH][9b] AI call start, history length:', history.length);
+        const { response, model } = await routeMessageWithTools(
+          messages,
+          systemPrompt,
+          TOOL_DEFINITIONS,
+          execFn
+        );
+        console.error('[WH][9b] AI response model:', model, 'length:', response?.length, 'preview:', response?.slice(0, 80));
+        displayText = response;
+      }
 
+      const parsed = parseTransaction(displayText);
       if (parsed) {
         displayText = parsed.cleanResponse;
         try {

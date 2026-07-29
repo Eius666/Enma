@@ -20,7 +20,7 @@ const DAY_NAMES_RU = ['воскресенье', 'понедельник', 'вт�
 async function llmCall(messages, systemPrompt, timeoutMs = 25_000) {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error('OPENROUTER_API_KEY not set');
-  const model = process.env.OPENROUTER_PRIMARY_MODEL || 'google/gemini-2.5-flash';
+  const model = process.env.CONTENT_LLM_MODEL || 'google/gemini-2.5-flash';
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);

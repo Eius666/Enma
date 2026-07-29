@@ -88,15 +88,6 @@ module.exports = async (req, res) => {
   // 4. Confirm payment + update subscription in a batch
   const now = admin.firestore.FieldValue.serverTimestamp();
 
-  // 4a. Process referral commission (non-fatal)
-  try {
-    const { processSubscriptionPayment } = require('../_lib/referral/earnings');
-    const token = process.env.TELEGRAM_BOT_TOKEN;
-    await processSubscriptionPayment(userId, 10, paymentId, token);
-  } catch (referralErr) {
-    console.error('[ton/verify] referral processing error:', referralErr.message);
-  }
-
   const batch = db.batch();
 
   batch.update(paymentRef, {
@@ -107,6 +98,15 @@ module.exports = async (req, res) => {
   });
 
   const userId = payment.userId;
+
+  // 4a. Process referral commission (non-fatal)
+  try {
+    const { processSubscriptionPayment } = require('../_lib/referral/earnings');
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    await processSubscriptionPayment(userId, 10, paymentId, token);
+  } catch (referralErr) {
+    console.error('[ton/verify] referral processing error:', referralErr.message);
+  }
   const plan = payment.plan || 'pro';
   const periodMonths = payment.periodMonths || 1;
 
