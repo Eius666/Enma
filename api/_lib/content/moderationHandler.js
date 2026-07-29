@@ -127,7 +127,7 @@ async function handleIdeaAction(token, chatId, docRef, doc, docId, action, origM
 
     // Text generated. imageUrl is null until image gen is implemented —
     // still send draft preview (image-less posts publish fine).
-    const scheduledAt = nextHourSlot();
+    const scheduledAt = getNextPublishSlot();
     await docRef.update({
       status:       'draft',
       text:         postData.threadsText || '',
@@ -266,15 +266,20 @@ async function handleIdeaAction(token, chatId, docRef, doc, docId, action, origM
 async function handleDraftAction(token, chatId, docRef, doc, docId, action, origMessage) {
 
   if (action === 'approve') {
-    await docRef.update({ status: 'approved', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-    const scheduledAt = doc.scheduledAt?.toDate?.() || nextHourSlot();
+    const scheduledAt = getNextPublishSlot();
+    await docRef.update({
+      status:      'approved',
+      scheduledAt: admin.firestore.Timestamp.fromDate(scheduledAt),
+      updatedAt:   admin.firestore.FieldValue.serverTimestamp(),
+    });
     const timeStr = scheduledAt.toLocaleString('ru-RU', {
-      timeZone: 'UTC', hour: '2-digit', minute: '2-digit',
+      timeZone: 'Europe/Moscow',
+      hour: '2-digit', minute: '2-digit',
       day: 'numeric', month: 'short',
     });
     await tgPost(token, 'sendMessage', {
       chat_id: chatId,
-      text: `✅ Пост в очереди. Публикация: ${timeStr} UTC`,
+      text: `✅ Пост одобрен! Будет опубликован в ${timeStr} (МСК).`,
     });
     return;
   }
@@ -382,7 +387,7 @@ async function handlePostSkipAction(token, chatId, docRef, doc, docId, action, o
     await tgPost(token, 'sendMessage', { chat_id: chatId, text: '⏳ Генерирую новый текст…' });
 
     const postData = await regeneratePost({ title: doc.idea, angle: doc.angle }, 8_000);
-    const scheduledAt = nextHourSlot();
+    const scheduledAt = getNextPublishSlot();
 
     const newRef = db.collection('content_queue').doc();
     await newRef.set({
@@ -488,11 +493,21 @@ async function regenLimitReached(token, chatId, docId, origMessage) {
   });
 }
 
-function nextHourSlot() {
-  const d = new Date();
-  d.setUTCMinutes(0, 0, 0);
-  d.setUTCHours(d.getUTCHours() + 1);
-  return d;
+function getNextPublishSlot() {
+  const SLOTS = [8, 10, 13]; // UTC hours (11:00, 13:00, 16:00 МСК)
+  const now = new Date();
+  const utcHour = now.getUTCHours();
+  const base = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  for (const slot of SLOTS) {
+    if (slot > utcHour) {
+      base.setUTCHours(slot, 0, 0, 0);
+      return base;
+    }
+  }
+  // All slots today passed — use first slot tomorrow.
+  base.setUTCDate(base.getUTCDate() + 1);
+  base.setUTCHours(SLOTS[0], 0, 0, 0);
+  return base;
 }
 
 async function editOrSend(token, chatId, messageId, text) {
