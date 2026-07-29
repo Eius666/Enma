@@ -66,68 +66,103 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const now = admin.firestore.Timestamp.fromDate(new Date());
+    const nowMs = Date.now();
+
+    // Single equality filter only — no composite index needed.
+    // scheduledAt comparison is done in-memory to handle both Firestore
+    // Timestamps and ISO string values (created by older code).
     const snapshot = await db
       .collection('reminders')
       .where('status', '==', 'pending')
-      .where('scheduledAt', '<=', now)
-      .orderBy('scheduledAt', 'asc')
-      .limit(100)
+      .limit(200)
       .get();
 
-    if (snapshot.empty) {
-      res.status(200).json({ ok: true, processed: 0 });
+    console.log('[cron] pending reminders in collection:', snapshot.size);
+
+    const dueDocs = snapshot.docs.filter(d => {
+      const s = d.data().scheduledAt;
+      if (!s) return false;
+      const ts = s.toDate ? s.toDate() : new Date(s);
+      return !isNaN(ts.getTime()) && ts.getTime() <= nowMs;
+    });
+
+    console.log('[cron] due now:', dueDocs.length,
+      '| skipped (future):', snapshot.size - dueDocs.length);
+
+    if (!dueDocs.length) {
+      res.status(200).json({ ok: true, processed: 0, pending: snapshot.size });
       return;
     }
 
     const results = [];
-    for (const docSnap of snapshot.docs) {
+    for (const docSnap of dueDocs) {
       const docRef = docSnap.ref;
+      const data   = docSnap.data();
+
+      console.log('[cron] processing reminder:', docRef.id,
+        '| title:', data.title,
+        '| chatId:', data.chatId,
+        '| scheduledAt:', data.scheduledAt?.toDate?.()?.toISOString?.() ?? data.scheduledAt);
+
       const claimed = await db.runTransaction(async tx => {
         const latest = await tx.get(docRef);
         if (!latest.exists) return null;
-        const data = latest.data();
-        if (data.status !== 'pending') return null;
+        if (latest.data().status !== 'pending') return null;
         tx.update(docRef, {
-          status: 'sending',
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          status:    'sending',
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-        return data;
+        return latest.data();
       });
 
-      if (!claimed) continue;
+      if (!claimed) {
+        console.log('[cron] reminder', docRef.id, 'skipped — already claimed');
+        continue;
+      }
+
+      if (!claimed.chatId) {
+        console.error('[cron] reminder', docRef.id, 'has no chatId — skipping');
+        await docRef.update({ status: 'failed', lastError: 'missing chatId',
+          updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+        results.push({ id: docRef.id, ok: false, error: 'missing chatId' });
+        continue;
+      }
+
       let text;
       if (claimed.telegramText) {
         text = claimed.telegramText;
       } else if (claimed.type === 'task_deadline') {
-        const mins = claimed.notifyBefore ?? 15;
-        text = `⏰ Напоминание: «${claimed.title}» через ${mins} мин`;
+        text = `⏰ Напоминание: «${claimed.title}» через ${claimed.notifyBefore ?? 15} мин`;
       } else if (claimed.type === 'habit_reminder') {
         text = `🌱 Привычка: «${claimed.title}» — не забудь отметить сегодня!`;
       } else {
-        text = `Reminder: ${claimed.title}${claimed.time ? `\n${claimed.time}` : ''}`;
+        text = `⏰ Напоминание: ${claimed.title}`;
       }
 
       const sendResult = await sendTelegramMessage(token, claimed.chatId, text);
+      console.log('[cron] sendMessage to', claimed.chatId, '→ ok:', sendResult.ok,
+        '| status:', sendResult.status,
+        '| payload:', JSON.stringify(sendResult.payload).slice(0, 120));
+
       if (sendResult.ok) {
         await docRef.update({
-          status: 'sent',
+          status:     'sent',
           notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          updatedAt:  admin.firestore.FieldValue.serverTimestamp(),
         });
       } else {
         await docRef.update({
-          status: 'pending',
+          status:    'pending',
           lastError: sendResult.payload?.description ?? 'Telegram send failed',
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       }
-      results.push({ id: docRef.id, ok: sendResult.ok, status: sendResult.status });
+      results.push({ id: docRef.id, ok: sendResult.ok, httpStatus: sendResult.status });
     }
 
     res.status(200).json({ ok: true, processed: results.length, results });
   } catch (error) {
-    console.error('❌ Cron execution error:', error);
-    res.status(500).json({ ok: false, description: 'Cron failed' });
+    console.error('[cron] ❌ execution error:', error.message, error.stack?.slice(0, 300));
+    res.status(500).json({ ok: false, description: error.message });
   }
 };
