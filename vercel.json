@@ -9,10 +9,7 @@
     "api/debug-ai.js":              { "maxDuration": 30 },
     "api/setup-webhook.js":         { "maxDuration": 15 }
   },
-  "crons": [
-    { "path": "/api/telegram/cron", "schedule": "* * * * *" }
-  ],
-  "rewrites": [
+"rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
