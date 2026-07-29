@@ -34,8 +34,23 @@ module.exports = async (req, res) => {
   if (cronSecret) {
     const header = req.headers?.authorization ?? '';
     const bearer = header.startsWith('Bearer ') ? header.slice(7) : '';
-    const querySecret = typeof req.query?.secret === 'string' ? req.query.secret : '';
+
+    // Parse query directly from req.url — req.query is not always populated
+    // in Vercel serverless functions outside of Next.js routing.
+    let querySecret = '';
+    try {
+      const parsed = new URL(req.url || '/', 'https://placeholder.local');
+      querySecret = parsed.searchParams.get('secret') || '';
+    } catch (_) {
+      querySecret = req.query?.secret || '';
+    }
+
     const isVercelCron = req.headers['user-agent'] === 'vercel-cron/1.0';
+
+    console.log('[cron] auth — bearer:', bearer ? 'set' : 'empty',
+      '| querySecret:', querySecret ? 'set' : 'empty',
+      '| req.query:', JSON.stringify(req.query),
+      '| isVercelCron:', isVercelCron);
 
     if (!isVercelCron && bearer !== cronSecret && querySecret !== cronSecret) {
       console.warn('[cron] Unauthorized cron attempt');
