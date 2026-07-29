@@ -1,6 +1,6 @@
 'use strict';
 
-const { TOOL_DEFINITIONS, executeTool } = require('./tools');
+const { TOOL_DEFINITIONS, executeTool, getUserTimezone } = require('./tools');
 
 const OR_BASE = 'https://openrouter.ai/api/v1';
 
@@ -16,13 +16,15 @@ const SYSTEM_PROMPT = `Ты — Enma, умный персональный асс
 
 Правила:
 1. Всегда используй инструменты когда пользователь просит что-то сделать.
-2. Часовой пояс пользователя: Europe/Moscow (GMT+3). Конвертируй в UTC перед сохранением.
+2. Часовой пояс пользователя: {{TIMEZONE}}. Конвертируй локальное время в UTC перед сохранением.
 3. Текущая дата и время (UTC): {{CURRENT_TIME}}
 4. Отвечай на русском, будь дружелюбным и кратким.
 5. НЕ придумывай данные — если не знаешь, используй search_web.`;
 
-function buildSystemPrompt() {
-  return SYSTEM_PROMPT.replace('{{CURRENT_TIME}}', new Date().toISOString());
+function buildSystemPrompt(timezone = 'Europe/Warsaw') {
+  return SYSTEM_PROMPT
+    .replace('{{TIMEZONE}}', timezone)
+    .replace('{{CURRENT_TIME}}', new Date().toISOString());
 }
 
 // ── JSON extractor (handles Gemini's markdown wrapping) ───────────────────────
@@ -125,7 +127,8 @@ async function searchWeb(query) {
 // ── Main chat function ────────────────────────────────────────────────────────
 
 async function chatWithTools(userMessage, userId, chatId, history = []) {
-  const system   = { role: 'system', content: buildSystemPrompt() };
+  const timezone = await getUserTimezone(userId).catch(() => 'Europe/Warsaw');
+  const system   = { role: 'system', content: buildSystemPrompt(timezone) };
   const trimmed  = history.slice(-10);
   const messages = [system, ...trimmed, { role: 'user', content: userMessage }];
 
@@ -172,7 +175,7 @@ async function chatWithTools(userMessage, userId, chatId, history = []) {
         const found = await searchWeb(args.query || userMessage);
         result = { ok: true, message: found };
       } else {
-        result = await executeTool(name, args, userId, chatId);
+        result = await executeTool(name, args, userId, chatId, timezone);
       }
     } catch (err) {
       result  = { ok: false, error: err.message };

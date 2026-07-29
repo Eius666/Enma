@@ -5,6 +5,7 @@ const { verifyWebhookSignature }                           = require('../_lib/ve
 const { rateLimit, getClientIp }                           = require('../_lib/rateLimit');
 const { checkSubscription, getTrialUsed, incrementTrialUsed, TRIAL_LIMIT } = require('../_lib/ai/subscription');
 const { chatWithTools }                                    = require('../_lib/llm-chat');
+const { getUserTimezone, isValidTimezone, getUtcOffsetStr } = require('../_lib/tools');
 const { generatePost, generateImage }                      = require('../_lib/content/generator');
 const { handleCallbackQuery: handleContentCb, handleAdminTextMessage, isContentCallback, isAdminChatId } = require('../_lib/content/moderationHandler');
 const { handleTaskCallback }                               = require('../_lib/ai/tools');
@@ -381,6 +382,23 @@ module.exports = async (req, res) => {
     if (text === '/cancel') {
       await db.collection('user_states').doc(String(chatId)).delete().catch(() => {});
       await sendMessage(token, chatId, '🚫 Отменено');
+      res.status(200).json({ ok: true });
+      return;
+    }
+
+    if (text === '/timezone' || text.startsWith('/timezone ')) {
+      const arg = text.slice('/timezone'.length).trim();
+      if (!arg) {
+        const tz     = await getUserTimezone(userId);
+        const offset = getUtcOffsetStr(tz);
+        await sendMessage(token, chatId, `Твой часовой пояс: ${tz} (${offset})\n\nЧтобы изменить: /timezone Europe/Warsaw`);
+      } else if (!isValidTimezone(arg)) {
+        await sendMessage(token, chatId, `❌ Неверный часовой пояс: «${arg}»\nПример: /timezone Europe/Warsaw`);
+      } else {
+        await db.collection('users').doc(userId).update({ timezone: arg });
+        const offset = getUtcOffsetStr(arg);
+        await sendMessage(token, chatId, `✅ Часовой пояс обновлён: ${arg} (${offset})`);
+      }
       res.status(200).json({ ok: true });
       return;
     }
