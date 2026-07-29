@@ -1,9 +1,11 @@
 'use strict';
 
-// Diagnostic endpoint — tests OpenRouter API directly.
+// Diagnostic endpoint.
 // Protected with CRON_SECRET (or open if CRON_SECRET not set, for dev convenience).
-// Usage: GET /api/debug-ai  with  Authorization: Bearer <CRON_SECRET>
-//        or GET /api/debug-ai?secret=<CRON_SECRET>
+// Usage: GET /api/debug-ai?secret=<CRON_SECRET>
+//        GET /api/debug-ai?secret=<CRON_SECRET>&type=reminders  — Firestore reminders
+
+const { db } = require('./_lib/firebaseAdmin');
 
 module.exports = async (req, res) => {
   const secret = process.env.CRON_SECRET;
@@ -13,6 +15,57 @@ module.exports = async (req, res) => {
     if (!headerOk && !queryOk) {
       res.status(401).json({ ok: false, error: 'unauthorized' });
       return;
+    }
+  }
+
+  // ── Reminders debug mode ───────────────────────────────────────────────────
+  if (req.query?.type === 'reminders') {
+    try {
+      const snap = await db.collection('reminders')
+        .orderBy('createdAt', 'desc')
+        .limit(10)
+        .get();
+
+      const now  = new Date();
+      const docs = snap.docs.map(d => {
+        const data = d.data();
+        const sAt  = data.scheduledAt;
+        let scheduledAtIso  = null;
+        let scheduledAtType = 'missing';
+        let isDue           = false;
+
+        if (sAt?.toDate) {
+          scheduledAtIso  = sAt.toDate().toISOString();
+          scheduledAtType = 'Firestore Timestamp';
+          isDue           = sAt.toDate() <= now;
+        } else if (sAt) {
+          scheduledAtIso  = String(sAt);
+          scheduledAtType = 'string';
+          isDue           = new Date(sAt) <= now;
+        }
+
+        return {
+          id: d.id,
+          title:         data.title,
+          status:        data.status,
+          chatId:        data.chatId,
+          telegramText:  data.telegramText,
+          scheduledAt:   scheduledAtIso,
+          scheduledAtType,
+          isDue,
+          lastError:     data.lastError,
+          createdAt:     data.createdAt?.toDate?.()?.toISOString?.() ?? null,
+        };
+      });
+
+      const byStatus = {};
+      for (const d of docs) byStatus[d.status] = (byStatus[d.status] || 0) + 1;
+
+      return res.status(200).json({
+        ok: true, serverNow: now.toISOString(), total: docs.length, byStatus, docs,
+      });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message });
     }
   }
 
