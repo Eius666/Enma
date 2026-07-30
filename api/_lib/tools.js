@@ -323,6 +323,37 @@ const TOOL_DEFINITIONS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'send_message',
+      description: 'Отправить текстовое сообщение в указанный чат от имени бота. Используй когда пользователь просит отправить кому-то сообщение. Бот может отправлять только в чаты, где он уже есть участником или пользователь написал боту /start. Если chat_id не указан — спроси у пользователя.',
+      parameters: {
+        type: 'object',
+        properties: {
+          chat_id: { type: 'string', description: 'ID целевого чата (числовой ID или @username канала/группы)' },
+          text:    { type: 'string', description: 'Текст сообщения' },
+        },
+        required: ['chat_id', 'text'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'forward_message',
+      description: 'Переслать сообщение из текущего чата пользователя в другой чат. Нужен message_id пересылаемого сообщения. Если chat_id не указан — спроси у пользователя.',
+      parameters: {
+        type: 'object',
+        properties: {
+          chat_id:      { type: 'string',  description: 'ID целевого чата' },
+          from_chat_id: { type: 'string',  description: 'ID чата-источника (по умолчанию текущий чат пользователя — не указывай если не нужно)' },
+          message_id:   { type: 'integer', description: 'ID сообщения для пересылки' },
+        },
+        required: ['chat_id', 'message_id'],
+      },
+    },
+  },
 ];
 
 // ── Tool implementations ──────────────────────────────────────────────────────
@@ -656,6 +687,47 @@ async function getFinanceStats(args, userId) {
   return { ok: true, message: lines.join('\n') };
 }
 
+async function sendBotMessage(args) {
+  const { chat_id, text } = args;
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return { ok: false, error: 'TELEGRAM_BOT_TOKEN not set' };
+
+  const resp = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ chat_id, text, parse_mode: 'HTML' }),
+  });
+  const data = await resp.json().catch(() => ({}));
+
+  if (!data.ok) {
+    const desc = data.description || 'Unknown Telegram error';
+    console.error('[send_message] TG error:', desc);
+    return { ok: false, error: `Telegram: ${desc}` };
+  }
+  return { ok: true, message: `✅ Сообщение отправлено в чат ${chat_id}` };
+}
+
+async function forwardBotMessage(args, defaultChatId) {
+  const { chat_id, message_id } = args;
+  const from_chat_id = args.from_chat_id || String(defaultChatId);
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return { ok: false, error: 'TELEGRAM_BOT_TOKEN not set' };
+
+  const resp = await fetch(`https://api.telegram.org/bot${token}/forwardMessage`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ chat_id, from_chat_id, message_id }),
+  });
+  const data = await resp.json().catch(() => ({}));
+
+  if (!data.ok) {
+    const desc = data.description || 'Unknown Telegram error';
+    console.error('[forward_message] TG error:', desc);
+    return { ok: false, error: `Telegram: ${desc}` };
+  }
+  return { ok: true, message: `✅ Сообщение переслано в чат ${chat_id}` };
+}
+
 // ── Dispatcher ────────────────────────────────────────────────────────────────
 
 async function executeTool(name, args, userId, chatId, timezone) {
@@ -669,6 +741,8 @@ async function executeTool(name, args, userId, chatId, timezone) {
     case 'set_timezone':       return setTimezone(args, userId);
     case 'generate_image':     return generateImage(args, chatId);
     case 'get_finance_stats':  return getFinanceStats(args, userId);
+    case 'send_message':       return sendBotMessage(args);
+    case 'forward_message':    return forwardBotMessage(args, chatId);
     // search_web is intercepted by the caller
     case 'search_web':         return { ok: false, error: 'SEARCH_WEB_REDIRECT', query: args?.query };
     default:                   return { ok: false, error: `Unknown tool: ${name}` };
