@@ -1,7 +1,8 @@
 'use strict';
 
-const { admin, db } = require('../_lib/firebaseAdmin');
+const { admin, db }          = require('../_lib/firebaseAdmin');
 const { rateLimit, getClientIp } = require('../_lib/rateLimit');
+const { calculateNextRun, getUserTimezone } = require('../_lib/tools');
 
 const TELEGRAM_API = 'https://api.telegram.org';
 
@@ -89,11 +90,6 @@ module.exports = async (req, res) => {
     console.log('[cron] due now:', dueDocs.length,
       '| skipped (future):', snapshot.size - dueDocs.length);
 
-    if (!dueDocs.length) {
-      res.status(200).json({ ok: true, processed: 0, pending: snapshot.size });
-      return;
-    }
-
     const results = [];
     for (const docSnap of dueDocs) {
       const docRef = docSnap.ref;
@@ -160,7 +156,60 @@ module.exports = async (req, res) => {
       results.push({ id: docRef.id, ok: sendResult.ok, httpStatus: sendResult.status });
     }
 
-    res.status(200).json({ ok: true, processed: results.length, results });
+    // ── [2] Automations ──────────────────────────────────────────────────────
+    const autoSnap = await db
+      .collection('automations')
+      .where('status', '==', 'active')
+      .limit(200)
+      .get();
+
+    const dueAutos = autoSnap.docs.filter(d => {
+      const s = d.data().nextRunAt;
+      if (!s) return false;
+      const ts = s.toDate ? s.toDate() : new Date(s);
+      return !isNaN(ts.getTime()) && ts.getTime() <= nowMs;
+    });
+
+    console.log('[cron] automations due:', dueAutos.length, '| total active:', autoSnap.size);
+
+    const autoResults = [];
+    for (const docSnap of dueAutos) {
+      const a      = docSnap.data();
+      const docRef = docSnap.ref;
+
+      console.log('[cron] automation', docRef.id, '| name:', a.name, '| chatId:', a.chatId);
+
+      try {
+        const sendResult = await sendTelegramMessage(token, a.chatId, `⏰ ${a.name}\n\n${a.messageText}`);
+        console.log('[cron] automation sendMessage → ok:', sendResult.ok);
+
+        if (sendResult.ok) {
+          const tz      = await getUserTimezone(a.userId).catch(() => 'Europe/Warsaw');
+          const prevRun = a.nextRunAt?.toDate ? a.nextRunAt.toDate() : new Date(a.nextRunAt);
+          const nextRun = calculateNextRun(a.scheduleType, a.scheduleData || {}, prevRun, tz);
+
+          await docRef.update({
+            lastRunAt: admin.firestore.Timestamp.fromDate(new Date(nowMs)),
+            nextRunAt: admin.firestore.Timestamp.fromDate(nextRun),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          console.log('[cron] automation', docRef.id, 'rescheduled →', nextRun.toISOString());
+          autoResults.push({ id: docRef.id, ok: true });
+        } else {
+          console.error('[cron] automation', docRef.id, 'send failed:', sendResult.payload?.description);
+          autoResults.push({ id: docRef.id, ok: false, error: sendResult.payload?.description });
+        }
+      } catch (autoErr) {
+        console.error('[cron] automation', docRef.id, 'error:', autoErr.message);
+        autoResults.push({ id: docRef.id, ok: false, error: autoErr.message });
+      }
+    }
+
+    res.status(200).json({
+      ok: true,
+      reminders: { processed: results.length, results },
+      automations: { processed: autoResults.length, results: autoResults },
+    });
   } catch (error) {
     console.error('[cron] ❌ execution error:', error.message, error.stack?.slice(0, 300));
     res.status(500).json({ ok: false, description: error.message });

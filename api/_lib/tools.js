@@ -157,6 +157,136 @@ function parseRelativeTime(text, timezone) {
   return null;
 }
 
+// ── Automation scheduling helpers ────────────────────────────────────────────
+
+const DOW_NAMES_RU = ['', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+/** ISO weekday (1=Mon…7=Sun) for a YYYY-MM-DD string (computed in UTC noon). */
+function isoDow(dateStr) {
+  const d   = new Date(dateStr + 'T12:00:00Z');
+  const dow = d.getUTCDay(); // 0=Sun
+  return dow === 0 ? 7 : dow;
+}
+
+/**
+ * Calculate the NEXT UTC Date for a recurring automation after `fromDate`.
+ * fromDate should be the previous nextRunAt (already triggered).
+ */
+function calculateNextRun(scheduleType, scheduleData, fromDate, timezone) {
+  const tz  = timezone || DEFAULT_TZ;
+  const { time, daysOfWeek, dayOfMonth } = scheduleData;
+
+  // Date string in user's timezone for the "from" moment
+  const fromDateStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(fromDate);
+
+  if (scheduleType === 'daily') {
+    return localToUtc(addDaysToDateStr(fromDateStr, 1), time, tz);
+  }
+
+  if (scheduleType === 'weekly') {
+    const days   = (daysOfWeek || [1]).slice().sort((a, b) => a - b);
+    const curDow = isoDow(fromDateStr);
+    // Find next matching day (offset 1..7 from current)
+    for (let offset = 1; offset <= 7; offset++) {
+      const nextDow = ((curDow - 1 + offset) % 7) + 1;
+      if (days.includes(nextDow)) {
+        return localToUtc(addDaysToDateStr(fromDateStr, offset), time, tz);
+      }
+    }
+    return localToUtc(addDaysToDateStr(fromDateStr, 7), time, tz);
+  }
+
+  if (scheduleType === 'monthly') {
+    const dom  = dayOfMonth || 1;
+    const base = new Date(fromDateStr + 'T12:00:00Z');
+    let y = base.getUTCFullYear();
+    let m = base.getUTCMonth() + 1; // 1-based
+
+    // Advance to next month
+    m += 1;
+    if (m > 12) { m = 1; y += 1; }
+
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const actualDay   = Math.min(dom, daysInMonth);
+    const dateStr     = `${y}-${String(m).padStart(2, '0')}-${String(actualDay).padStart(2, '0')}`;
+    return localToUtc(dateStr, time, tz);
+  }
+
+  // Fallback
+  return new Date(fromDate.getTime() + 86_400_000);
+}
+
+/**
+ * Calculate the FIRST nextRunAt when creating a new automation.
+ * Picks the nearest upcoming occurrence that hasn't started yet.
+ */
+function calculateFirstRun(scheduleType, scheduleData, timezone) {
+  const tz  = timezone || DEFAULT_TZ;
+  const { time, daysOfWeek, dayOfMonth } = scheduleData;
+  const now = new Date();
+
+  if (scheduleType === 'daily') {
+    const today     = getTodayDateInTz(tz);
+    const candidate = localToUtc(today, time, tz);
+    return candidate > now ? candidate : localToUtc(addDaysToDateStr(today, 1), time, tz);
+  }
+
+  if (scheduleType === 'weekly') {
+    const days    = (daysOfWeek || [1]).slice().sort((a, b) => a - b);
+    const today   = getTodayDateInTz(tz);
+    const todayDow = isoDow(today);
+
+    // Check today if it's a target day and time hasn't passed
+    if (days.includes(todayDow)) {
+      const candidate = localToUtc(today, time, tz);
+      if (candidate > now) return candidate;
+    }
+    // Scan next 7 days
+    for (let offset = 1; offset <= 7; offset++) {
+      const nextDow = ((todayDow - 1 + offset) % 7) + 1;
+      if (days.includes(nextDow)) {
+        return localToUtc(addDaysToDateStr(today, offset), time, tz);
+      }
+    }
+    return localToUtc(addDaysToDateStr(today, 7), time, tz);
+  }
+
+  if (scheduleType === 'monthly') {
+    const dom   = dayOfMonth || 1;
+    const today = getTodayDateInTz(tz);
+    const base  = new Date(today + 'T12:00:00Z');
+    const y0    = base.getUTCFullYear();
+    const m0    = base.getUTCMonth() + 1;
+
+    // Try this month
+    const daysInM0 = new Date(y0, m0, 0).getDate();
+    if (dom <= daysInM0) {
+      const dateStr   = `${y0}-${String(m0).padStart(2, '0')}-${String(dom).padStart(2, '0')}`;
+      const candidate = localToUtc(dateStr, time, tz);
+      if (candidate > now) return candidate;
+    }
+
+    // Next month
+    const m1 = m0 === 12 ? 1 : m0 + 1;
+    const y1 = m0 === 12 ? y0 + 1 : y0;
+    const daysInM1 = new Date(y1, m1, 0).getDate();
+    const actualDay = Math.min(dom, daysInM1);
+    return localToUtc(`${y1}-${String(m1).padStart(2, '0')}-${String(actualDay).padStart(2, '0')}`, time, tz);
+  }
+
+  return localToUtc(addDaysToDateStr(getTodayDateInTz(tz), 1), time, tz);
+}
+
+function formatScheduleRu(scheduleType, scheduleData) {
+  const { time, daysOfWeek, dayOfMonth } = scheduleData;
+  if (scheduleType === 'daily')   return `Каждый день в ${time}`;
+  if (scheduleType === 'weekly')  return `Каждый ${(daysOfWeek || []).map(d => DOW_NAMES_RU[d] || d).join(', ')} в ${time}`;
+  if (scheduleType === 'monthly') return `${dayOfMonth}-го числа каждого месяца в ${time}`;
+  return `${scheduleType} в ${time}`;
+}
+
 // ── Tool definitions (OpenAI function-calling format) ────────────────────────
 
 const TOOL_DEFINITIONS = [
@@ -335,6 +465,62 @@ const TOOL_DEFINITIONS = [
           text:    { type: 'string', description: 'Текст сообщения' },
         },
         required: ['chat_id', 'text'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_automation',
+      description: 'Создать повторяющееся автоматическое действие. Например: "каждый день в 8:00 напоминай про таблетки" или "каждый понедельник присылай расписание".',
+      parameters: {
+        type: 'object',
+        properties: {
+          name:          { type: 'string', description: 'Краткое название автоматизации' },
+          message_text:  { type: 'string', description: 'Текст сообщения который бот будет отправлять' },
+          schedule_type: { type: 'string', enum: ['daily', 'weekly', 'monthly'], description: 'Тип повторения' },
+          time:          { type: 'string', description: 'Время HH:MM по местному времени пользователя' },
+          days_of_week:  { type: 'array',  items: { type: 'integer' }, description: 'Дни недели 1=Пн…7=Вс. Обязательно если schedule_type=weekly' },
+          day_of_month:  { type: 'integer', description: 'День месяца 1-31. Обязательно если schedule_type=monthly' },
+        },
+        required: ['name', 'message_text', 'schedule_type', 'time'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_automations',
+      description: 'Показать список активных автоматизаций пользователя.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_automation',
+      description: 'Удалить автоматизацию по ID.',
+      parameters: {
+        type: 'object',
+        properties: {
+          automation_id: { type: 'string', description: 'ID автоматизации' },
+        },
+        required: ['automation_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'pause_automation',
+      description: 'Поставить автоматизацию на паузу или возобновить.',
+      parameters: {
+        type: 'object',
+        properties: {
+          automation_id: { type: 'string', description: 'ID автоматизации' },
+          action:        { type: 'string', enum: ['pause', 'resume'] },
+        },
+        required: ['automation_id', 'action'],
       },
     },
   },
@@ -687,6 +873,118 @@ async function getFinanceStats(args, userId) {
   return { ok: true, message: lines.join('\n') };
 }
 
+async function createAutomation(args, userId, chatId, timezone) {
+  const { name, message_text, schedule_type, time, days_of_week, day_of_month } = args;
+  const tz = timezone || DEFAULT_TZ;
+
+  if (schedule_type === 'weekly' && (!days_of_week || !days_of_week.length)) {
+    return { ok: false, error: 'Для weekly расписания укажи days_of_week (1=Пн, 7=Вс)' };
+  }
+  if (schedule_type === 'monthly' && !day_of_month) {
+    return { ok: false, error: 'Для monthly расписания укажи day_of_month (1-31)' };
+  }
+
+  const scheduleData = {
+    time,
+    daysOfWeek:  schedule_type === 'weekly'  ? (days_of_week || []) : [],
+    dayOfMonth:  schedule_type === 'monthly' ? (day_of_month || null) : null,
+  };
+
+  const nextRunAt = calculateFirstRun(schedule_type, scheduleData, tz);
+
+  const id = createId();
+  await db.collection('automations').doc(id).set({
+    userId, chatId, name, messageText: message_text,
+    scheduleType: schedule_type, scheduleData,
+    nextRunAt:  admin.firestore.Timestamp.fromDate(nextRunAt),
+    lastRunAt:  null,
+    status:     'active',
+    createdAt:  admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt:  admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  const offset = getUtcOffsetStr(tz);
+  const nextStr = nextRunAt.toLocaleString('ru-RU', {
+    timeZone: tz, day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
+  });
+  const schedStr = formatScheduleRu(schedule_type, scheduleData);
+
+  return {
+    ok: true,
+    message: `✅ Автоматизация «${name}» создана.\nРасписание: ${schedStr}\nПервый запуск: ${nextStr} (${offset})\nID: ${id}`,
+  };
+}
+
+async function listAutomations(userId, timezone) {
+  const tz = timezone || DEFAULT_TZ;
+
+  const snap = await db.collection('automations')
+    .where('userId',  '==', userId)
+    .where('status',  '==', 'active')
+    .orderBy('nextRunAt', 'asc')
+    .limit(20)
+    .get();
+
+  if (snap.empty) return { ok: true, message: 'У вас нет активных автоматизаций.' };
+
+  const offset = getUtcOffsetStr(tz);
+  const lines  = snap.docs.map(d => {
+    const a       = d.data();
+    const nextTs  = a.nextRunAt?.toDate?.();
+    const nextStr = nextTs ? nextTs.toLocaleString('ru-RU', {
+      timeZone: tz, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+    }) : '—';
+    const schedStr = formatScheduleRu(a.scheduleType, a.scheduleData || {});
+    return `🔁 ${a.name}\n   ${schedStr} | след: ${nextStr} (${offset})\n   ID: ${d.id}`;
+  });
+
+  return { ok: true, message: `⚙️ Автоматизации:\n\n${lines.join('\n\n')}` };
+}
+
+async function deleteAutomation(args, userId) {
+  const { automation_id } = args;
+  const ref  = db.collection('automations').doc(automation_id);
+  const snap = await ref.get();
+
+  if (!snap.exists || snap.data().userId !== userId) {
+    return { ok: false, error: 'Автоматизация не найдена' };
+  }
+  await ref.update({ status: 'deleted', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+  return { ok: true, message: `✅ Автоматизация «${snap.data().name}» удалена` };
+}
+
+async function pauseAutomation(args, userId, timezone) {
+  const { automation_id, action } = args;
+  const tz  = timezone || DEFAULT_TZ;
+  const ref  = db.collection('automations').doc(automation_id);
+  const snap = await ref.get();
+
+  if (!snap.exists || snap.data().userId !== userId) {
+    return { ok: false, error: 'Автоматизация не найдена' };
+  }
+
+  const a = snap.data();
+  if (action === 'pause') {
+    await ref.update({ status: 'paused', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    return { ok: true, message: `⏸ Автоматизация «${a.name}» приостановлена` };
+  }
+
+  if (action === 'resume') {
+    const nextRunAt = calculateFirstRun(a.scheduleType, a.scheduleData || {}, tz);
+    await ref.update({
+      status:    'active',
+      nextRunAt: admin.firestore.Timestamp.fromDate(nextRunAt),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    const nextStr = nextRunAt.toLocaleString('ru-RU', {
+      timeZone: tz, day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
+    });
+    return { ok: true, message: `▶️ Автоматизация «${a.name}» возобновлена. Следующий запуск: ${nextStr}` };
+  }
+
+  return { ok: false, error: 'action должен быть pause или resume' };
+}
+
 async function sendBotMessage(args) {
   const { chat_id, text } = args;
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -741,12 +1039,16 @@ async function executeTool(name, args, userId, chatId, timezone) {
     case 'set_timezone':       return setTimezone(args, userId);
     case 'generate_image':     return generateImage(args, chatId);
     case 'get_finance_stats':  return getFinanceStats(args, userId);
-    case 'send_message':       return sendBotMessage(args);
-    case 'forward_message':    return forwardBotMessage(args, chatId);
+    case 'send_message':        return sendBotMessage(args);
+    case 'forward_message':     return forwardBotMessage(args, chatId);
+    case 'create_automation':   return createAutomation(args, userId, chatId, timezone);
+    case 'list_automations':    return listAutomations(userId, timezone);
+    case 'delete_automation':   return deleteAutomation(args, userId);
+    case 'pause_automation':    return pauseAutomation(args, userId, timezone);
     // search_web is intercepted by the caller
-    case 'search_web':         return { ok: false, error: 'SEARCH_WEB_REDIRECT', query: args?.query };
-    default:                   return { ok: false, error: `Unknown tool: ${name}` };
+    case 'search_web':          return { ok: false, error: 'SEARCH_WEB_REDIRECT', query: args?.query };
+    default:                    return { ok: false, error: `Unknown tool: ${name}` };
   }
 }
 
-module.exports = { TOOL_DEFINITIONS, executeTool, getUserTimezone, isValidTimezone, getUtcOffsetStr };
+module.exports = { TOOL_DEFINITIONS, executeTool, getUserTimezone, isValidTimezone, getUtcOffsetStr, calculateNextRun };
