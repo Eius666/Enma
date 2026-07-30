@@ -287,6 +287,42 @@ const TOOL_DEFINITIONS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_image',
+      description: 'Сгенерировать изображение по описанию. Используй когда пользователь просит нарисовать, создать картинку, сгенерировать изображение.',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string', description: 'Описание изображения на английском' },
+          style:  {
+            type: 'string',
+            description: 'Стиль изображения (опционально)',
+            enum: ['photo', 'illustration', '3d', 'anime', 'minimalist', 'pixel-art'],
+          },
+        },
+        required: ['prompt'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_finance_stats',
+      description: 'Показать статистику расходов и доходов пользователя. Используй когда спрашивают про траты, бюджет, сколько потратил.',
+      parameters: {
+        type: 'object',
+        properties: {
+          period: {
+            type: 'string',
+            description: 'Период: today, week, month, all (по умолчанию month)',
+            enum: ['today', 'week', 'month', 'all'],
+          },
+        },
+      },
+    },
+  },
 ];
 
 // ── Tool implementations ──────────────────────────────────────────────────────
@@ -402,8 +438,26 @@ async function createTask(args, userId, chatId, timezone) {
   return { ok: true, message: `✅ Задача создана: «${title}» на ${taskDate}${timeStr}` };
 }
 
+function autoCategorize(description) {
+  const lower = (description || '').toLowerCase();
+  const rules = {
+    food:          ['кофе', 'еда', 'ресторан', 'cafe', 'food', 'пицца', 'суши', 'бургер', 'обед', 'ужин', 'завтрак', 'продукт', 'маркет', 'доставка', 'перекус', 'фастфуд'],
+    transport:     ['такси', 'метро', 'бензин', 'парковк', 'uber', 'bolt', 'yandex go', 'транспорт', 'билет', 'автобус', 'электричк'],
+    entertainment: ['кино', 'фильм', 'игра', 'нетфликс', 'netflix', 'spotify', 'подписк', 'развлеч', 'концерт', 'театр'],
+    shopping:      ['одежд', 'обувь', 'магазин', 'amazon', 'ozon', 'wildberries', 'покупк', 'шопинг'],
+    bills:         ['аренд', 'коммунал', 'свет', 'интернет', 'телефон', 'хранени'],
+    health:        ['аптек', 'врач', 'больниц', 'спорт', 'зал', 'фитнес', 'лекарств', 'витамин'],
+    study:         ['курс', 'книг', 'обучен', 'удем', 'skillbox', 'учёба'],
+  };
+  for (const [cat, keywords] of Object.entries(rules)) {
+    if (keywords.some(kw => lower.includes(kw))) return cat;
+  }
+  return 'other';
+}
+
 async function createTransaction(args, userId, chatId) {
-  const { amount, description, type, category } = args;
+  const { amount, description, type } = args;
+  const category = args.category || autoCategorize(description);
   const id = createId();
 
   await db.collection('transactions').doc(id).set({
@@ -412,7 +466,7 @@ async function createTransaction(args, userId, chatId) {
     type,
     amount,
     description,
-    categoryId: category ? `cat-${category}` : 'cat-other',
+    categoryId: `cat-${category}`,
     date:       new Date().toISOString(),
     source:     'telegram-bot',
     createdAt:  admin.firestore.FieldValue.serverTimestamp(),
@@ -420,7 +474,7 @@ async function createTransaction(args, userId, chatId) {
 
   const emoji = type === 'income' ? '💰' : '💸';
   const verb  = type === 'income' ? 'Доход' : 'Расход';
-  return { ok: true, message: `${emoji} ${verb}: ${description} — ${amount} ₽` };
+  return { ok: true, message: `${emoji} ${verb}: ${description} — ${amount} ₽ [${category}]` };
 }
 
 async function queryReminders(args, userId, timezone) {
@@ -494,6 +548,114 @@ async function setTimezone(args, userId) {
   return { ok: true, message: `✅ Часовой пояс обновлён: ${timezone} (${offset})` };
 }
 
+async function generateImage(args, chatId) {
+  const { prompt, style } = args;
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  const token  = process.env.TELEGRAM_BOT_TOKEN;
+  const model  = process.env.IMAGE_GEN_MODEL || 'openai/gpt-image-1';
+
+  const fullPrompt = style ? `${prompt}, ${style} style` : prompt;
+  console.log('[generate_image] model:', model, '| prompt:', fullPrompt.slice(0, 80));
+
+  const res = await fetch('https://openrouter.ai/api/v1/images/generations', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body:    JSON.stringify({ model, prompt: fullPrompt, n: 1, size: '1024x1024' }),
+    signal:  AbortSignal.timeout(25_000),
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => '');
+    console.error('[generate_image] API error:', res.status, err.slice(0, 200));
+    return { ok: false, error: `Ошибка генерации (${res.status}). Попробуй позже.` };
+  }
+
+  const data     = await res.json();
+  const imageUrl = data.data?.[0]?.url || null;
+  const b64      = data.data?.[0]?.b64_json || null;
+
+  if (!imageUrl && !b64) {
+    console.error('[generate_image] no image in response:', JSON.stringify(data).slice(0, 200));
+    return { ok: false, error: 'Модель не вернула изображение.' };
+  }
+
+  if (imageUrl) {
+    await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ chat_id: chatId, photo: imageUrl, caption: `🎨 ${prompt}` }),
+    });
+  } else {
+    // b64 response — send as file upload
+    const formData = new FormData();
+    const blob = new Blob([Buffer.from(b64, 'base64')], { type: 'image/png' });
+    formData.append('chat_id', String(chatId));
+    formData.append('caption', `🎨 ${prompt}`);
+    formData.append('photo', blob, 'image.png');
+    await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, { method: 'POST', body: formData });
+  }
+
+  return { ok: true, message: '🖼 Картинка отправлена!' };
+}
+
+async function getFinanceStats(args, userId) {
+  const { period = 'month' } = args || {};
+  const now = new Date();
+
+  let startDate = null;
+  if (period === 'today') {
+    startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  } else if (period === 'week') {
+    startDate = new Date(now.getTime() - 7 * 86_400_000);
+  } else if (period === 'month') {
+    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+
+  const snap = await db.collection('transactions')
+    .where('userId', '==', userId)
+    .orderBy('date', 'desc')
+    .limit(200)
+    .get();
+
+  let totalExpense = 0;
+  let totalIncome  = 0;
+  const categories = {};
+
+  for (const doc of snap.docs) {
+    const d      = doc.data();
+    const txDate = new Date(d.date);
+    if (startDate && txDate < startDate) continue;
+
+    if (d.type === 'expense') {
+      totalExpense += d.amount || 0;
+      const cat = (d.categoryId || 'cat-other').replace('cat-', '');
+      categories[cat] = (categories[cat] || 0) + (d.amount || 0);
+    } else if (d.type === 'income') {
+      totalIncome += d.amount || 0;
+    }
+  }
+
+  const periodLabel = { today: 'Сегодня', week: 'За неделю', month: 'За месяц', all: 'За всё время' }[period] || 'За всё время';
+  const net = totalIncome - totalExpense;
+
+  const lines = [
+    `📊 ${periodLabel}`,
+    `💸 Расходы: ${totalExpense.toFixed(2)} ₽`,
+    `💰 Доходы:  ${totalIncome.toFixed(2)} ₽`,
+    `${net >= 0 ? '✅' : '⚠️'} Баланс: ${net >= 0 ? '+' : ''}${net.toFixed(2)} ₽`,
+  ];
+
+  const catEntries = Object.entries(categories).sort((a, b) => b[1] - a[1]);
+  if (catEntries.length) {
+    lines.push('', 'По категориям:');
+    for (const [cat, amount] of catEntries) {
+      lines.push(`  • ${cat}: ${amount.toFixed(2)} ₽`);
+    }
+  }
+
+  return { ok: true, message: lines.join('\n') };
+}
+
 // ── Dispatcher ────────────────────────────────────────────────────────────────
 
 async function executeTool(name, args, userId, chatId, timezone) {
@@ -505,6 +667,8 @@ async function executeTool(name, args, userId, chatId, timezone) {
     case 'query_tasks':        return queryTasks(args, userId);
     case 'query_transactions': return queryTransactions(args, userId);
     case 'set_timezone':       return setTimezone(args, userId);
+    case 'generate_image':     return generateImage(args, chatId);
+    case 'get_finance_stats':  return getFinanceStats(args, userId);
     // search_web is intercepted by the caller
     case 'search_web':         return { ok: false, error: 'SEARCH_WEB_REDIRECT', query: args?.query };
     default:                   return { ok: false, error: `Unknown tool: ${name}` };

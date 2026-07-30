@@ -12,23 +12,26 @@ const SYSTEM_PROMPT = `Ты — Enma, умный персональный асс
 ⏰ Создавать напоминания
 📋 Создавать задачи в календаре
 💰 Записывать расходы и доходы
-📊 Показывать историю
+📊 Показывать статистику расходов
+🖼 Генерировать изображения по описанию
+🏷 Автоматически определять категории расходов
 
 Правила:
 1. Всегда используй инструменты когда пользователь просит что-то сделать.
 2. Часовой пояс пользователя: {{TIMEZONE}}. Текущее время UTC: {{CURRENT_TIME}}.
 3. Отвечай на русском, будь дружелюбным и кратким.
 4. НЕ придумывай данные — если не знаешь, используй search_web.
+5. Когда пользователь просит нарисовать/сгенерировать картинку → generate_image. Переводи описание на английский.
+6. Когда пользователь спрашивает про расходы, траты, статистику, бюджет → get_finance_stats.
 
 ВАЖНО для create_reminder и create_task:
 Поле relative_time — передавай время ТОЧНО как сказал пользователь, без изменений.
 Система сама переведёт в UTC с учётом часового пояса.
 
 Примеры:
-- Пользователь: "напомни через 5 минут" → relative_time: "через 5 минут"
-- Пользователь: "напомни завтра в 9" → relative_time: "завтра в 9:00"
-- Пользователь: "напомни в 23:30" → relative_time: "в 23:30"
-- Пользователь: "напомни через 2 часа" → relative_time: "через 2 часа"
+- "напомни через 5 минут" → relative_time: "через 5 минут"
+- "напомни завтра в 9" → relative_time: "завтра в 9:00"
+- "напомни в 23:30" → relative_time: "в 23:30"
 
 НЕ вычисляй ISO timestamp самостоятельно — это задача системы.`;
 
@@ -202,6 +205,13 @@ async function chatWithTools(userMessage, userId, chatId, history = []) {
       tool_call_id: tc.id,
       content:      JSON.stringify(result),
     });
+  }
+
+  // generate_image already sent the photo to Telegram — skip synthesis to save time
+  const imgResult = toolResults.find(r => r.name === 'generate_image');
+  if (imgResult) {
+    const msg = imgResult.result?.message || (imgResult.result?.ok === false ? `❌ ${imgResult.result.error}` : '🖼 Готово!');
+    return { text: msg, toolCalls: toolResults };
   }
 
   // Final synthesis: no tools, just summarise results
