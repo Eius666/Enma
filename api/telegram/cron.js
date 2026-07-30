@@ -205,10 +205,27 @@ module.exports = async (req, res) => {
       }
     }
 
+    // ── [3] Cleanup stale pending reminders ─────────────────────────────────
+    const cutoff    = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const staleSnap = await db
+      .collection('reminders')
+      .where('status', '==', 'pending')
+      .where('scheduledAt', '<', cutoff)
+      .limit(50)
+      .get();
+
+    let staleCount = 0;
+    for (const doc of staleSnap.docs) {
+      await doc.ref.delete();
+      staleCount++;
+    }
+    if (staleCount > 0) console.log(`[cron] Cleaned ${staleCount} stale reminders`);
+
     res.status(200).json({
       ok: true,
       reminders: { processed: results.length, results },
       automations: { processed: autoResults.length, results: autoResults },
+      staleRemindersDeleted: staleCount,
     });
   } catch (error) {
     console.error('[cron] ❌ execution error:', error.message, error.stack?.slice(0, 300));

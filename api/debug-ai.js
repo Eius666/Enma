@@ -18,6 +18,39 @@ module.exports = async (req, res) => {
     }
   }
 
+  // ── One-time cleanup of broken reminders ──────────────────────────────────
+  if (req.query?.action === 'cleanup-reminders') {
+    try {
+      const snap   = await db.collection('reminders').limit(500).get();
+      const now    = Date.now();
+      const cutoff = now - 24 * 60 * 60 * 1000;
+      const toDelete = [];
+
+      for (const doc of snap.docs) {
+        const d   = doc.data();
+        const sAt = d.scheduledAt;
+
+        if (!sAt) {
+          toDelete.push({ id: doc.id, reason: 'null scheduledAt' });
+          continue;
+        }
+
+        const ts = sAt.toDate ? sAt.toDate() : new Date(sAt);
+        if (d.status === 'pending' && !isNaN(ts.getTime()) && ts.getTime() < cutoff) {
+          toDelete.push({ id: doc.id, reason: 'stale pending >24h' });
+        }
+      }
+
+      for (const { id } of toDelete) {
+        await db.collection('reminders').doc(id).delete();
+      }
+
+      return res.status(200).json({ ok: true, cleaned: toDelete.length, details: toDelete });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  }
+
   // ── Reminders debug mode ───────────────────────────────────────────────────
   if (req.query?.type === 'reminders') {
     try {
