@@ -217,6 +217,61 @@ async function handleGenerateCallback(token, cq) {
   }
 }
 
+// ── Vision — analyse a Telegram photo ────────────────────────────────────────
+
+async function handlePhotoMessage(token, chatId, photos, caption) {
+  const apiKey      = process.env.OPENROUTER_API_KEY;
+  const visionModel = process.env.VISION_MODEL || 'google/gemini-2.5-flash';
+
+  // Telegram gives multiple sizes; pick the largest
+  const photo    = photos[photos.length - 1];
+  const fileRes  = await fetch(`${TG}/bot${token}/getFile?file_id=${photo.file_id}`);
+  const fileData = await fileRes.json();
+  const filePath = fileData.result?.file_path;
+
+  if (!filePath) return null;
+
+  const imgResp   = await fetch(`https://api.telegram.org/file/bot${token}/${filePath}`,
+    { signal: AbortSignal.timeout(15_000) });
+  const imgBuf    = await imgResp.arrayBuffer();
+  const base64    = Buffer.from(imgBuf).toString('base64');
+  const mime      = filePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
+
+  const userPrompt = caption
+    ? `Пользователь отправил фото с подписью: "${caption}". Опиши что на изображении и ответь на вопрос или контекст из подписи.`
+    : 'Опиши что на этом изображении. Отвечай на русском, будь кратким и точным.';
+
+  const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method:  'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      'HTTP-Referer':  'https://enma.app',
+      'X-Title':       'Enma',
+    },
+    body: JSON.stringify({
+      model:      visionModel,
+      max_tokens: 600,
+      messages: [{
+        role:    'user',
+        content: [
+          { type: 'text',      text: userPrompt },
+          { type: 'image_url', image_url: { url: `data:${mime};base64,${base64}` } },
+        ],
+      }],
+    }),
+    signal: AbortSignal.timeout(20_000),
+  });
+
+  if (!resp.ok) {
+    console.error('[WH][vision] API error:', resp.status, (await resp.text().catch(() => '')).slice(0, 200));
+    return null;
+  }
+
+  const data = await resp.json();
+  return data.choices?.[0]?.message?.content || null;
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 
 module.exports = async (req, res) => {
@@ -295,13 +350,15 @@ module.exports = async (req, res) => {
       return;
     }
 
-    if (!message?.text || !message?.chat) {
+    const text   = message?.text   ? String(message.text).slice(0, 4096)   : null;
+    const photos = message?.photo?.length ? message.photo                   : null;
+
+    if (!message?.chat || (!text && !photos)) {
       res.status(200).json({ ok: true });
       return;
     }
 
     const chatId = message.chat.id;
-    const text   = String(message.text).slice(0, 4096);
 
     // ── [5] USER LOOKUP ──────────────────────────────────────────────────────
     let userQuery = await db.collection('users').where('chatId', '==', chatId).limit(1).get();
@@ -317,117 +374,100 @@ module.exports = async (req, res) => {
     }
     const userId = userQuery.docs[0].id;
 
-    // ── [5a] ADMIN CONTENT STATE ─────────────────────────────────────────────
-    if (isAdminChatId(chatId)) {
-      const handled = await handleAdminTextMessage(token, chatId, text).catch(() => false);
-      if (handled) { res.status(200).json({ ok: true }); return; }
-    }
+    // ── [5a–6b] TEXT-ONLY FLOWS ──────────────────────────────────────────────
+    if (text) {
+      if (isAdminChatId(chatId)) {
+        const handled = await handleAdminTextMessage(token, chatId, text).catch(() => false);
+        if (handled) { res.status(200).json({ ok: true }); return; }
+      }
 
-    // ── [5b] USER STATE MACHINE (wallet setup) ───────────────────────────────
-    const stateHandled = await checkUserState(token, chatId, userId, text).catch(() => false);
-    if (stateHandled) { res.status(200).json({ ok: true }); return; }
+      const stateHandled = await checkUserState(token, chatId, userId, text).catch(() => false);
+      if (stateHandled) { res.status(200).json({ ok: true }); return; }
 
-    // ── [6] /start ───────────────────────────────────────────────────────────
-    if (text.startsWith('/start')) {
-      await ensureReferralCode(userId).catch(() => {});
-      const param = text.split(' ')[1] || '';
-      if (param.startsWith('ref_')) {
-        const result = await handleReferralStart(userId, param.slice(4)).catch(() => ({ ok: false }));
-        if (result.ok) {
-          await sendMessage(token, chatId,
-            `👋 Тебя пригласил ${result.referrerName}.\n\n` +
-            `У тебя ${TRIAL_LIMIT} бесплатных запроса. Для безлимита — /subscribe`
-          );
-          res.status(200).json({ ok: true });
-          return;
+      if (text.startsWith('/start')) {
+        await ensureReferralCode(userId).catch(() => {});
+        const param = text.split(' ')[1] || '';
+        if (param.startsWith('ref_')) {
+          const result = await handleReferralStart(userId, param.slice(4)).catch(() => ({ ok: false }));
+          if (result.ok) {
+            await sendMessage(token, chatId,
+              `👋 Тебя пригласил ${result.referrerName}.\n\n` +
+              `У тебя ${TRIAL_LIMIT} бесплатных запроса. Для безлимита — /subscribe`
+            );
+            res.status(200).json({ ok: true }); return;
+          }
         }
+        await sendMessage(token, chatId,
+          'Привет! Я Enma — AI-ассистент для финансов и продуктивности.\n\n' +
+          'Что умею:\n' +
+          '💬 Отвечать на вопросы\n' +
+          '🔍 Искать в интернете (погода, курсы, новости)\n' +
+          '⏰ Создавать напоминания\n' +
+          '📋 Вести задачи\n' +
+          '💰 Записывать расходы и доходы\n' +
+          '🖼 Анализировать изображения\n\n' +
+          `У тебя ${TRIAL_LIMIT} бесплатных запроса.\n` +
+          'Подписка — /subscribe\n' +
+          'Реферальная программа — /referral'
+        );
+        res.status(200).json({ ok: true }); return;
       }
-      await sendMessage(token, chatId,
-        'Привет! Я Enma — AI-ассистент для финансов и продуктивности.\n\n' +
-        'Что умею:\n' +
-        '💬 Отвечать на вопросы\n' +
-        '🔍 Искать в интернете (погода, курсы, новости)\n' +
-        '⏰ Создавать напоминания\n' +
-        '📋 Вести задачи\n' +
-        '💰 Записывать расходы и доходы\n\n' +
-        `У тебя ${TRIAL_LIMIT} бесплатных запроса.\n` +
-        'Подписка — /subscribe\n' +
-        'Реферальная программа — /referral'
-      );
-      res.status(200).json({ ok: true });
-      return;
-    }
 
-    // ── [6b] COMMANDS ────────────────────────────────────────────────────────
-    if (text === '/subscribe' || text.startsWith('/subscribe ')) {
-      await handleSubscribeCommand(token, chatId);
-      res.status(200).json({ ok: true });
-      return;
-    }
-    if (text === '/referral' || text.startsWith('/referral ')) {
-      await handleReferralCommand(token, chatId, userId);
-      res.status(200).json({ ok: true });
-      return;
-    }
-    if (text === '/wallet' || text.startsWith('/wallet ')) {
-      await handleWalletCommand(token, chatId, userId);
-      res.status(200).json({ ok: true });
-      return;
-    }
-    if (text === '/balance' || text.startsWith('/balance ')) {
-      await handleBalanceCommand(token, chatId, userId);
-      res.status(200).json({ ok: true });
-      return;
-    }
-    if (text === '/cancel') {
-      await db.collection('user_states').doc(String(chatId)).delete().catch(() => {});
-      await sendMessage(token, chatId, '🚫 Отменено');
-      res.status(200).json({ ok: true });
-      return;
-    }
-
-    if (text === '/timezone' || text.startsWith('/timezone ')) {
-      const arg = text.slice('/timezone'.length).trim();
-      if (!arg) {
-        const tz     = await getUserTimezone(userId);
-        const offset = getUtcOffsetStr(tz);
-        await sendMessage(token, chatId, `Твой часовой пояс: ${tz} (${offset})\n\nЧтобы изменить: /timezone Europe/Warsaw`);
-      } else if (!isValidTimezone(arg)) {
-        await sendMessage(token, chatId, `❌ Неверный часовой пояс: «${arg}»\nПример: /timezone Europe/Warsaw`);
-      } else {
-        await db.collection('users').doc(userId).update({ timezone: arg });
-        const offset = getUtcOffsetStr(arg);
-        await sendMessage(token, chatId, `✅ Часовой пояс обновлён: ${arg} (${offset})`);
+      if (text === '/subscribe' || text.startsWith('/subscribe ')) {
+        await handleSubscribeCommand(token, chatId);
+        res.status(200).json({ ok: true }); return;
       }
-      res.status(200).json({ ok: true });
-      return;
-    }
-
-    // /generate or /post — content generation (admin only)
-    if (text === '/generate' || text === '/post' || text.startsWith('/generate ') || text.startsWith('/post ')) {
-      if (!isAdminChatId(chatId)) {
-        await sendMessage(token, chatId, '⛔ Только для администраторов.');
-        res.status(200).json({ ok: true });
-        return;
+      if (text === '/referral' || text.startsWith('/referral ')) {
+        await handleReferralCommand(token, chatId, userId);
+        res.status(200).json({ ok: true }); return;
       }
-      const docRef = db.collection('content_queue').doc();
-      await docRef.set({
-        status:    'generating',
-        chatId,
-        userId,
-        source:    'telegram-command',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      // Fire and don't await — generation is async (up to 22s total)
-      handleContentGeneration(docRef.id, chatId, token).catch(err =>
-        console.error('[WH][gen] unhandled:', err.message)
-      );
-      res.status(200).json({ ok: true });
-      return;
-    }
+      if (text === '/wallet' || text.startsWith('/wallet ')) {
+        await handleWalletCommand(token, chatId, userId);
+        res.status(200).json({ ok: true }); return;
+      }
+      if (text === '/balance' || text.startsWith('/balance ')) {
+        await handleBalanceCommand(token, chatId, userId);
+        res.status(200).json({ ok: true }); return;
+      }
+      if (text === '/cancel') {
+        await db.collection('user_states').doc(String(chatId)).delete().catch(() => {});
+        await sendMessage(token, chatId, '🚫 Отменено');
+        res.status(200).json({ ok: true }); return;
+      }
+      if (text === '/timezone' || text.startsWith('/timezone ')) {
+        const arg = text.slice('/timezone'.length).trim();
+        if (!arg) {
+          const tz     = await getUserTimezone(userId);
+          const offset = getUtcOffsetStr(tz);
+          await sendMessage(token, chatId, `Твой часовой пояс: ${tz} (${offset})\n\nЧтобы изменить: /timezone Europe/Warsaw`);
+        } else if (!isValidTimezone(arg)) {
+          await sendMessage(token, chatId, `❌ Неверный часовой пояс: «${arg}»\nПример: /timezone Europe/Warsaw`);
+        } else {
+          await db.collection('users').doc(userId).update({ timezone: arg });
+          await sendMessage(token, chatId, `✅ Часовой пояс обновлён: ${arg} (${getUtcOffsetStr(arg)})`);
+        }
+        res.status(200).json({ ok: true }); return;
+      }
+      if (text === '/generate' || text === '/post' || text.startsWith('/generate ') || text.startsWith('/post ')) {
+        if (!isAdminChatId(chatId)) {
+          await sendMessage(token, chatId, '⛔ Только для администраторов.');
+          res.status(200).json({ ok: true }); return;
+        }
+        const docRef = db.collection('content_queue').doc();
+        await docRef.set({
+          status:    'generating', chatId, userId,
+          source:    'telegram-command',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        handleContentGeneration(docRef.id, chatId, token).catch(err =>
+          console.error('[WH][gen] unhandled:', err.message)
+        );
+        res.status(200).json({ ok: true }); return;
+      }
+    } // end text-only flows
 
-    // ── [7] ACCESS GATE ──────────────────────────────────────────────────────
+    // ── [7] ACCESS GATE (text + photo) ───────────────────────────────────────
     const sub = await checkSubscription(userId);
     let usingTrial = false;
     let trialUsed  = 0;
@@ -442,7 +482,42 @@ module.exports = async (req, res) => {
       usingTrial = true;
     }
 
-    // ── [8] CHAT WITH TOOLS ──────────────────────────────────────────────────
+    // ── [8a] VISION — photo message ──────────────────────────────────────────
+    if (photos) {
+      await sendChatAction(token, chatId, 'upload_photo');
+      const caption = message.caption ? String(message.caption).slice(0, 1024) : null;
+
+      const description = await handlePhotoMessage(token, chatId, photos, caption).catch(err => {
+        console.error('[WH][vision] error:', err.message);
+        return null;
+      });
+
+      const replyText = description
+        ? `🖼 ${description}`
+        : '⚠️ Не удалось проанализировать изображение. Попробуй ещё раз.';
+
+      await sendMessage(token, chatId, replyText);
+
+      const userHistoryMsg = caption ? `[фото] ${caption}` : '[фото]';
+      await Promise.all([
+        saveMessage(userId, 'user', userHistoryMsg).catch(() => {}),
+        saveMessage(userId, 'assistant', replyText).catch(() => {}),
+      ]);
+
+      if (usingTrial) {
+        await incrementTrialUsed(userId);
+        const used = trialUsed + 1;
+        if (TRIAL_LIMIT - used > 0) {
+          await sendMessage(token, chatId, `💬 Пробный запрос ${used} из ${TRIAL_LIMIT}`);
+        } else {
+          await sendTrialExhaustedPrompt(token, chatId);
+        }
+      }
+      res.status(200).json({ ok: true });
+      return;
+    }
+
+    // ── [8b] CHAT WITH TOOLS — text message ──────────────────────────────────
     await sendChatAction(token, chatId);
 
     const history = await loadHistory(userId, sub.active).catch(() => []);
@@ -452,7 +527,7 @@ module.exports = async (req, res) => {
       const { text: response } = await chatWithTools(text, userId, chatId, history);
       replyText = response || 'Не удалось получить ответ.';
     } catch (aiErr) {
-      console.error('[WH][8] chatWithTools error:', aiErr.message);
+      console.error('[WH][8b] chatWithTools error:', aiErr.message);
       replyText = 'Извините, временно не могу обработать запрос. Попробуйте позже.';
     }
 
