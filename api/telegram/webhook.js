@@ -272,6 +272,51 @@ async function handlePhotoMessage(token, chatId, photos, caption) {
   return data.choices?.[0]?.message?.content || null;
 }
 
+// ── Voice — transcribe with Whisper (no disk writes) ─────────────────────────
+
+async function handleVoiceMessage(token, voice) {
+  const openaiKey    = process.env.OPENAI_API_KEY;
+  const whisperModel = process.env.WHISPER_MODEL || 'whisper-1';
+
+  if (!openaiKey) throw new Error('OPENAI_API_KEY not set');
+
+  // 1. Get Telegram file path
+  const fileRes  = await fetch(`${TG}/bot${token}/getFile?file_id=${voice.file_id}`);
+  const fileData = await fileRes.json();
+  const filePath = fileData.result?.file_path;
+  if (!filePath) throw new Error('Telegram getFile: no file_path');
+
+  // 2. Download audio into memory (Vercel is read-only — no fs writes)
+  const audioResp = await fetch(`https://api.telegram.org/file/bot${token}/${filePath}`,
+    { signal: AbortSignal.timeout(20_000) });
+  if (!audioResp.ok) throw new Error(`Telegram download ${audioResp.status}`);
+
+  const audioBuf = await audioResp.arrayBuffer();
+
+  // 3. Send to Whisper via in-memory FormData + Blob
+  const form = new FormData();
+  form.append('file',     new Blob([audioBuf], { type: 'audio/ogg' }), 'audio.ogg');
+  form.append('model',    whisperModel);
+  form.append('language', 'ru');
+
+  const whisperResp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method:  'POST',
+    headers: { 'Authorization': `Bearer ${openaiKey}` },
+    body:    form,
+    signal:  AbortSignal.timeout(30_000),
+  });
+
+  if (!whisperResp.ok) {
+    const errText = await whisperResp.text().catch(() => '');
+    console.error('[WH][voice] Whisper error:', whisperResp.status, errText.slice(0, 200));
+    throw new Error(`Whisper ${whisperResp.status}`);
+  }
+
+  const result = await whisperResp.json();
+  console.log('[WH][voice] transcribed', (result.text || '').length, 'chars');
+  return result.text?.trim() || null;
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 
 module.exports = async (req, res) => {
@@ -350,10 +395,11 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const text   = message?.text   ? String(message.text).slice(0, 4096)   : null;
-    const photos = message?.photo?.length ? message.photo                   : null;
+    const text   = message?.text         ? String(message.text).slice(0, 4096) : null;
+    const photos = message?.photo?.length ? message.photo                       : null;
+    const voice  = message?.voice        ? message.voice                        : null;
 
-    if (!message?.chat || (!text && !photos)) {
+    if (!message?.chat || (!text && !photos && !voice)) {
       res.status(200).json({ ok: true });
       return;
     }
@@ -405,7 +451,8 @@ module.exports = async (req, res) => {
           '⏰ Создавать напоминания\n' +
           '📋 Вести задачи\n' +
           '💰 Записывать расходы и доходы\n' +
-          '🖼 Анализировать изображения\n\n' +
+          '🖼 Анализировать изображения\n' +
+          '🎤 Понимать голосовые сообщения\n\n' +
           `У тебя ${TRIAL_LIMIT} бесплатных запроса.\n` +
           'Подписка — /subscribe\n' +
           'Реферальная программа — /referral'
@@ -467,7 +514,7 @@ module.exports = async (req, res) => {
       }
     } // end text-only flows
 
-    // ── [7] ACCESS GATE (text + photo) ───────────────────────────────────────
+    // ── [7] ACCESS GATE (text + photo + voice) ───────────────────────────────
     const sub = await checkSubscription(userId);
     let usingTrial = false;
     let trialUsed  = 0;
@@ -517,7 +564,61 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // ── [8b] CHAT WITH TOOLS — text message ──────────────────────────────────
+    // ── [8b] VOICE — STT → chatWithTools ─────────────────────────────────────
+    if (voice) {
+      await sendChatAction(token, chatId);
+
+      let transcription;
+      try {
+        transcription = await handleVoiceMessage(token, voice);
+      } catch (err) {
+        console.error('[WH][voice] STT error:', err.message);
+        const errMsg = err.message.includes('OPENAI_API_KEY not set')
+          ? '🎤 Голосовые сообщения временно недоступны.'
+          : '🎤 Не удалось распознать речь. Попробуй ещё раз или напиши текстом.';
+        await sendMessage(token, chatId, errMsg);
+        res.status(200).json({ ok: true });
+        return;
+      }
+
+      if (!transcription) {
+        await sendMessage(token, chatId, '🎤 Не удалось распознать речь. Попробуй ещё раз или напиши текстом.');
+        res.status(200).json({ ok: true });
+        return;
+      }
+
+      const voiceHistory = await loadHistory(userId, sub.active).catch(() => []);
+
+      let voiceReply;
+      try {
+        const { text: response } = await chatWithTools(transcription, userId, chatId, voiceHistory);
+        voiceReply = response || 'Не удалось получить ответ.';
+      } catch (aiErr) {
+        console.error('[WH][8b] voice chatWithTools error:', aiErr.message);
+        voiceReply = 'Извините, временно не могу обработать запрос. Попробуйте позже.';
+      }
+
+      await sendMessage(token, chatId, voiceReply, { disable_web_page_preview: true });
+
+      await Promise.all([
+        saveMessage(userId, 'user', transcription).catch(() => {}),
+        saveMessage(userId, 'assistant', voiceReply).catch(() => {}),
+      ]);
+
+      if (usingTrial) {
+        await incrementTrialUsed(userId);
+        const used = trialUsed + 1;
+        if (TRIAL_LIMIT - used > 0) {
+          await sendMessage(token, chatId, `💬 Пробный запрос ${used} из ${TRIAL_LIMIT}`);
+        } else {
+          await sendTrialExhaustedPrompt(token, chatId);
+        }
+      }
+      res.status(200).json({ ok: true });
+      return;
+    }
+
+    // ── [8c] CHAT WITH TOOLS — text message ──────────────────────────────────
     await sendChatAction(token, chatId);
 
     const history = await loadHistory(userId, sub.active).catch(() => []);
