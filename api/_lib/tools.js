@@ -994,6 +994,7 @@ async function sendBotMessage(args) {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body:    JSON.stringify({ chat_id, text, parse_mode: 'HTML' }),
+    signal:  AbortSignal.timeout(10_000),
   });
   const data = await resp.json().catch(() => ({}));
 
@@ -1015,6 +1016,7 @@ async function forwardBotMessage(args, defaultChatId) {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body:    JSON.stringify({ chat_id, from_chat_id, message_id }),
+    signal:  AbortSignal.timeout(10_000),
   });
   const data = await resp.json().catch(() => ({}));
 

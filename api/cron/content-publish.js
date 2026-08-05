@@ -89,7 +89,7 @@ module.exports = async (req, res) => {
       const docRef = docSnap.ref;
 
       // Claim post in a transaction to prevent double-publish across concurrent invocations
-      const post = await db.runTransaction(async tx => {
+      let post = await db.runTransaction(async tx => {
         const latest = await tx.get(docRef);
         if (!latest.exists) return null;
         if (latest.data().status !== 'approved') return null;
@@ -109,12 +109,12 @@ module.exports = async (req, res) => {
       // On any failure the post still publishes — text only, no image.
       if (post.imagePrompt && !post.imageUrl) {
         try {
-          console.error('[content-publish] generating image for doc', docRef.id);
+          console.log('[content-publish] generating image for doc', docRef.id);
           await docRef.update({ status: 'generating_image', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
           const imageUrl = await generateImage(post.imagePrompt, 14_000);
           await docRef.update({ imageUrl, status: 'approved', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
           post = { ...post, imageUrl };
-          console.error('[content-publish] image generated:', imageUrl.slice(0, 60));
+          console.log('[content-publish] image generated:', imageUrl.slice(0, 60));
         } catch (imgErr) {
           console.error('[content-publish] image generation failed:', imgErr.message, '— publishing text only');
           await docRef.update({ status: 'approved', updatedAt: admin.firestore.FieldValue.serverTimestamp() });

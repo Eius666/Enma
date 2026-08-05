@@ -628,7 +628,7 @@ module.exports = async (req, res) => {
       const { text: response } = await chatWithTools(text, userId, chatId, history);
       replyText = response || 'Не удалось получить ответ.';
     } catch (aiErr) {
-      console.error('[WH][8b] chatWithTools error:', aiErr.message);
+      console.error('[WH][8c] chatWithTools error:', aiErr.message);
       replyText = 'Извините, временно не могу обработать запрос. Попробуйте позже.';
     }
 

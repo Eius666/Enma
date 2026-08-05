@@ -45,7 +45,7 @@ module.exports = async (req, res) => {
 
   try {
     // ── 1. Regular reminders ────────────────────────────────────────────────
-    const remSnap = await db.collection('reminders').where('sent', '==', false).get();
+    const remSnap = await db.collection('reminders').where('sent', '==', false).limit(50).get();
     const dueReminders = remSnap.docs.filter(doc => {
       const r = doc.data();
       return r.triggerAt && new Date(r.triggerAt) <= now;
@@ -75,6 +75,7 @@ module.exports = async (req, res) => {
     // Single-field filter + in-memory check to avoid composite index
     const taskSnap = await db.collection('tasks')
       .where('reminderSent', '==', false)
+      .limit(50)
       .get();
 
     const dueTasks = taskSnap.docs.filter(doc => {
