@@ -78,3 +78,21 @@
   font-size: 16px;
   color: var(--text-secondary);
 }
+
+.auth-bot-link {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: rgba(0, 136, 204, 0.1);
+  border: 1px solid rgba(0, 136, 204, 0.3);
+  border-radius: 20px;
+  color: #0088cc;
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+
+.auth-bot-link:hover {
+  background: rgba(0, 136, 204, 0.18);
+}

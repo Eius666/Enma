@@ -94,7 +94,7 @@ async function send(token, chatId, text) {
   await fetch(`${TG}/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text }),
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
   }).catch(() => {});
 }
 

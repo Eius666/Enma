@@ -145,7 +145,13 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
   }, [selectedCurrency, priceUsd, tonUsdRate]);
 
   const handlePay = useCallback(async () => {
-    if (!isConnected || !user) return;
+    if (!user) return;
+    // Stars payment goes through Telegram bot — no TON wallet needed
+    if (selectedCurrency === 'stars') {
+      window.open('https://t.me/YourArc_bot', '_blank');
+      return;
+    }
+    if (!isConnected) return;
     setPaymentStatus('sending');
 
     try {
@@ -358,12 +364,18 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       <button
         className={`subscription-panel__pay-btn${isCurrentPlan ? ' subscription-panel__pay-btn--current' : ''}`}
         onClick={handlePay}
-        disabled={!isConnected || !!isCurrentPlan || paymentStatus === 'sending'}
+        disabled={
+          (selectedCurrency !== 'stars' && !isConnected) ||
+          !!isCurrentPlan ||
+          paymentStatus === 'sending'
+        }
         type="button"
       >
         {paymentStatus === 'idle' &&
           (isCurrentPlan
             ? t.currentPlan
+            : selectedCurrency === 'stars'
+            ? `${t.pay} ${getDisplayPrice()} Stars → Telegram`
             : !isConnected
             ? t.connectFirst
             : `${t.pay} ${getDisplayPrice()} ${CurrencyLabels[selectedCurrency][language]}`)}

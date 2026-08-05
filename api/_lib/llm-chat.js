@@ -1,6 +1,6 @@
 'use strict';
 
-const { TOOL_DEFINITIONS, executeTool, getUserTimezone } = require('./tools');
+const { TOOL_DEFINITIONS, executeTool, getUserTimezone, getUserCurrency } = require('./tools');
 
 const OR_BASE = 'https://openrouter.ai/api/v1';
 
@@ -17,7 +17,6 @@ const SYSTEM_PROMPT = `Ты — Enma, умный персональный асс
 🔍 Анализировать отправленные изображения (vision)
 🎤 Понимать голосовые сообщения (STT)
 🏷 Автоматически определять категории расходов
-📨 Отправлять и пересылать сообщения через бота
 🔁 Создавать повторяющиеся автоматизации (daily/weekly/monthly)
 💬 Помнить контекст разговора (последние сообщения)
 
@@ -28,6 +27,8 @@ const SYSTEM_PROMPT = `Ты — Enma, умный персональный асс
 4. НЕ придумывай данные — если не знаешь, используй search_web.
 5. Когда пользователь просит нарисовать/сгенерировать картинку → generate_image. Переводи описание на английский.
 6. Когда пользователь спрашивает про расходы, траты, статистику, бюджет → get_finance_stats.
+7. Форматирование — используй HTML-теги Telegram: <b>жирный</b> для заголовков и ключевых слов, <code>моноширинный</code> для ID/дат/чисел. НЕ используй Markdown (**, ##) — Telegram рендерит только HTML. Абзацы — не длиннее 3-4 строк, эмоджи — 1-2 на ответ.
+8. Если инструмент вернул ошибку — объясни понятным языком, а не технически.
 
 ВАЖНО для create_reminder и create_task:
 Поле relative_time — передавай время ТОЧНО как сказал пользователь, без изменений.
@@ -47,8 +48,7 @@ const SYSTEM_PROMPT = `Ты — Enma, умный персональный асс
 - Уточни расписание у пользователя до создания. После create_automation покажи ID — он нужен для управления.
 
 Отправка и пересылка сообщений:
-- send_message: бот может отправить текст только в чаты, где он есть участником, или пользователям, которые написали ему /start.
-- forward_message: пересылает сообщение из текущего чата. Если пользователь не указал chat_id назначения — уточни прежде чем вызывать тул.`;
+- send_message / forward_message: используй только если пользователь явно просит отправить или переслать сообщение. Уточняй chat_id если не указан.`;
 
 function buildSystemPrompt(timezone = 'Europe/Warsaw') {
   const now = new Date().toISOString();
@@ -157,8 +157,11 @@ async function searchWeb(query) {
 // ── Main chat function ────────────────────────────────────────────────────────
 
 async function chatWithTools(userMessage, userId, chatId, history = []) {
-  const timezone = await getUserTimezone(userId).catch(() => 'Europe/Warsaw');
-  const system   = { role: 'system', content: buildSystemPrompt(timezone) };
+  const [timezone, currency] = await Promise.all([
+    getUserTimezone(userId).catch(() => 'Europe/Warsaw'),
+    getUserCurrency(userId).catch(() => 'RUB'),
+  ]);
+  const system = { role: 'system', content: buildSystemPrompt(timezone) };
   const trimmed  = history.slice(-10);
   const messages = [system, ...trimmed, { role: 'user', content: userMessage }];
 
@@ -205,7 +208,7 @@ async function chatWithTools(userMessage, userId, chatId, history = []) {
         const found = await searchWeb(args.query || userMessage);
         result = { ok: true, message: found };
       } else {
-        result = await executeTool(name, args, userId, chatId, timezone);
+        result = await executeTool(name, args, userId, chatId, timezone, currency);
       }
     } catch (err) {
       result  = { ok: false, error: err.message };

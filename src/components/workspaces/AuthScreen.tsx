@@ -78,6 +78,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           <span className="badge badge-live">{t('auth.badge')}</span>
           <h1>{t('auth.title')}</h1>
           <p>{t('auth.subtitle')}</p>
+          <a
+            href="https://t.me/YourArc_bot"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="auth-bot-link"
+          >
+            💬 {language === 'ru' ? 'Открыть бота в Telegram' : 'Open bot in Telegram'}
+          </a>
         </header>
 
         <button

@@ -6,6 +6,8 @@ const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 const DEFAULT_TZ = 'Europe/Warsaw';
 
+const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', RUB: '₽', BYN: 'Br', CNY: '¥' };
+
 // ── Timezone helpers ──────────────────────────────────────────────────────────
 
 function isValidTimezone(tz) {
@@ -30,6 +32,13 @@ async function getUserTimezone(userId) {
     const tz  = doc.exists ? doc.data()?.timezone : null;
     return (tz && isValidTimezone(tz)) ? tz : DEFAULT_TZ;
   } catch { return DEFAULT_TZ; }
+}
+
+async function getUserCurrency(userId) {
+  try {
+    const doc = await db.collection('users').doc(userId).get();
+    return (doc.exists ? doc.data()?.currency : null) || 'RUB';
+  } catch { return 'RUB'; }
 }
 
 /**
@@ -672,7 +681,7 @@ function autoCategorize(description) {
   return 'other';
 }
 
-async function createTransaction(args, userId, chatId) {
+async function createTransaction(args, userId, chatId, currency = 'RUB') {
   const { amount, description, type } = args;
   const category = args.category || autoCategorize(description);
   const id = createId();
@@ -691,7 +700,8 @@ async function createTransaction(args, userId, chatId) {
 
   const emoji = type === 'income' ? '💰' : '💸';
   const verb  = type === 'income' ? 'Доход' : 'Расход';
-  return { ok: true, message: `${emoji} ${verb}: ${description} — ${amount} ₽ [${category}]` };
+  const sym   = CURRENCY_SYMBOLS[currency] || currency;
+  return { ok: true, message: `${emoji} ${verb}: ${description} — ${amount} ${sym} [${category}]` };
 }
 
 async function queryReminders(args, userId, timezone) {
@@ -737,7 +747,7 @@ async function queryTasks(args, userId) {
   return { ok: true, message: `📋 Задачи:\n${lines.join('\n')}` };
 }
 
-async function queryTransactions(args, userId) {
+async function queryTransactions(args, userId, currency = 'RUB') {
   const { type = 'all', limit = 10 } = args || {};
 
   let q = db.collection('transactions').where('userId', '==', userId);
@@ -747,10 +757,11 @@ async function queryTransactions(args, userId) {
   const snap = await q.get();
   if (snap.empty) return { ok: true, message: 'Нет транзакций.' };
 
+  const sym   = CURRENCY_SYMBOLS[currency] || currency;
   const lines = snap.docs.map(d => {
     const tx    = d.data();
     const emoji = tx.type === 'income' ? '💰' : '💸';
-    return `${emoji} ${tx.description} — ${tx.amount} ₽`;
+    return `${emoji} ${tx.description} — ${tx.amount} ${sym}`;
   });
   return { ok: true, message: `💳 История:\n${lines.join('\n')}` };
 }
@@ -815,7 +826,7 @@ async function generateImage(args, chatId) {
   return { ok: true, message: '🖼 Картинка отправлена!' };
 }
 
-async function getFinanceStats(args, userId) {
+async function getFinanceStats(args, userId, currency = 'RUB') {
   const { period = 'month' } = args || {};
   const now = new Date();
 
@@ -854,19 +865,20 @@ async function getFinanceStats(args, userId) {
 
   const periodLabel = { today: 'Сегодня', week: 'За неделю', month: 'За месяц', all: 'За всё время' }[period] || 'За всё время';
   const net = totalIncome - totalExpense;
+  const sym = CURRENCY_SYMBOLS[currency] || currency;
 
   const lines = [
     `📊 ${periodLabel}`,
-    `💸 Расходы: ${totalExpense.toFixed(2)} ₽`,
-    `💰 Доходы:  ${totalIncome.toFixed(2)} ₽`,
-    `${net >= 0 ? '✅' : '⚠️'} Баланс: ${net >= 0 ? '+' : ''}${net.toFixed(2)} ₽`,
+    `💸 Расходы: ${totalExpense.toFixed(2)} ${sym}`,
+    `💰 Доходы:  ${totalIncome.toFixed(2)} ${sym}`,
+    `${net >= 0 ? '✅' : '⚠️'} Баланс: ${net >= 0 ? '+' : ''}${net.toFixed(2)} ${sym}`,
   ];
 
   const catEntries = Object.entries(categories).sort((a, b) => b[1] - a[1]);
   if (catEntries.length) {
     lines.push('', 'По категориям:');
     for (const [cat, amount] of catEntries) {
-      lines.push(`  • ${cat}: ${amount.toFixed(2)} ₽`);
+      lines.push(`  • ${cat}: ${amount.toFixed(2)} ${sym}`);
     }
   }
 
@@ -1030,17 +1042,17 @@ async function forwardBotMessage(args, defaultChatId) {
 
 // ── Dispatcher ────────────────────────────────────────────────────────────────
 
-async function executeTool(name, args, userId, chatId, timezone) {
+async function executeTool(name, args, userId, chatId, timezone, currency = 'RUB') {
   switch (name) {
     case 'create_reminder':    return createReminder(args, userId, chatId, timezone);
     case 'create_task':        return createTask(args, userId, chatId, timezone);
-    case 'create_transaction': return createTransaction(args, userId, chatId);
+    case 'create_transaction': return createTransaction(args, userId, chatId, currency);
     case 'query_reminders':    return queryReminders(args, userId, timezone);
     case 'query_tasks':        return queryTasks(args, userId);
-    case 'query_transactions': return queryTransactions(args, userId);
+    case 'query_transactions': return queryTransactions(args, userId, currency);
     case 'set_timezone':       return setTimezone(args, userId);
     case 'generate_image':     return generateImage(args, chatId);
-    case 'get_finance_stats':  return getFinanceStats(args, userId);
+    case 'get_finance_stats':  return getFinanceStats(args, userId, currency);
     case 'send_message':        return sendBotMessage(args);
     case 'forward_message':     return forwardBotMessage(args, chatId);
     case 'create_automation':   return createAutomation(args, userId, chatId, timezone);
@@ -1053,4 +1065,4 @@ async function executeTool(name, args, userId, chatId, timezone) {
   }
 }
 
-module.exports = { TOOL_DEFINITIONS, executeTool, getUserTimezone, isValidTimezone, getUtcOffsetStr, calculateNextRun };
+module.exports = { TOOL_DEFINITIONS, executeTool, getUserTimezone, getUserCurrency, isValidTimezone, getUtcOffsetStr, calculateNextRun };

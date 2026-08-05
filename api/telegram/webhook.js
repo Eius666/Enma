@@ -28,7 +28,7 @@ async function tg(token, method, body) {
 }
 
 const sendMessage = (token, chatId, text, opts = {}) =>
-  tg(token, 'sendMessage', { chat_id: chatId, text, ...opts });
+  tg(token, 'sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', ...opts });
 
 const editMessage = (token, chatId, messageId, text, opts = {}) =>
   tg(token, 'editMessageText', { chat_id: chatId, message_id: messageId, text, ...opts });
@@ -412,9 +412,18 @@ module.exports = async (req, res) => {
       userQuery = await db.collection('users').where('chatId', '==', String(chatId)).limit(1).get();
     }
     if (userQuery.empty) {
-      await sendMessage(token, chatId,
-        '⚠️ Привет! Пожалуйста, сначала открой Мини-Апп (Enma), чтобы привязать аккаунт.'
-      );
+      if (text?.startsWith('/start')) {
+        await sendMessage(token, chatId,
+          'Привет! Я Enma — AI-ассистент для финансов и продуктивности.\n\n' +
+          'Чтобы начать, открой веб-приложение и создай аккаунт:\n' +
+          `👉 ${APP_URL}\n\n` +
+          'После регистрации вернись сюда — я готов к работе! 🚀'
+        );
+      } else {
+        await sendMessage(token, chatId,
+          `⚠️ Сначала открой Enma и создай аккаунт:\n👉 ${APP_URL}\n\nПосле этого вернись сюда.`
+        );
+      }
       res.status(200).json({ ok: true });
       return;
     }
@@ -453,9 +462,10 @@ module.exports = async (req, res) => {
           '💰 Записывать расходы и доходы\n' +
           '🖼 Анализировать изображения\n' +
           '🎤 Понимать голосовые сообщения\n\n' +
-          `У тебя ${TRIAL_LIMIT} бесплатных запроса.\n` +
+          `У тебя ${TRIAL_LIMIT} бесплатных запросов.\n` +
           'Подписка — /subscribe\n' +
-          'Реферальная программа — /referral'
+          'Реферальная программа — /referral\n\n' +
+          'Попробуй написать: «напомни мне завтра в 9 утра» ⏰'
         );
         res.status(200).json({ ok: true }); return;
       }
