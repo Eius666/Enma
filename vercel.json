@@ -2,7 +2,6 @@
   "functions": {
     "api/telegram/webhook.js":      { "maxDuration": 30 },
     "api/telegram/cron.js":         { "maxDuration": 30 },
-    "api/cron/reminders.js":        { "maxDuration": 30 },
     "api/cron/content-plan.js":     { "maxDuration": 30 },
     "api/cron/content-publish.js":  { "maxDuration": 30 },
     "api/cron/maintenance.js":      { "maxDuration": 30 },

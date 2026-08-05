@@ -41,8 +41,10 @@ module.exports = async (req, res) => {
         }
       }
 
-      for (const { id } of toDelete) {
-        await db.collection('reminders').doc(id).delete();
+      if (toDelete.length > 0) {
+        const batch = db.batch();
+        for (const { id } of toDelete) batch.delete(db.collection('reminders').doc(id));
+        await batch.commit();
       }
 
       return res.status(200).json({ ok: true, cleaned: toDelete.length, details: toDelete });

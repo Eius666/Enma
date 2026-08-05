@@ -45,7 +45,7 @@ module.exports = async (req, res) => {
 
   let tonData;
   try {
-    const tonRes = await fetch(url, { headers });
+    const tonRes = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) });
     if (!tonRes.ok) {
       return res.status(502).json({ error: 'TonCenter API error', httpStatus: tonRes.status });
     }

@@ -214,12 +214,13 @@ module.exports = async (req, res) => {
       .limit(50)
       .get();
 
-    let staleCount = 0;
-    for (const doc of staleSnap.docs) {
-      await doc.ref.delete();
-      staleCount++;
+    const staleCount = staleSnap.docs.length;
+    if (staleCount > 0) {
+      const batch = db.batch();
+      for (const doc of staleSnap.docs) batch.delete(doc.ref);
+      await batch.commit();
+      console.log(`[cron] Cleaned ${staleCount} stale reminders`);
     }
-    if (staleCount > 0) console.log(`[cron] Cleaned ${staleCount} stale reminders`);
 
     res.status(200).json({
       ok: true,
