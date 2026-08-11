@@ -348,6 +348,8 @@ const TOOL_DEFINITIONS = [
           description: { type: 'string', description: 'Описание' },
           type:        { type: 'string', enum: ['expense', 'income'] },
           category:    { type: 'string', description: 'Категория (еда, транспорт, зарплата, etc.)' },
+          bank:        { type: 'string', description: 'Банк или платёжный метод (Тинькофф, Сбербанк, Наличные, etc.). Спроси если у пользователя настроены банки.' },
+          goalId:      { type: 'string', description: 'ID цели накопления если транзакция связана с целью' },
         },
         required: ['amount', 'description', 'type'],
       },
@@ -391,6 +393,7 @@ const TOOL_DEFINITIONS = [
         properties: {
           type:  { type: 'string', enum: ['expense', 'income', 'all'] },
           limit: { type: 'number' },
+          bank:  { type: 'string', description: 'Фильтр по банку/платёжному методу (опционально)' },
         },
       },
     },
@@ -549,6 +552,97 @@ const TOOL_DEFINITIONS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'set_banks',
+      description: 'Сохранить список банков/платёжных методов пользователя. Используй когда пользователь называет свои банки или хочет обновить список.',
+      parameters: {
+        type: 'object',
+        properties: {
+          banks: { type: 'array', items: { type: 'string' }, description: 'Список банков/методов оплаты, например ["Тинькофф", "Сбербанк", "Наличные"]' },
+        },
+        required: ['banks'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_banks',
+      description: 'Получить список банков/платёжных методов пользователя.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_goal',
+      description: 'Создать цель накопления. Используй когда пользователь хочет накопить на что-то конкретное.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title:        { type: 'string', description: 'Название цели, например "Отпуск в Испании"' },
+          targetAmount: { type: 'number', description: 'Целевая сумма' },
+          deadline:     { type: 'string', description: 'Дедлайн YYYY-MM-DD (опционально)' },
+          category:     { type: 'string', description: 'Категория цели (опционально): travel, car, home, education, other' },
+        },
+        required: ['title', 'targetAmount'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'deposit_to_goal',
+      description: 'Пополнить цель накопления на сумму.',
+      parameters: {
+        type: 'object',
+        properties: {
+          goalId: { type: 'string', description: 'ID цели (из list_goals)' },
+          amount: { type: 'number', description: 'Сумма пополнения' },
+        },
+        required: ['goalId', 'amount'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'withdraw_from_goal',
+      description: 'Снять средства с цели накопления.',
+      parameters: {
+        type: 'object',
+        properties: {
+          goalId: { type: 'string', description: 'ID цели (из list_goals)' },
+          amount: { type: 'number', description: 'Сумма снятия' },
+        },
+        required: ['goalId', 'amount'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_goals',
+      description: 'Показать все цели накопления пользователя с прогрессом.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_goal',
+      description: 'Удалить цель накопления.',
+      parameters: {
+        type: 'object',
+        properties: {
+          goalId: { type: 'string', description: 'ID цели' },
+        },
+        required: ['goalId'],
+      },
+    },
+  },
 ];
 
 // ── Tool implementations ──────────────────────────────────────────────────────
@@ -682,11 +776,11 @@ function autoCategorize(description) {
 }
 
 async function createTransaction(args, userId, chatId, currency = 'RUB') {
-  const { amount, description, type } = args;
+  const { amount, description, type, bank, goalId } = args;
   const category = args.category || autoCategorize(description);
   const id = createId();
 
-  await db.collection('transactions').doc(id).set({
+  const txData = {
     userId,
     chatId,
     type,
@@ -696,12 +790,36 @@ async function createTransaction(args, userId, chatId, currency = 'RUB') {
     date:       new Date().toISOString(),
     source:     'telegram-bot',
     createdAt:  admin.firestore.FieldValue.serverTimestamp(),
-  });
+  };
+  if (bank)   txData.bank   = bank;
+  if (goalId) txData.goalId = goalId;
 
-  const emoji = type === 'income' ? '💰' : '💸';
-  const verb  = type === 'income' ? 'Доход' : 'Расход';
-  const sym   = CURRENCY_SYMBOLS[currency] || currency;
-  return { ok: true, message: `${emoji} ${verb}: ${description} — ${amount} ${sym} [${category}]` };
+  await db.collection('transactions').doc(id).set(txData);
+
+  if (bank) {
+    await db.collection('users').doc(userId).update({
+      banks: admin.firestore.FieldValue.arrayUnion(bank),
+    }).catch(() => {});
+  }
+
+  if (goalId) {
+    const goalRef  = db.collection('goals').doc(goalId);
+    const goalSnap = await goalRef.get().catch(() => null);
+    if (goalSnap?.exists && goalSnap.data().userId === userId) {
+      const current = goalSnap.data().currentAmount || 0;
+      const delta   = type === 'income' ? amount : -amount;
+      await goalRef.update({
+        currentAmount: Math.max(0, current + delta),
+        updatedAt:     admin.firestore.FieldValue.serverTimestamp(),
+      }).catch(() => {});
+    }
+  }
+
+  const emoji    = type === 'income' ? '💰' : '💸';
+  const verb     = type === 'income' ? 'Доход' : 'Расход';
+  const sym      = CURRENCY_SYMBOLS[currency] || currency;
+  const bankStr  = bank ? ` [${bank}]` : '';
+  return { ok: true, message: `${emoji} ${verb}: ${description} — ${amount} ${sym} [${category}]${bankStr}` };
 }
 
 async function queryReminders(args, userId, timezone) {
@@ -748,20 +866,26 @@ async function queryTasks(args, userId) {
 }
 
 async function queryTransactions(args, userId, currency = 'RUB') {
-  const { type = 'all', limit = 10 } = args || {};
+  const { type = 'all', limit = 10, bank } = args || {};
 
   let q = db.collection('transactions').where('userId', '==', userId);
   if (type !== 'all') q = q.where('type', '==', type);
-  q = q.orderBy('date', 'desc').limit(Math.min(limit, 20));
+  const fetchLimit = bank ? Math.min(limit * 4, 80) : Math.min(limit, 20);
+  q = q.orderBy('date', 'desc').limit(fetchLimit);
 
   const snap = await q.get();
-  if (snap.empty) return { ok: true, message: 'Нет транзакций.' };
+  let docs = snap.docs;
+  if (bank) docs = docs.filter(d => d.data().bank === bank);
+  docs = docs.slice(0, Math.min(limit, 20));
+
+  if (!docs.length) return { ok: true, message: 'Нет транзакций.' };
 
   const sym   = CURRENCY_SYMBOLS[currency] || currency;
-  const lines = snap.docs.map(d => {
-    const tx    = d.data();
-    const emoji = tx.type === 'income' ? '💰' : '💸';
-    return `${emoji} ${tx.description} — ${tx.amount} ${sym}`;
+  const lines = docs.map(d => {
+    const tx        = d.data();
+    const emoji     = tx.type === 'income' ? '💰' : '💸';
+    const bankLabel = tx.bank ? ` [${tx.bank}]` : '';
+    return `${emoji} ${tx.description} — ${tx.amount} ${sym}${bankLabel}`;
   });
   return { ok: true, message: `💳 История:\n${lines.join('\n')}` };
 }
@@ -848,6 +972,7 @@ async function getFinanceStats(args, userId, currency = 'RUB') {
   let totalExpense = 0;
   let totalIncome  = 0;
   const categories = {};
+  const byBank     = {};
 
   for (const doc of snap.docs) {
     const d      = doc.data();
@@ -858,8 +983,16 @@ async function getFinanceStats(args, userId, currency = 'RUB') {
       totalExpense += d.amount || 0;
       const cat = (d.categoryId || 'cat-other').replace('cat-', '');
       categories[cat] = (categories[cat] || 0) + (d.amount || 0);
+      if (d.bank) {
+        if (!byBank[d.bank]) byBank[d.bank] = { income: 0, expense: 0 };
+        byBank[d.bank].expense += d.amount || 0;
+      }
     } else if (d.type === 'income') {
       totalIncome += d.amount || 0;
+      if (d.bank) {
+        if (!byBank[d.bank]) byBank[d.bank] = { income: 0, expense: 0 };
+        byBank[d.bank].income += d.amount || 0;
+      }
     }
   }
 
@@ -879,6 +1012,17 @@ async function getFinanceStats(args, userId, currency = 'RUB') {
     lines.push('', 'По категориям:');
     for (const [cat, amount] of catEntries) {
       lines.push(`  • ${cat}: ${amount.toFixed(2)} ${sym}`);
+    }
+  }
+
+  const bankEntries = Object.entries(byBank).sort((a, b) => (b[1].expense + b[1].income) - (a[1].expense + a[1].income));
+  if (bankEntries.length) {
+    lines.push('', 'По банкам:');
+    for (const [bk, stats] of bankEntries) {
+      const parts = [];
+      if (stats.expense > 0) parts.push(`расходы ${stats.expense.toFixed(2)} ${sym}`);
+      if (stats.income  > 0) parts.push(`доходы ${stats.income.toFixed(2)} ${sym}`);
+      lines.push(`  • ${bk}: ${parts.join(', ')}`);
     }
   }
 
@@ -1040,6 +1184,164 @@ async function forwardBotMessage(args, defaultChatId) {
   return { ok: true, message: `✅ Сообщение переслано в чат ${chat_id}` };
 }
 
+// ── Banks ─────────────────────────────────────────────────────────────────────
+
+async function setBanks(args, userId) {
+  const { banks } = args;
+  if (!Array.isArray(banks)) return { ok: false, error: 'banks должен быть массивом' };
+  await db.collection('users').doc(userId).update({ banks });
+  if (!banks.length) return { ok: true, message: '✅ Список банков очищен.' };
+  return { ok: true, message: `✅ Банки сохранены:\n${banks.map(b => `• ${b}`).join('\n')}` };
+}
+
+async function getBanks(userId) {
+  const doc   = await db.collection('users').doc(userId).get();
+  const banks = doc.exists ? (doc.data()?.banks || []) : [];
+  if (!banks.length) return { ok: true, message: 'Банки не настроены. Добавь: «Мои банки: Тинькофф, Сбербанк, Наличные»', banks: [] };
+  return { ok: true, message: `🏦 Твои банки:\n${banks.map(b => `• ${b}`).join('\n')}`, banks };
+}
+
+// ── Goals ─────────────────────────────────────────────────────────────────────
+
+function progressBar(current, target, width = 10) {
+  const pct    = Math.min(current / (target || 1), 1);
+  const filled = Math.round(pct * width);
+  return '▓'.repeat(filled) + '░'.repeat(width - filled);
+}
+
+async function createGoal(args, userId, currency) {
+  const { title, targetAmount, deadline, category } = args;
+  const sym = CURRENCY_SYMBOLS[currency] || currency;
+  const id  = createId();
+
+  await db.collection('goals').doc(id).set({
+    userId,
+    title,
+    targetAmount,
+    currentAmount: 0,
+    currency,
+    deadline:  deadline  || null,
+    category:  category  || null,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  let motivation = '';
+  if (deadline) {
+    const months = Math.ceil((new Date(deadline) - new Date()) / (1000 * 60 * 60 * 24 * 30));
+    if (months > 0) {
+      const monthly = Math.ceil(targetAmount / months);
+      motivation = `\n\nПри откладывании <b>${monthly} ${sym}/мес</b> достигнешь цели за ${months} мес.`;
+    }
+  }
+
+  return {
+    ok: true,
+    message: `🎯 Цель создана: <b>${title}</b>\nЦелевая сумма: ${targetAmount} ${sym}${motivation}\nID: <code>${id}</code>`,
+  };
+}
+
+async function depositToGoal(args, userId, chatId, currency) {
+  const { goalId, amount } = args;
+  const sym = CURRENCY_SYMBOLS[currency] || currency;
+
+  const ref  = db.collection('goals').doc(goalId);
+  const snap = await ref.get();
+  if (!snap.exists || snap.data().userId !== userId) return { ok: false, error: 'Цель не найдена' };
+
+  const goal      = snap.data();
+  const newAmount = (goal.currentAmount || 0) + amount;
+  await ref.update({ currentAmount: newAmount, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+
+  await db.collection('transactions').doc(createId()).set({
+    userId, chatId,
+    type:        'goal_deposit',
+    amount,
+    description: `Пополнение: ${goal.title}`,
+    categoryId:  'cat-goal',
+    goalId,
+    date:        new Date().toISOString(),
+    source:      'telegram-bot',
+    createdAt:   admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  const pct      = Math.min(Math.round(newAmount / goal.targetAmount * 100), 100);
+  const bar      = progressBar(newAmount, goal.targetAmount);
+  const congrats = pct >= 100 ? '\n\n🎉 Цель достигнута! Поздравляем!' : '';
+  return {
+    ok: true,
+    message: `💰 Пополнение: +${amount} ${sym}\n🎯 <b>${goal.title}</b>\n${bar} ${pct}%\n${newAmount} / ${goal.targetAmount} ${sym}${congrats}`,
+  };
+}
+
+async function withdrawFromGoal(args, userId, chatId, currency) {
+  const { goalId, amount } = args;
+  const sym = CURRENCY_SYMBOLS[currency] || currency;
+
+  const ref  = db.collection('goals').doc(goalId);
+  const snap = await ref.get();
+  if (!snap.exists || snap.data().userId !== userId) return { ok: false, error: 'Цель не найдена' };
+
+  const goal    = snap.data();
+  const current = goal.currentAmount || 0;
+  if (current - amount < 0) return { ok: false, error: `Недостаточно средств. Накоплено: ${current} ${sym}` };
+
+  const newAmount = current - amount;
+  await ref.update({ currentAmount: newAmount, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+
+  await db.collection('transactions').doc(createId()).set({
+    userId, chatId,
+    type:        'goal_withdraw',
+    amount,
+    description: `Снятие: ${goal.title}`,
+    categoryId:  'cat-goal',
+    goalId,
+    date:        new Date().toISOString(),
+    source:      'telegram-bot',
+    createdAt:   admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  const pct = Math.round(newAmount / goal.targetAmount * 100);
+  const bar = progressBar(newAmount, goal.targetAmount);
+  return {
+    ok: true,
+    message: `📉 Снятие: -${amount} ${sym}\n🎯 <b>${goal.title}</b>\n${bar} ${pct}%\n${newAmount} / ${goal.targetAmount} ${sym}`,
+  };
+}
+
+async function listGoals(userId, currency) {
+  const sym  = CURRENCY_SYMBOLS[currency] || currency;
+  const snap = await db.collection('goals')
+    .where('userId', '==', userId)
+    .orderBy('createdAt', 'desc')
+    .limit(20)
+    .get();
+
+  if (snap.empty) return { ok: true, message: 'У тебя нет целей накопления.\n\nСоздай первую: «Хочу накопить на отпуск 50 000»' };
+
+  const lines = snap.docs.map(d => {
+    const g    = d.data();
+    const cur  = g.currentAmount || 0;
+    const pct  = Math.min(Math.round(cur / g.targetAmount * 100), 100);
+    const bar  = progressBar(cur, g.targetAmount);
+    const dl   = g.deadline
+      ? `\n📅 ${new Date(g.deadline).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}`
+      : '';
+    return `🎯 <b>${g.title}</b> — ${cur} / ${g.targetAmount} ${sym} (${pct}%)\n${bar}${dl}\nID: <code>${d.id}</code>`;
+  });
+  return { ok: true, message: `🎯 <b>Цели накопления:</b>\n\n${lines.join('\n\n')}` };
+}
+
+async function deleteGoal(args, userId) {
+  const { goalId } = args;
+  const ref  = db.collection('goals').doc(goalId);
+  const snap = await ref.get();
+  if (!snap.exists || snap.data().userId !== userId) return { ok: false, error: 'Цель не найдена' };
+  const title = snap.data().title;
+  await ref.delete();
+  return { ok: true, message: `✅ Цель «${title}» удалена.` };
+}
+
 // ── Dispatcher ────────────────────────────────────────────────────────────────
 
 async function executeTool(name, args, userId, chatId, timezone, currency = 'RUB') {
@@ -1059,6 +1361,13 @@ async function executeTool(name, args, userId, chatId, timezone, currency = 'RUB
     case 'list_automations':    return listAutomations(userId, timezone);
     case 'delete_automation':   return deleteAutomation(args, userId);
     case 'pause_automation':    return pauseAutomation(args, userId, timezone);
+    case 'set_banks':           return setBanks(args, userId);
+    case 'get_banks':           return getBanks(userId);
+    case 'create_goal':         return createGoal(args, userId, currency);
+    case 'deposit_to_goal':     return depositToGoal(args, userId, chatId, currency);
+    case 'withdraw_from_goal':  return withdrawFromGoal(args, userId, chatId, currency);
+    case 'list_goals':          return listGoals(userId, currency);
+    case 'delete_goal':         return deleteGoal(args, userId);
     // search_web is intercepted by the caller
     case 'search_web':          return { ok: false, error: 'SEARCH_WEB_REDIRECT', query: args?.query };
     default:                    return { ok: false, error: `Unknown tool: ${name}` };

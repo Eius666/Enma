@@ -5,7 +5,7 @@ const { verifyWebhookSignature }                           = require('../_lib/ve
 const { rateLimit, getClientIp }                           = require('../_lib/rateLimit');
 const { checkSubscription, getTrialUsed, incrementTrialUsed, TRIAL_LIMIT } = require('../_lib/ai/subscription');
 const { chatWithTools }                                    = require('../_lib/llm-chat');
-const { getUserTimezone, isValidTimezone, getUtcOffsetStr } = require('../_lib/tools');
+const { getUserTimezone, getUserCurrency, isValidTimezone, getUtcOffsetStr } = require('../_lib/tools');
 const { generatePost, generateImage }                      = require('../_lib/content/generator');
 const { handleCallbackQuery: handleContentCb, handleAdminTextMessage, isContentCallback, isAdminChatId } = require('../_lib/content/moderationHandler');
 const { handleTaskCallback }                               = require('../_lib/ai/tools');
@@ -502,6 +502,50 @@ module.exports = async (req, res) => {
         } else {
           await db.collection('users').doc(userId).update({ timezone: arg });
           await sendMessage(token, chatId, `✅ Часовой пояс обновлён: ${arg} (${getUtcOffsetStr(arg)})`);
+        }
+        res.status(200).json({ ok: true }); return;
+      }
+      if (text === '/banks') {
+        const userDoc = await db.collection('users').doc(userId).get();
+        const banks   = userDoc.exists ? (userDoc.data()?.banks || []) : [];
+        if (!banks.length) {
+          await sendMessage(token, chatId,
+            '🏦 Банки не настроены.\n\nНапиши боту: «Мои банки: Тинькофф, Сбербанк, Наличные»'
+          );
+        } else {
+          await sendMessage(token, chatId,
+            `🏦 <b>Твои банки:</b>\n${banks.map(b => `• ${b}`).join('\n')}\n\n` +
+            'Чтобы изменить список напиши: «Мои банки: Тинькофф, Наличные»'
+          );
+        }
+        res.status(200).json({ ok: true }); return;
+      }
+      if (text === '/goals') {
+        const currency = await getUserCurrency(userId).catch(() => 'RUB');
+        const sym      = { USD: '$', EUR: '€', RUB: '₽', BYN: 'Br', CNY: '¥' }[currency] || currency;
+        const goalSnap = await db.collection('goals')
+          .where('userId', '==', userId)
+          .orderBy('createdAt', 'desc')
+          .limit(20)
+          .get();
+        if (goalSnap.empty) {
+          await sendMessage(token, chatId, '🎯 Целей нет.\n\nСоздай первую: «Хочу накопить на отпуск 50 000»');
+        } else {
+          const bar = (cur, target) => {
+            const pct    = Math.min(cur / (target || 1), 1);
+            const filled = Math.round(pct * 10);
+            return '▓'.repeat(filled) + '░'.repeat(10 - filled);
+          };
+          const lines = goalSnap.docs.map(d => {
+            const g   = d.data();
+            const cur = g.currentAmount || 0;
+            const pct = Math.min(Math.round(cur / g.targetAmount * 100), 100);
+            const dl  = g.deadline
+              ? `\n📅 ${new Date(g.deadline).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}`
+              : '';
+            return `🎯 <b>${g.title}</b>\n${bar(cur, g.targetAmount)} ${pct}% (${cur} / ${g.targetAmount} ${sym})${dl}\nID: <code>${d.id}</code>`;
+          });
+          await sendMessage(token, chatId, `🎯 <b>Цели накопления:</b>\n\n${lines.join('\n\n')}`);
         }
         res.status(200).json({ ok: true }); return;
       }
