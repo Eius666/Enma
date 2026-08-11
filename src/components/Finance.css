@@ -530,3 +530,76 @@ body.theme-light .fin-editor__date {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* ── Bank chips in editor ── */
+.fin-editor__bank-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.fin-editor__bank-chip {
+  padding: 7px 14px;
+  border-radius: 20px;
+  border: 1.5px solid var(--notes-card-border);
+  background: var(--notes-card-bg);
+  color: var(--notes-text);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.fin-editor__bank-chip--active {
+  background: var(--notes-accent);
+  border-color: var(--notes-accent);
+  color: #fff;
+}
+
+/* ── Bank filter chips in list ── */
+.fin-list__bank-wrap {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 0 16px 10px;
+  scrollbar-width: none;
+}
+.fin-list__bank-wrap::-webkit-scrollbar { display: none; }
+
+.fin-list__bank-chip {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  border-radius: 16px;
+  border: 1.5px solid var(--notes-card-border);
+  background: var(--notes-card-bg);
+  color: var(--notes-text-muted);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.fin-list__bank-chip--active {
+  background: var(--notes-accent);
+  border-color: var(--notes-accent);
+  color: #fff;
+}
+
+/* ── Bank tag on transaction rows ── */
+.fin-list__item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.fin-list__item-bank {
+  font-size: 11px;
+  color: var(--notes-text-muted);
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  border-radius: 8px;
+  padding: 1px 6px;
+  line-height: 1.4;
+}

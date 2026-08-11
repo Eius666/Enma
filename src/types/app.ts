@@ -73,6 +73,8 @@ export type Transaction = {
   originalCurrency?: Currency;
   // 'telegram-bot' for transactions created via Telegram chat.
   source?: string;
+  // Bank / payment method (e.g. "Тинькофф", "Наличные"). Optional.
+  bank?: string;
 };
 
 // Client-side habit shape: history keyed by YYYY-MM-DD date strings.

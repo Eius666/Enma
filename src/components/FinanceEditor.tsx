@@ -22,6 +22,7 @@ interface FinanceEditorProps {
   currency: Currency;
   convertAmount: (amount: number) => number;
   convertToBase: (amount: number) => number;
+  banks: string[];
   onBack: () => void;
 }
 
@@ -93,6 +94,7 @@ const T = {
     descPlaceholder: 'What is this for?',
     dateLabel: 'DATE',
     catLabel: 'CATEGORY',
+    bankLabel: 'BANK / PAYMENT METHOD',
     save: 'Save Transaction',
     confirmDelete: 'Delete this transaction?',
     saving: 'Saving…',
@@ -107,23 +109,27 @@ const T = {
     descPlaceholder: 'На что это?',
     dateLabel: 'ДАТА',
     catLabel: 'КАТЕГОРИЯ',
+    bankLabel: 'БАНК / МЕТОД ОПЛАТЫ',
     save: 'Сохранить',
     confirmDelete: 'Удалить эту транзакцию?',
     saving: 'Сохранение…',
   },
 };
 
+const LAST_BANK_KEY = 'enma.lastBank';
+
 // ── applyTxData ───────────────────────────────────────────────────────────────
 
 /** Populate form fields from a transaction data object. */
 function applyTxData(
-  tx: { type?: 'income' | 'expense'; amount?: number; description?: string; date?: string; categoryId?: string; category?: string },
+  tx: { type?: 'income' | 'expense'; amount?: number; description?: string; date?: string; categoryId?: string; category?: string; bank?: string },
   convertAmount: (n: number) => number,
   setTxType: (v: 'income' | 'expense') => void,
   setAmountStr: (v: string) => void,
   setDescription: (v: string) => void,
   setDate: (v: string) => void,
-  setSelectedCatId: (v: string) => void
+  setSelectedCatId: (v: string) => void,
+  setSelectedBank: (v: string) => void
 ) {
   if (tx.type) setTxType(tx.type);
   if (tx.amount !== undefined) {
@@ -139,6 +145,7 @@ function applyTxData(
     p.ru.toLowerCase() === catNameClean.toLowerCase()
   );
   if (preset) setSelectedCatId(preset.id);
+  if (tx.bank) setSelectedBank(tx.bank);
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -151,6 +158,7 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
   currency,
   convertAmount,
   convertToBase,
+  banks,
   onBack,
 }) => {
   const t = T[language];
@@ -161,20 +169,23 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(todayStr());
   const [selectedCatId, setSelectedCatId] = useState<string>('');
+  const [selectedBank, setSelectedBank] = useState<string>(
+    () => (transactionId ? '' : (localStorage.getItem(LAST_BANK_KEY) ?? ''))
+  );
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(!transactionId || !!initialTransaction);
 
   // ── Load existing transaction ─────────────────────────────────────────────
   useEffect(() => {
     if (initialTransaction) {
-      applyTxData(initialTransaction, convertAmount, setTxType, setAmountStr, setDescription, setDate, setSelectedCatId);
+      applyTxData(initialTransaction, convertAmount, setTxType, setAmountStr, setDescription, setDate, setSelectedCatId, setSelectedBank);
       return;
     }
     if (!transactionId) return;
     getDoc(doc(db, 'transactions', transactionId))
       .then(snap => {
         if (snap.exists()) {
-          applyTxData(snap.data(), convertAmount, setTxType, setAmountStr, setDescription, setDate, setSelectedCatId);
+          applyTxData(snap.data() as Parameters<typeof applyTxData>[0], convertAmount, setTxType, setAmountStr, setDescription, setDate, setSelectedCatId, setSelectedBank);
         }
         setLoaded(true);
       })
@@ -216,7 +227,11 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
       if (!transactionId) {
         payload.createdAt = serverTimestamp();
       }
+      if (selectedBank) payload.bank = selectedBank;
       await setDoc(doc(db, 'transactions', id), payload, { merge: true });
+      if (selectedBank) {
+        try { localStorage.setItem(LAST_BANK_KEY, selectedBank); } catch { /* ignore */ }
+      }
       onBack();
     } catch (err) {
       console.warn('FinanceEditor save error', err);
@@ -339,6 +354,25 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
           onChange={e => setDate(e.target.value)}
         />
       </div>
+
+      {/* ── Bank / Payment method ── */}
+      {banks.length > 0 && (
+        <>
+          <div className="fin-editor__section-label">{t.bankLabel}</div>
+          <div className="fin-editor__bank-chips">
+            {banks.map(bank => (
+              <button
+                key={bank}
+                className={`fin-editor__bank-chip${selectedBank === bank ? ' fin-editor__bank-chip--active' : ''}`}
+                onClick={() => setSelectedBank(selectedBank === bank ? '' : bank)}
+                type="button"
+              >
+                {bank}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* ── Save ── */}
       <button

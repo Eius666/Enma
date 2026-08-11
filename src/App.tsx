@@ -668,6 +668,7 @@ const App: React.FC = () => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [banks, setBanks] = useState<string[]>([]);
 
   const t = (key: TranslationKey, params?: Record<string, string | number>) =>
     translate(language, key, params);
@@ -925,6 +926,9 @@ const App: React.FC = () => {
           const firestoreCurrency = data.currency as Currency;
           setCurrency(firestoreCurrency);
           try { localStorage.setItem(CURRENCY_STORAGE_KEY, firestoreCurrency); } catch { /* ignore */ }
+        }
+        if (data && Array.isArray(data.banks)) {
+          setBanks(data.banks as string[]);
         }
       },
       err => console.warn('Failed to listen to user currency', err)
@@ -1246,6 +1250,14 @@ const App: React.FC = () => {
     }
   };
 
+
+  const saveBanks = useCallback((newBanks: string[]) => {
+    setBanks(newBanks);
+    if (user?.uid) {
+      setDoc(doc(db, 'users', user.uid), { banks: newBanks, updatedAt: serverTimestamp() }, { merge: true })
+        .catch(err => console.warn('Failed to sync banks', err));
+    }
+  }, [user]);
 
   const loadExchangeRates = useCallback(async (force = false) => {
     const cached = readRatesCache();
@@ -1577,6 +1589,7 @@ const App: React.FC = () => {
             currency={currency}
             convertAmount={convertAmount}
             convertToBase={convertToBase}
+            banks={banks}
             onBack={() => {
               setFinanceView('list');
               setActiveTransactionId(null);
@@ -1626,6 +1639,8 @@ const App: React.FC = () => {
             onRefreshRates={() => loadExchangeRates(true)}
             onSubscriptionChange={setSubscription}
             onSignOut={handleSignOut}
+            banks={banks}
+            onBanksChange={saveBanks}
           />
         )}
       </main>

@@ -120,6 +120,7 @@ const FinanceList: React.FC<FinanceListProps> = ({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState(t.all);
+  const [activeBank, setActiveBank] = useState<string | null>(null);
 
   // For summary totals (always in USD base).
   const fmt = (amount: number) =>
@@ -161,12 +162,22 @@ const FinanceList: React.FC<FinanceListProps> = ({
 
   const safeActiveCategory = chips.includes(activeCategory) ? activeCategory : t.all;
 
+  // ── Banks that appear in actual transactions ───────────────────────────────
+  const txBanks = useMemo(() => {
+    const seen = new Set<string>();
+    for (const tx of transactions) {
+      if (tx.bank) seen.add(tx.bank);
+    }
+    return Array.from(seen);
+  }, [transactions]);
+
   // ── Filtered transactions ──────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return transactions.filter(tx => {
       const label = resolveCatLabel(tx, categories);
       if (safeActiveCategory !== t.all && label !== safeActiveCategory) return false;
+      if (activeBank !== null && tx.bank !== activeBank) return false;
       if (q) {
         return (
           tx.description.toLowerCase().includes(q) ||
@@ -175,7 +186,7 @@ const FinanceList: React.FC<FinanceListProps> = ({
       }
       return true;
     });
-  }, [transactions, categories, safeActiveCategory, searchQuery, t.all]);
+  }, [transactions, categories, safeActiveCategory, activeBank, searchQuery, t.all]);
 
   // ── Date grouping ──────────────────────────────────────────────────────────
   type Group = { label: string; items: Transaction[] };
@@ -243,6 +254,29 @@ const FinanceList: React.FC<FinanceListProps> = ({
         </div>
       </div>
 
+      {/* ── Bank filter chips ── */}
+      {txBanks.length > 0 && (
+        <div className="fin-list__bank-wrap">
+          <button
+            className={`fin-list__bank-chip${activeBank === null ? ' fin-list__bank-chip--active' : ''}`}
+            onClick={() => setActiveBank(null)}
+            type="button"
+          >
+            {t.all}
+          </button>
+          {txBanks.map(bank => (
+            <button
+              key={bank}
+              className={`fin-list__bank-chip${activeBank === bank ? ' fin-list__bank-chip--active' : ''}`}
+              onClick={() => setActiveBank(activeBank === bank ? null : bank)}
+              type="button"
+            >
+              {bank}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* ── Transaction list ── */}
       {isEmpty ? (
         <div className="fin-list__empty">
@@ -281,9 +315,14 @@ const FinanceList: React.FC<FinanceListProps> = ({
                     <span className="fin-list__item-title">
                       {tx.description || (language === 'ru' ? 'Без описания' : 'No description')}
                     </span>
-                    {catLabel && (
-                      <span className="fin-list__item-cat">{catLabel}</span>
-                    )}
+                    <span className="fin-list__item-meta">
+                      {catLabel && (
+                        <span className="fin-list__item-cat">{catLabel}</span>
+                      )}
+                      {tx.bank && (
+                        <span className="fin-list__item-bank">{tx.bank}</span>
+                      )}
+                    </span>
                   </span>
                   <span className="fin-list__item-right">
                     <span className={`fin-list__item-amount fin-list__item-amount--${tx.type}`}>

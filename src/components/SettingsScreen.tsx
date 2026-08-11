@@ -25,11 +25,13 @@ interface SettingsScreenProps {
   subscription: Subscription | null;
   ratesStatus: 'idle' | 'loading' | 'error';
   ratesUpdatedAt: string | null;
+  banks: string[];
   onLanguageChange: (lang: 'en' | 'ru') => void;
   onCurrencyChange: (currency: string) => void;
   onThemeToggle: () => void;
   onRefreshRates: () => void;
   onSubscriptionChange: (sub: Subscription | null) => void;
+  onBanksChange: (banks: string[]) => void;
   onSignOut: () => void;
 }
 
@@ -49,6 +51,10 @@ const T = {
     themeLight: 'Light',
     langEn: 'English',
     langRu: 'Russian',
+    groupBanks: 'Banks & Payment Methods',
+    noBanks: 'No banks added',
+    bankPlaceholder: 'Bank name…',
+    addBank: 'Add',
     groupPayment: 'Payment',
     subFree: 'Free',
     subActive: 'Active',
@@ -73,6 +79,10 @@ const T = {
     themeLight: 'Светлая',
     langEn: 'English',
     langRu: 'Русский',
+    groupBanks: 'Банки и методы оплаты',
+    noBanks: 'Банки не добавлены',
+    bankPlaceholder: 'Название банка…',
+    addBank: 'Добавить',
     groupPayment: 'Оплата',
     subFree: 'Бесплатно',
     subActive: 'Активна',
@@ -97,17 +107,20 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   user,
   subscription,
   ratesStatus,
+  banks,
   onLanguageChange,
   onCurrencyChange,
   onThemeToggle,
   onRefreshRates,
   onSubscriptionChange,
+  onBanksChange,
   onSignOut,
 }) => {
   const t = T[language];
 
   const [langOpen,     setLangOpen]     = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
+  const [bankInput,    setBankInput]    = useState('');
 
   const userEmail = user?.email ?? '—';
 
@@ -252,6 +265,62 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           {/* Toggle pill — visual only, click on row toggles */}
           <span className={`sett-toggle${theme === 'light' ? ' sett-toggle--on' : ''}`} aria-hidden="true" />
         </button>
+      </div>
+
+      {/* ━━━ Group: Banks ━━━ */}
+      <div className="sett-group__label">{t.groupBanks}</div>
+      <div className="sett-banks">
+        {banks.length === 0 && (
+          <span className="sett-banks__empty">{t.noBanks}</span>
+        )}
+        {banks.length > 0 && (
+          <div className="sett-banks__chips">
+            {banks.map(bank => (
+              <span key={bank} className="sett-banks__chip">
+                {bank}
+                <button
+                  className="sett-banks__chip-del"
+                  onClick={() => onBanksChange(banks.filter(b => b !== bank))}
+                  type="button"
+                  aria-label={`Remove ${bank}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="sett-banks__add-row">
+          <input
+            className="sett-banks__add-input"
+            type="text"
+            placeholder={t.bankPlaceholder}
+            value={bankInput}
+            onChange={e => setBankInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                const name = bankInput.trim();
+                if (name && !banks.includes(name)) {
+                  onBanksChange([...banks, name]);
+                  setBankInput('');
+                }
+              }
+            }}
+          />
+          <button
+            className="sett-banks__add-btn"
+            type="button"
+            onClick={() => {
+              const name = bankInput.trim();
+              if (name && !banks.includes(name)) {
+                onBanksChange([...banks, name]);
+                setBankInput('');
+              }
+            }}
+          >
+            {t.addBank}
+          </button>
+        </div>
       </div>
 
       {/* ━━━ Group: Payment ━━━ */}

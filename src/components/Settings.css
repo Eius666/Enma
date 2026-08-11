@@ -400,3 +400,100 @@ body.theme-light .sett-subscription-wrap .subscription-panel {
   border: 1px solid rgba(143, 150, 220, 0.25);
   box-shadow: 0 8px 32px rgba(143, 150, 220, 0.14);
 }
+
+/* ━━━ Banks section ━━━ */
+.sett-banks {
+  background: var(--sett-card-bg, rgba(30, 30, 50, 0.7));
+  border: 1px solid var(--sett-card-border, rgba(255,255,255,0.08));
+  border-radius: 18px;
+  padding: 14px 16px;
+  margin: 0 16px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sett-banks__empty {
+  font-size: 13px;
+  color: var(--sett-muted, #888);
+}
+
+.sett-banks__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sett-banks__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  background: rgba(143, 150, 220, 0.15);
+  border: 1px solid rgba(143, 150, 220, 0.25);
+  color: var(--sett-text, #e8e8f0);
+  font-size: 13px;
+}
+
+.sett-banks__chip-del {
+  background: none;
+  border: none;
+  color: var(--sett-muted, #888);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+.sett-banks__chip-del:hover { color: #ff4757; }
+
+.sett-banks__add-row {
+  display: flex;
+  gap: 8px;
+}
+
+.sett-banks__add-input {
+  flex: 1;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1.5px solid var(--sett-card-border, rgba(255,255,255,0.1));
+  background: rgba(255,255,255,0.06);
+  color: var(--sett-text, #e8e8f0);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.sett-banks__add-input:focus { border-color: rgba(143, 150, 220, 0.55); }
+.sett-banks__add-input::placeholder { color: var(--sett-muted, #888); }
+
+.sett-banks__add-btn {
+  padding: 9px 16px;
+  border-radius: 12px;
+  border: none;
+  background: var(--notes-accent, #8f96dc);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+.sett-banks__add-btn:active { opacity: 0.8; }
+
+/* Light theme overrides */
+body.theme-light .sett-banks {
+  background: rgba(255,255,255,0.85);
+  border-color: rgba(143,150,220,0.2);
+}
+body.theme-light .sett-banks__chip {
+  color: #1a1a2e;
+}
+body.theme-light .sett-banks__add-input {
+  background: rgba(0,0,0,0.04);
+  color: #1a1a2e;
+}
