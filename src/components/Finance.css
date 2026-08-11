@@ -223,11 +223,10 @@ body.theme-light .fin-list__item-icon {
 .fin-list__item-cat {
   font-size: 12px;
   color: var(--notes-text-secondary);
-  margin-top: 2px;
-  display: block;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .fin-list__item-right {
@@ -536,25 +535,29 @@ body.theme-light .fin-editor__date {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 20px;
 }
 
 .fin-editor__bank-chip {
-  padding: 7px 14px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
   border-radius: 20px;
-  border: 1.5px solid var(--notes-card-border);
+  border: 1px solid var(--notes-card-border);
   background: var(--notes-card-bg);
-  color: var(--notes-text);
+  color: var(--notes-text-secondary);
   font-size: 13px;
+  font-weight: 500;
   font-family: inherit;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition: all 0.18s;
 }
 
 .fin-editor__bank-chip--active {
-  background: var(--notes-accent);
+  background: rgba(123, 104, 238, 0.22);
   border-color: var(--notes-accent);
-  color: #fff;
+  color: var(--notes-accent);
 }
 
 /* ── Bank filter chips in list ── */
@@ -562,22 +565,25 @@ body.theme-light .fin-editor__date {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding: 0 16px 10px;
+  padding-bottom: 10px;
   scrollbar-width: none;
+  margin-bottom: 4px;
 }
 .fin-list__bank-wrap::-webkit-scrollbar { display: none; }
 
 .fin-list__bank-chip {
   flex-shrink: 0;
-  padding: 5px 12px;
-  border-radius: 16px;
-  border: 1.5px solid var(--notes-card-border);
+  padding: 7px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--notes-card-border);
   background: var(--notes-card-bg);
-  color: var(--notes-text-muted);
-  font-size: 12px;
+  color: var(--notes-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
   font-family: inherit;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+  transition: background 0.18s, border-color 0.18s, color 0.18s;
 }
 
 .fin-list__bank-chip--active {
@@ -592,6 +598,8 @@ body.theme-light .fin-editor__date {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+  margin-top: 2px;
+  min-width: 0;
 }
 
 .fin-list__item-bank {
@@ -602,4 +610,5 @@ body.theme-light .fin-editor__date {
   border-radius: 8px;
   padding: 1px 6px;
   line-height: 1.4;
+  flex-shrink: 0;
 }
