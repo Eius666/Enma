@@ -518,8 +518,7 @@ module.exports = async (req, res) => {
       }
       if (text === '/support' || text === '/поддержка') {
         await sendMessage(token, chatId,
-          '📧 <b>Служба поддержки</b>\n\nДля обращения в службу поддержки напишите нам на почту:\n\n<code>EnmatechTest@outlook.com</code>',
-          { reply_markup: { inline_keyboard: [[{ text: '📧 Написать на почту', url: 'mailto:EnmatechTest@outlook.com' }]] } }
+          '📧 <b>Служба поддержки</b>\n\nДля обращения в службу поддержки напишите нам на почту:\n\n<code>EnmatechTest@outlook.com</code>'
         );
         res.status(200).json({ ok: true }); return;
       }
