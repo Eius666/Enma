@@ -516,6 +516,13 @@ module.exports = async (req, res) => {
         await sendMessage(token, chatId, '🚫 Отменено');
         res.status(200).json({ ok: true }); return;
       }
+      if (text === '/support' || text === '/поддержка') {
+        await sendMessage(token, chatId,
+          '📧 <b>Служба поддержки</b>\n\nДля обращения в службу поддержки напишите нам на почту:\n\n<code>EnmatechTest@outlook.com</code>',
+          { reply_markup: { inline_keyboard: [[{ text: '📧 Написать на почту', url: 'mailto:EnmatechTest@outlook.com' }]] } }
+        );
+        res.status(200).json({ ok: true }); return;
+      }
       if (text === '/privacy' || text === '/политика') {
         await sendMessage(token, chatId,
           `📄 <b>Политика конфиденциальности</b>\n\n${APP_URL}/privacy.html`,
@@ -544,7 +551,7 @@ module.exports = async (req, res) => {
           '/timezone — изменить часовой пояс\n' +
           '/delete — удалить мои данные\n' +
           '/cancel — отменить текущее действие\n\n' +
-          '📄 /privacy · 📋 /terms'
+          '📄 /privacy · 📋 /terms · 📧 /support'
         );
         res.status(200).json({ ok: true }); return;
       }
