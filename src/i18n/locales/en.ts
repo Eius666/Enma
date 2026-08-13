@@ -19,6 +19,11 @@ export const en = {
     switchPromptSignUp: 'Already have an account?',
     switchCreate: 'Create one',
     switchSignIn: 'Sign in instead',
+    consentAgree: 'I agree to the ',
+    consentPrivacy: 'Privacy Policy',
+    consentAnd: ' and ',
+    consentTerms: 'Terms of Service',
+    consentNote: 'By clicking the button, you consent to the processing of personal data in accordance with the Privacy Policy.',
   },
   nav: {
     dayFlow: 'day flow',

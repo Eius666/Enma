@@ -96,3 +96,63 @@
 .auth-bot-link:hover {
   background: rgba(0, 136, 204, 0.18);
 }
+
+/* ── Consent block ────────────────────────────── */
+
+@keyframes authConsentIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.auth-consent {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: authConsentIn 0.2s ease forwards;
+}
+
+.auth-consent__check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.auth-consent__check input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.auth-consent__link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  transition: text-decoration-color 0.15s;
+  display: inline;
+}
+
+.auth-consent__link:hover {
+  text-decoration-color: var(--accent);
+}
+
+.auth-consent__note {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  opacity: 0.7;
+  padding-left: 28px;
+  margin: 0;
+}

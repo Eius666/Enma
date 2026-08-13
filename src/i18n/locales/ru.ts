@@ -19,6 +19,11 @@ export const ru = {
     switchPromptSignUp: 'Уже есть аккаунт?',
     switchCreate: 'Создать',
     switchSignIn: 'Войти',
+    consentAgree: 'Я соглашаюсь с ',
+    consentPrivacy: 'политикой конфиденциальности',
+    consentAnd: ' и ',
+    consentTerms: 'пользовательским соглашением',
+    consentNote: 'Нажимая кнопку, вы даёте согласие на обработку персональных данных в соответствии с политикой конфиденциальности.',
   },
   nav: {
     dayFlow: 'день',
