@@ -488,6 +488,17 @@ module.exports = async (req, res) => {
         await handleBalanceCommand(token, chatId, userId);
         res.status(200).json({ ok: true }); return;
       }
+      if (text.toLowerCase() === 'plat chek') {
+        await sendMessage(token, chatId, 'Правовая информация', {
+          reply_markup: {
+            inline_keyboard: [[
+              { text: '📄 Политика конфиденциальности', url: `${APP_URL}/privacy.html` },
+              { text: '📝 Пользовательское соглашение',  url: `${APP_URL}/terms.html`   },
+            ]],
+          },
+        });
+        res.status(200).json({ ok: true }); return;
+      }
       if (text === '/cancel') {
         await db.collection('user_states').doc(String(chatId)).delete().catch(() => {});
         await sendMessage(token, chatId, '🚫 Отменено');
