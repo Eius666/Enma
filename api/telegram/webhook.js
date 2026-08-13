@@ -460,11 +460,13 @@ module.exports = async (req, res) => {
           '⏰ Создавать напоминания\n' +
           '📋 Вести задачи\n' +
           '💰 Записывать расходы и доходы\n' +
+          '🏦 Отслеживать траты по банкам\n' +
+          '🎯 Вести цели накопления\n' +
           '🖼 Анализировать изображения\n' +
           '🎤 Понимать голосовые сообщения\n\n' +
           `У тебя ${TRIAL_LIMIT} бесплатных запросов.\n` +
-          'Подписка — /subscribe\n' +
-          'Реферальная программа — /referral\n\n' +
+          'Подписка — /subscribe · Помощь — /help\n\n' +
+          '📄 /privacy · 📋 /terms\n\n' +
           'Попробуй написать: «напомни мне завтра в 9 утра» ⏰'
         );
         res.status(200).json({ ok: true }); return;
@@ -489,6 +491,37 @@ module.exports = async (req, res) => {
       if (text === '/cancel') {
         await db.collection('user_states').doc(String(chatId)).delete().catch(() => {});
         await sendMessage(token, chatId, '🚫 Отменено');
+        res.status(200).json({ ok: true }); return;
+      }
+      if (text === '/privacy' || text === '/политика') {
+        await sendMessage(token, chatId,
+          `📄 <b>Политика конфиденциальности</b>\n\n${APP_URL}/privacy.html`,
+          { reply_markup: { inline_keyboard: [[{ text: '📄 Открыть', url: `${APP_URL}/privacy.html` }]] } }
+        );
+        res.status(200).json({ ok: true }); return;
+      }
+      if (text === '/terms' || text === '/соглашение') {
+        await sendMessage(token, chatId,
+          `📋 <b>Пользовательское соглашение</b>\n\n${APP_URL}/terms.html`,
+          { reply_markup: { inline_keyboard: [[{ text: '📋 Открыть', url: `${APP_URL}/terms.html` }]] } }
+        );
+        res.status(200).json({ ok: true }); return;
+      }
+      if (text === '/help' || text === '/помощь') {
+        await sendMessage(token, chatId,
+          '📖 <b>Доступные команды:</b>\n\n' +
+          '/start — приветствие и возможности\n' +
+          '/subscribe — оформить подписку\n' +
+          '/referral — реферальная программа\n' +
+          '/balance — баланс бонусов\n' +
+          '/wallet — TON-кошелёк\n' +
+          '/banks — мои банки\n' +
+          '/goals — цели накопления\n' +
+          '/timezone — часовой пояс\n' +
+          '/cancel — отменить действие\n\n' +
+          '📄 /privacy — политика конфиденциальности\n' +
+          '📋 /terms — пользовательское соглашение'
+        );
         res.status(200).json({ ok: true }); return;
       }
       if (text === '/timezone' || text.startsWith('/timezone ')) {

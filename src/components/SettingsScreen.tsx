@@ -8,6 +8,8 @@ import {
   FaSun,
   FaChevronRight,
   FaStar,
+  FaShieldAlt,
+  FaFileContract,
 } from 'react-icons/fa';
 import { User } from 'firebase/auth';
 import type { Subscription } from '../subscription';
@@ -56,6 +58,10 @@ const T = {
     bankPlaceholder: 'Bank name…',
     addBank: 'Add',
     groupPayment: 'Payment',
+    groupLegal: 'Legal',
+    rowPrivacy: 'Privacy Policy',
+    rowTerms: 'Terms of Service',
+    legalNote: 'By using the service you agree to the Privacy Policy and Terms of Service.',
     subFree: 'Free',
     subActive: 'Active',
     currencies: {
@@ -84,6 +90,10 @@ const T = {
     bankPlaceholder: 'Название банка…',
     addBank: 'Добавить',
     groupPayment: 'Оплата',
+    groupLegal: 'Документы',
+    rowPrivacy: 'Политика конфиденциальности',
+    rowTerms: 'Пользовательское соглашение',
+    legalNote: 'Используя сервис, вы соглашаетесь с политикой конфиденциальности и пользовательским соглашением.',
     subFree: 'Бесплатно',
     subActive: 'Активна',
     currencies: {
@@ -123,9 +133,16 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [bankInput,    setBankInput]    = useState('');
 
   const userEmail = user?.email ?? '—';
-
-  // Short subscription label
   const subLabel = subscription ? t.subActive : t.subFree;
+
+  const openLink = (url: string) => {
+    const tgWebApp = (window as Window & { Telegram?: { WebApp?: { openLink?: (u: string) => void } } }).Telegram?.WebApp;
+    if (tgWebApp?.openLink) {
+      tgWebApp.openLink(url);
+    } else {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  };
 
   return (
     <div className="sett-screen">
@@ -354,6 +371,38 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           onSubscriptionChange={onSubscriptionChange}
         />
       </div>
+
+      {/* ━━━ Group: Legal documents ━━━ */}
+      <div className="sett-group__label">{t.groupLegal}</div>
+      <div className="sett-group">
+        <button
+          className="sett-row"
+          onClick={() => openLink('/privacy.html')}
+          type="button"
+        >
+          <div className="sett-row__icon-wrap">
+            <FaShieldAlt className="sett-row__icon" />
+          </div>
+          <span className="sett-row__label">{t.rowPrivacy}</span>
+          <FaChevronRight className="sett-row__chevron" />
+        </button>
+
+        <div className="sett-row__divider" />
+
+        <button
+          className="sett-row"
+          onClick={() => openLink('/terms.html')}
+          type="button"
+        >
+          <div className="sett-row__icon-wrap">
+            <FaFileContract className="sett-row__icon" />
+          </div>
+          <span className="sett-row__label">{t.rowTerms}</span>
+          <FaChevronRight className="sett-row__chevron" />
+        </button>
+      </div>
+
+      <p className="sett-legal-note">{t.legalNote}</p>
 
     </div>
   );
