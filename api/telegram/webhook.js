@@ -5,7 +5,7 @@ const { verifyWebhookSignature }                           = require('../_lib/ve
 const { rateLimit, getClientIp }                           = require('../_lib/rateLimit');
 const { checkSubscription, getTrialUsed, incrementTrialUsed, TRIAL_LIMIT } = require('../_lib/ai/subscription');
 const { chatWithTools }                                    = require('../_lib/llm-chat');
-const { getUserTimezone, getUserCurrency, isValidTimezone, getUtcOffsetStr } = require('../_lib/tools');
+const { executeTool, getUserTimezone, getUserCurrency, isValidTimezone, getUtcOffsetStr } = require('../_lib/tools');
 const { generatePost, generateImage }                      = require('../_lib/content/generator');
 const { handleCallbackQuery: handleContentCb, handleAdminTextMessage, isContentCallback, isAdminChatId } = require('../_lib/content/moderationHandler');
 const { handleTaskCallback }                               = require('../_lib/ai/tools');
@@ -364,6 +364,25 @@ module.exports = async (req, res) => {
           if (userId) await handleWalletCommand(token, chatId, userId).catch(() => {});
           await answerCbQuery(token, cq.id);
         }
+      } else if (data === 'delete_confirm') {
+        const cbChatId = cq.from?.id;
+        if (cbChatId) {
+          const snap = await db.collection('users').where('chatId', '==', cbChatId).limit(1).get().catch(() => ({ empty: true }));
+          if (!snap.empty) {
+            const cbUserId = snap.docs[0].id;
+            const batch = db.batch();
+            const txSnap = await db.collection('transactions').where('userId', '==', cbUserId).limit(500).get().catch(() => ({ empty: true }));
+            if (!txSnap.empty) txSnap.docs.forEach(d => batch.delete(d.ref));
+            const goalSnap = await db.collection('goals').where('userId', '==', cbUserId).limit(100).get().catch(() => ({ empty: true }));
+            if (!goalSnap.empty) goalSnap.docs.forEach(d => batch.delete(d.ref));
+            await batch.commit().catch(() => {});
+          }
+          await answerCbQuery(token, cq.id, 'Данные удалены');
+          await tg(token, 'editMessageText', {
+            chat_id: cbChatId, message_id: cq.message?.message_id,
+            text: '🗑 Все транзакции и цели удалены.',
+          }).catch(() => {});
+        }
       } else {
         await answerCbQuery(token, cq.id);
       }
@@ -453,21 +472,14 @@ module.exports = async (req, res) => {
           }
         }
         await sendMessage(token, chatId,
-          'Привет! Я Enma — AI-ассистент для финансов и продуктивности.\n\n' +
-          'Что умею:\n' +
-          '💬 Отвечать на вопросы\n' +
-          '🔍 Искать в интернете (погода, курсы, новости)\n' +
-          '⏰ Создавать напоминания\n' +
-          '📋 Вести задачи\n' +
-          '💰 Записывать расходы и доходы\n' +
-          '🏦 Отслеживать траты по банкам\n' +
-          '🎯 Вести цели накопления\n' +
-          '🖼 Анализировать изображения\n' +
-          '🎤 Понимать голосовые сообщения\n\n' +
-          `У тебя ${TRIAL_LIMIT} бесплатных запросов.\n` +
-          'Подписка — /subscribe · Помощь — /help\n\n' +
-          '📄 /privacy · 📋 /terms\n\n' +
-          'Попробуй написать: «напомни мне завтра в 9 утра» ⏰'
+          'Привет! Я Энма 👋\n\n' +
+          'Помогу с финансами, задачами и напоминаниями. Просто пиши как другу.\n\n' +
+          'Попробуй:\n' +
+          '— «потратила 800 на продукты»\n' +
+          '— «напомни завтра в 9 утра про встречу»\n' +
+          '— «сколько потратила за месяц?»\n\n' +
+          `Пробных запросов: ${TRIAL_LIMIT}. Безлимит — /subscribe\n` +
+          'Все команды — /help'
         );
         res.status(200).json({ ok: true }); return;
       }
@@ -520,18 +532,93 @@ module.exports = async (req, res) => {
       }
       if (text === '/help' || text === '/помощь') {
         await sendMessage(token, chatId,
-          '📖 <b>Доступные команды:</b>\n\n' +
-          '/start — приветствие и возможности\n' +
-          '/subscribe — оформить подписку\n' +
-          '/referral — реферальная программа\n' +
-          '/balance — баланс бонусов\n' +
-          '/wallet — TON-кошелёк\n' +
-          '/banks — мои банки\n' +
+          '<b>Команды:</b>\n\n' +
+          '/stats — траты за месяц\n' +
+          '/banks — мои банки и методы оплаты\n' +
           '/goals — цели накопления\n' +
-          '/timezone — часовой пояс\n' +
-          '/cancel — отменить действие\n\n' +
-          '📄 /privacy — политика конфиденциальности\n' +
-          '📋 /terms — пользовательское соглашение'
+          '/export — выгрузить последние транзакции\n\n' +
+          '/subscribe — подписка (безлимит)\n' +
+          '/referral — пригласить друга и получить бонус\n' +
+          '/balance — баланс реферальных бонусов\n' +
+          '/wallet — TON-кошелёк\n\n' +
+          '/timezone — изменить часовой пояс\n' +
+          '/delete — удалить мои данные\n' +
+          '/cancel — отменить текущее действие\n\n' +
+          '📄 /privacy · 📋 /terms'
+        );
+        res.status(200).json({ ok: true }); return;
+      }
+      if (text === '/stats' || text === '/статистика') {
+        const [tz, cur] = await Promise.all([
+          getUserTimezone(userId).catch(() => 'Europe/Warsaw'),
+          getUserCurrency(userId).catch(() => 'RUB'),
+        ]);
+        const result = await executeTool('get_finance_stats', { period: 'month' }, userId, chatId, tz, cur)
+          .catch(err => ({ ok: false, error: err.message }));
+        if (!result.ok) {
+          await sendMessage(token, chatId, '📊 Не удалось загрузить статистику. Попробуй чуть позже.');
+        } else {
+          const sym  = { USD: '$', EUR: '€', RUB: '₽', BYN: 'Br', CNY: '¥' }[cur] || cur;
+          const inc  = result.income  ?? 0;
+          const exp  = result.expenses ?? 0;
+          const bal  = inc - exp;
+          const sign = bal >= 0 ? '+' : '';
+          let msg = `📊 <b>Этот месяц</b>\n\n` +
+            `Доходы: <b>${inc} ${sym}</b>\n` +
+            `Расходы: <b>${exp} ${sym}</b>\n` +
+            `Баланс: <b>${sign}${bal} ${sym}</b>`;
+          if (result.byCategory && Object.keys(result.byCategory).length) {
+            const cats = Object.entries(result.byCategory)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 5)
+              .map(([cat, amt]) => `  ${cat}: ${amt} ${sym}`)
+              .join('\n');
+            msg += `\n\n<b>Топ категорий:</b>\n${cats}`;
+          }
+          await sendMessage(token, chatId, msg);
+        }
+        res.status(200).json({ ok: true }); return;
+      }
+      if (text === '/export') {
+        const cur = await getUserCurrency(userId).catch(() => 'RUB');
+        const sym = { USD: '$', EUR: '€', RUB: '₽', BYN: 'Br', CNY: '¥' }[cur] || cur;
+        const txSnap = await db.collection('transactions')
+          .where('userId', '==', userId)
+          .orderBy('date', 'desc')
+          .limit(30)
+          .get()
+          .catch(() => ({ empty: true }));
+        if (txSnap.empty) {
+          await sendMessage(token, chatId, 'Транзакций пока нет 🤷');
+        } else {
+          const lines = txSnap.docs.map(d => {
+            const t    = d.data();
+            const sign = t.type === 'income' ? '+' : '−';
+            const date = t.date ? new Date(t.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) : '?';
+            const cat  = t.category || t.categoryId || '';
+            const bank = t.bank ? ` · ${t.bank}` : '';
+            const desc = t.description || cat || '—';
+            return `${date} ${sign}${t.amount} ${sym}  ${desc}${bank}`;
+          });
+          await sendMessage(token, chatId,
+            `<b>Последние ${lines.length} транзакций:</b>\n\n<code>${lines.join('\n')}</code>`
+          );
+        }
+        res.status(200).json({ ok: true }); return;
+      }
+      if (text === '/delete' || text === '/удалить') {
+        await sendMessage(token, chatId,
+          '⚠️ <b>Удаление данных</b>\n\n' +
+          'Это удалит все твои транзакции и цели накопления. Отменить нельзя.\n\n' +
+          'Настройки аккаунта (язык, валюта, банки) останутся.',
+          {
+            reply_markup: {
+              inline_keyboard: [[
+                { text: '🗑 Да, удалить', callback_data: 'delete_confirm' },
+                { text: '↩️ Отмена',     callback_data: 'noop'           },
+              ]],
+            },
+          }
         );
         res.status(200).json({ ok: true }); return;
       }
@@ -540,7 +627,7 @@ module.exports = async (req, res) => {
         if (!arg) {
           const tz     = await getUserTimezone(userId);
           const offset = getUtcOffsetStr(tz);
-          await sendMessage(token, chatId, `Твой часовой пояс: ${tz} (${offset})\n\nЧтобы изменить: /timezone Europe/Warsaw`);
+          await sendMessage(token, chatId, `Часовой пояс: ${tz} (${offset})\n\nИзменить: /timezone Europe/Warsaw`);
         } else if (!isValidTimezone(arg)) {
           await sendMessage(token, chatId, `❌ Неверный часовой пояс: «${arg}»\nПример: /timezone Europe/Warsaw`);
         } else {
@@ -554,12 +641,12 @@ module.exports = async (req, res) => {
         const banks   = userDoc.exists ? (userDoc.data()?.banks || []) : [];
         if (!banks.length) {
           await sendMessage(token, chatId,
-            '🏦 Банки не настроены.\n\nНапиши боту: «Мои банки: Тинькофф, Сбербанк, Наличные»'
+            'Банков пока нет 🏦\n\nДобавь: «Мои банки: Тинькофф, Сбербанк, Наличные»'
           );
         } else {
           await sendMessage(token, chatId,
             `🏦 <b>Твои банки:</b>\n${banks.map(b => `• ${b}`).join('\n')}\n\n` +
-            'Чтобы изменить список напиши: «Мои банки: Тинькофф, Наличные»'
+            'Чтобы изменить: «Мои банки: Тинькофф, Наличные»'
           );
         }
         res.status(200).json({ ok: true }); return;
@@ -573,7 +660,7 @@ module.exports = async (req, res) => {
           .limit(20)
           .get();
         if (goalSnap.empty) {
-          await sendMessage(token, chatId, '🎯 Целей нет.\n\nСоздай первую: «Хочу накопить на отпуск 50 000»');
+          await sendMessage(token, chatId, 'Целей пока нет 🎯\n\nСоздай первую: «Хочу накопить на отпуск 50 000»');
         } else {
           const bar = (cur, target) => {
             const pct    = Math.min(cur / (target || 1), 1);
