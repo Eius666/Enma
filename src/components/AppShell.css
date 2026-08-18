@@ -56,13 +56,28 @@
   max-width: 120px;
 }
 
-/* PRO avatar modifier — gradient ring + PRO text replaces initials */
+/* Avatar wrapper — column so PRO label sits below the circle */
+.header-avatar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* PRO ring on avatar */
 .header-avatar--pro {
-  background: linear-gradient(135deg, #6C5CE7 0%, #a29bfe 100%);
-  font-size: 9px;
+  box-shadow: 0 0 0 2px #a29bfe, 0 0 8px rgba(108, 92, 231, 0.4);
+}
+
+/* PRO label below avatar */
+.header-avatar-pro-label {
+  font-size: 8px;
   font-weight: 800;
-  letter-spacing: 0.06em;
-  box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.5), 0 0 8px rgba(108, 92, 231, 0.3);
+  letter-spacing: 0.07em;
+  color: #a29bfe;
+  text-transform: uppercase;
+  line-height: 1;
 }
 
 /* — Right side: email + icon buttons — */

@@ -1441,12 +1441,16 @@ const App: React.FC = () => {
       {/* ── Compact header bar ── */}
       <header className="header-bar">
         <div className="header-left">
-          {/* Avatar — shows PRO when active, initials otherwise */}
-          <div
-            className={`header-avatar${subscription && isSubscriptionActive(subscription) ? ' header-avatar--pro' : ''}`}
-            aria-hidden="true"
-          >
-            {subscription && isSubscriptionActive(subscription) ? 'PRO' : avatarInitials}
+          {/* Avatar + optional PRO label below (Instagram-story style) */}
+          <div className="header-avatar-wrap" aria-hidden="true">
+            <div
+              className={`header-avatar${subscription && isSubscriptionActive(subscription) ? ' header-avatar--pro' : ''}`}
+            >
+              {avatarInitials}
+            </div>
+            {subscription && isSubscriptionActive(subscription) && (
+              <span className="header-avatar-pro-label">PRO</span>
+            )}
           </div>
           <span className="header-greeting">
             {language === 'ru' ? `Привет, ${userDisplayName}` : `Hi, ${userDisplayName}`}
