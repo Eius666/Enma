@@ -410,7 +410,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       setPayStatus('error');
       setTimeout(() => setPayStatus('idle'), 4000);
     }
-  }, [method, user, wallet, userAddress, plan, period, promoCode, discountMult, baseUsd, tonUsdRate, tonConnectUI, onSubscriptionChange, payStatus, stopPoll]);
+  }, [method, user, wallet, userAddress, plan, period, promoCode, promoDiscount, discountMult, baseUsd, tonUsdRate, tonConnectUI, onSubscriptionChange, payStatus, stopPoll]);
 
   // ── Button label ───────────────────────────────────────────────────────────
 
