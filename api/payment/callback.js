@@ -58,26 +58,53 @@ module.exports = async function handler(req, res) {
       }
 
       const now        = admin.firestore.FieldValue.serverTimestamp();
-      const endDate    = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const plan       = payment.plan   || 'pro';
+      const period     = payment.period || 'month';
+      const periodDays = period === 'year' ? 365 : 30;
+      const startDate  = new Date().toISOString();
+      const endDate    = new Date(Date.now() + periodDays * 24 * 60 * 60 * 1000).toISOString();
       const paidAmount = amount || payment.amount;
 
+      console.log(`[callback] CONFIRMED userId=${payment.userId} plan=${plan} period=${period} endDate=${endDate}`);
+
       await payDoc.ref.update({ status: 'CONFIRMED', confirmedAt: now });
+      console.log(`[callback] payment doc updated`);
 
       await db.collection('subscriptions').doc(payment.userId).set({
         userId:        payment.userId,
-        plan:          'pro',
+        plan,
+        period,
         status:        'active',
+        startDate,
         endDate,
         paymentId:     transactionId,
         paymentMethod: 'sbp',
         amountRub:     paidAmount,
         updatedAt:     now,
       }, { merge: true });
+      console.log(`[callback] subscriptions/${payment.userId} updated`);
+
+      const subSnapshot = {
+        plan,
+        period,
+        status:        'active',
+        startDate,
+        endDate,
+        paymentMethod: 'sbp',
+        userId:        payment.userId,
+        updatedAt:     startDate,
+      };
 
       await db.collection('users').doc(payment.userId).set(
-        { balance: admin.firestore.FieldValue.increment(paidAmount) },
+        {
+          balance:      admin.firestore.FieldValue.increment(paidAmount),
+          isPro:        true,
+          subscription: subSnapshot,
+          updatedAt:    now,
+        },
         { merge: true }
       );
+      console.log(`[callback] users/${payment.userId} isPro=true written`);
 
       // Increment promo usedCount atomically
       if (payment.promoCode) {
@@ -93,9 +120,10 @@ module.exports = async function handler(req, res) {
         ? `${paidAmount} ₽ (скидка ${payment.discountPercent}%)`
         : `${paidAmount} ₽`;
 
+      const durationLabel = period === 'year' ? '1 год' : '30 дней';
       await notifyUser(chatId,
         `✅ Платёж на <b>${amountText}</b> подтверждён!\n\n` +
-        `Enma Pro активна на 30 дней 🎉`
+        `Enma ${plan === 'business' ? 'Business' : 'Pro'} активна на ${durationLabel} 🎉`
       );
     }
 

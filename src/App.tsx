@@ -22,7 +22,7 @@ import {
   signInAnonymously,
   signOut
 } from 'firebase/auth';
-import { Timestamp, doc, getDoc, serverTimestamp, setDoc, collection, query, where, getDocs, orderBy, onSnapshot, limit } from 'firebase/firestore';
+import { Timestamp, doc, getDoc, serverTimestamp, setDoc, collection, query, where, orderBy, onSnapshot, limit } from 'firebase/firestore';
 import './App.v2.css';
 import { auth, db } from './firebase';
 import { useTelegramWebApp } from './hooks/useTelegramWebApp';
@@ -914,7 +914,7 @@ const App: React.FC = () => {
     }, { merge: true }).catch(err => console.warn('Failed to sync user mapping', err));
   }, [user, telegram]);
 
-  // Load currency from Firestore so changes from Telegram bot or other devices sync here.
+  // Load currency, banks, and Pro status — real-time, picks up SBP payment confirmation instantly.
   useEffect(() => {
     const uid = user?.uid;
     if (!uid) return;
@@ -930,8 +930,14 @@ const App: React.FC = () => {
         if (data && Array.isArray(data.banks)) {
           setBanks(data.banks as string[]);
         }
+        if (data?.isPro && data?.subscription?.status === 'active' && data?.subscription?.endDate) {
+          const sub = data.subscription as Subscription;
+          if (isSubscriptionActive(sub)) {
+            setSubscription(sub);
+          }
+        }
       },
-      err => console.warn('Failed to listen to user currency', err)
+      err => console.warn('Failed to listen to user doc', err)
     );
     return unsubscribe;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1354,24 +1360,25 @@ const App: React.FC = () => {
       setSubscription(null);
       return;
     }
-    const loadSubscription = async () => {
-      try {
-        const q = query(
-          collection(db, 'subscriptions'),
-          where('userId', '==', user.uid),
-          orderBy('updatedAt', 'desc'),
-          limit(1)
-        );
-        const snapshot = await getDocs(q);
+    const q = query(
+      collection(db, 'subscriptions'),
+      where('userId', '==', user.uid),
+      orderBy('updatedAt', 'desc'),
+      limit(1)
+    );
+    const unsubscribe = onSnapshot(
+      q,
+      snapshot => {
         if (!snapshot.empty) {
           const sub = snapshot.docs[0].data() as Subscription;
-          if (isSubscriptionActive(sub)) setSubscription(sub);
+          setSubscription(isSubscriptionActive(sub) ? sub : null);
+        } else {
+          setSubscription(null);
         }
-      } catch (error) {
-        console.warn('Failed to load subscription', error);
-      }
-    };
-    loadSubscription();
+      },
+      err => console.warn('Failed to load subscription', err)
+    );
+    return unsubscribe;
   }, [user]);
 
   const convertAmount = (amount: number) => amount * (rates[currency] ?? 1);
@@ -1443,6 +1450,9 @@ const App: React.FC = () => {
           <span className="header-greeting">
             {language === 'ru' ? `Привет, ${userDisplayName}` : `Hi, ${userDisplayName}`}
           </span>
+          {subscription && isSubscriptionActive(subscription) && (
+            <span className="header-pro-badge">PRO</span>
+          )}
         </div>
         <div className="header-right">
           {/* Email — small text, no box */}

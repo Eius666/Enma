@@ -56,6 +56,20 @@
   max-width: 120px;
 }
 
+/* PRO badge — appears after greeting when subscription is active */
+.header-pro-badge {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #fff;
+  background: linear-gradient(90deg, #6C5CE7, #a29bfe);
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
 /* — Right side: email + icon buttons — */
 .header-right {
   display: flex;
