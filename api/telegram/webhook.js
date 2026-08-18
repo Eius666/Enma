@@ -580,7 +580,31 @@ module.exports = async (req, res) => {
         res.status(200).json({ ok: true }); return;
       }
       if (text === '/subscribe' || text.startsWith('/subscribe ')) {
-        await handleSubscribeCommand(token, chatId);
+        const userDoc = await db.collection('users').doc(userId).get();
+        const userData = userDoc.data() || {};
+        const sub = userData.subscription;
+        const isPro = userData.isPro && sub?.status === 'active' && sub?.endDate;
+        if (isPro) {
+          const endDate = new Date(sub.endDate);
+          if (endDate > new Date()) {
+            const dateStr = endDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+            await sendMessage(token, chatId,
+              `✨ Подписка уже активна до <b>${dateStr}</b>\n\nПродлить заранее: /pay`
+            );
+            res.status(200).json({ ok: true }); return;
+          }
+        }
+        const promo = await getUserPromo(userId).catch(() => null);
+        const finalAmount = promo
+          ? Math.round(BASE_PRICE * (1 - promo.discountPercent / 100))
+          : BASE_PRICE;
+        const btnLabel = promo
+          ? `Оплатить ${finalAmount} ₽/мес (скидка ${promo.discountPercent}%)`
+          : `Оплатить ${BASE_PRICE} ₽/мес`;
+        await sendMessage(token, chatId,
+          '💳 <b>Enma Pro — 30 дней</b>\n\nAI-ассистент, финансы, напоминания без ограничений.',
+          { reply_markup: { inline_keyboard: [[{ text: btnLabel, callback_data: 'sbp_pay' }]] } }
+        );
         res.status(200).json({ ok: true }); return;
       }
       if (text === '/referral' || text.startsWith('/referral ')) {
