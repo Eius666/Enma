@@ -169,6 +169,8 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
   const [payStatus, setPayStatus] = useState<PayStatus>('idle');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const payBtnRef = useRef<HTMLButtonElement>(null);
+
   const stopPoll = useCallback(() => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
   }, []);
@@ -439,16 +441,25 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
         <p className="subscription-panel__subtitle">{t.subtitle}</p>
       </div>
 
-      {/* Active subscription badge */}
+      {/* Active subscription block */}
       {isActive && (
         <div className="subscription-panel__active">
-          <span className="subscription-panel__active-dot" />
-          <span>
-            {t.activeSub.replace(
-              '{date}',
-              new Date(subscription.endDate).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US')
-            )}
-          </span>
+          <div className="subscription-panel__active-body">
+            <span className="subscription-panel__active-dot" />
+            <span className="subscription-panel__active-text">
+              {t.activeSub.replace(
+                '{date}',
+                new Date(subscription.endDate).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' })
+              )}
+            </span>
+          </div>
+          <button
+            type="button"
+            className="subscription-panel__renew-btn"
+            onClick={() => payBtnRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+          >
+            {language === 'ru' ? 'Продлить' : 'Renew'}
+          </button>
         </div>
       )}
 
@@ -562,6 +573,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
 
       {/* Pay button */}
       <button
+        ref={payBtnRef}
         type="button"
         className={`subscription-panel__pay-btn${payStatus === 'verified' ? ' subscription-panel__pay-btn--verified' : ''}`}
         onClick={handlePay}

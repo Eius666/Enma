@@ -553,6 +553,32 @@ module.exports = async (req, res) => {
         }
         res.status(200).json({ ok: true }); return;
       }
+      if (text === '/status' || text === '/подписка') {
+        const userDoc = await db.collection('users').doc(userId).get();
+        const userData = userDoc.data() || {};
+        const sub = userData.subscription;
+        const isPro = userData.isPro && sub?.status === 'active' && sub?.endDate;
+        if (isPro) {
+          const endDate = new Date(sub.endDate);
+          if (endDate > new Date()) {
+            const daysLeft = Math.ceil((endDate - new Date()) / (1000 * 60 * 60 * 24));
+            const dateStr = endDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+            const planLabel = sub.plan === 'business' ? 'Business' : 'Pro';
+            await sendMessage(token, chatId,
+              `✨ <b>Enma ${planLabel}</b> активна\n\nДо: <b>${dateStr}</b>\nОсталось: <b>${daysLeft} дн.</b>`
+            );
+          } else {
+            await sendMessage(token, chatId, '⏰ Подписка истекла. Оформи новую: /pay');
+          }
+        } else {
+          const trialUsed = await getTrialUsed(userId).catch(() => 0);
+          const remaining = Math.max(0, TRIAL_LIMIT - trialUsed);
+          await sendMessage(token, chatId,
+            `🔓 Подписка не активна\n\nПробных запросов: <b>${remaining} из ${TRIAL_LIMIT}</b>\n\nОформить Pro: /pay`
+          );
+        }
+        res.status(200).json({ ok: true }); return;
+      }
       if (text === '/subscribe' || text.startsWith('/subscribe ')) {
         await handleSubscribeCommand(token, chatId);
         res.status(200).json({ ok: true }); return;
@@ -612,6 +638,7 @@ module.exports = async (req, res) => {
           '/banks — мои банки и методы оплаты\n' +
           '/goals — цели накопления\n' +
           '/export — выгрузить последние транзакции\n\n' +
+          '/status — статус подписки\n' +
           '/pay — оплата через СБП (1000 ₽/мес)\n' +
           '/promo — активировать промокод\n' +
           '/subscribe — подписка через Telegram Stars\n' +
