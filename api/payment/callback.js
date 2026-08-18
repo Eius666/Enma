@@ -1,6 +1,7 @@
 'use strict';
 
-const { db, admin } = require('../_lib/firebaseAdmin');
+const { db, admin }           = require('../_lib/firebaseAdmin');
+const { incrementPromoUsage } = require('../_lib/promoCodes');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -42,7 +43,7 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    const payDoc = snap.docs[0];
+    const payDoc  = snap.docs[0];
     const payment = payDoc.data();
 
     if (status === 'CANCELED') {
@@ -56,8 +57,8 @@ module.exports = async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
-      const now     = admin.firestore.FieldValue.serverTimestamp();
-      const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const now        = admin.firestore.FieldValue.serverTimestamp();
+      const endDate    = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
       const paidAmount = amount || payment.amount;
 
       await payDoc.ref.update({ status: 'CONFIRMED', confirmedAt: now });
@@ -78,13 +79,23 @@ module.exports = async function handler(req, res) {
         { merge: true }
       );
 
+      // Increment promo usedCount atomically
+      if (payment.promoCode) {
+        await incrementPromoUsage(payment.promoCode).catch(err =>
+          console.error('[callback] promo increment error:', err.message)
+        );
+      }
+
       const userSnap = await db.collection('users').doc(payment.userId).get();
       const chatId   = userSnap.exists ? userSnap.data().chatId : null;
 
+      const amountText = payment.discountPercent
+        ? `${paidAmount} ₽ (скидка ${payment.discountPercent}%)`
+        : `${paidAmount} ₽`;
+
       await notifyUser(chatId,
-        `✅ Платёж на <b>${paidAmount} ₽</b> подтверждён!\n\n` +
-        `Enma Pro активна на 30 дней 🎉\n` +
-        `Все функции доступны — пиши, что нужно!`
+        `✅ Платёж на <b>${amountText}</b> подтверждён!\n\n` +
+        `Enma Pro активна на 30 дней 🎉`
       );
     }
 

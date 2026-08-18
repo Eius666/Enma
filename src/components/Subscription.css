@@ -681,3 +681,80 @@ body.theme-light .subscription-panel__sbp-input::placeholder {
   cursor: default;
   transform: none;
 }
+
+/* ── SBP promo row ─────────────────────────────────── */
+
+.subscription-panel__sbp-promo-row {
+  display: flex;
+  gap: 8px;
+}
+
+.subscription-panel__sbp-promo-btn {
+  flex-shrink: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(123, 104, 238, 0.18);
+  color: var(--notes-accent, #7B68EE);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+
+.subscription-panel__sbp-promo-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.subscription-panel__sbp-promo-btn:active:not(:disabled) {
+  opacity: 0.75;
+}
+
+.subscription-panel__sbp-promo-msg {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.subscription-panel__sbp-promo-msg--valid {
+  color: #2ecc71;
+}
+
+.subscription-panel__sbp-promo-msg--invalid {
+  color: #ff4757;
+}
+
+/* ── SBP price display ─────────────────────────────── */
+
+.subscription-panel__sbp-price {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.subscription-panel__sbp-price-original {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.35);
+  text-decoration: line-through;
+}
+
+body.theme-light .subscription-panel__sbp-price-original {
+  color: rgba(0, 0, 0, 0.3);
+}
+
+.subscription-panel__sbp-price-final {
+  font-size: 22px;
+  font-weight: 700;
+  color: #2ecc71;
+}
+
+.subscription-panel__sbp-price-period {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+body.theme-light .subscription-panel__sbp-price-period {
+  color: rgba(0, 0, 0, 0.35);
+}

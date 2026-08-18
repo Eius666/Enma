@@ -2,15 +2,26 @@
 
 const { db, admin } = require('./firebaseAdmin');
 
-const PLATEGA_BASE = 'https://app.platega.io';
-const APP_URL = process.env.REACT_APP_URL || 'https://enma-silk.vercel.app';
+const PLATEGA_BASE  = 'https://app.platega.io';
+const APP_URL       = process.env.REACT_APP_URL || 'https://enma-silk.vercel.app';
+const BASE_PRICE    = 1000;
 
-async function createSbpPayment(userId, amount, userName = '') {
+/**
+ * @param {object} opts
+ * @param {string}  opts.userId
+ * @param {number}  opts.finalAmount       — amount actually charged (after promo)
+ * @param {string}  [opts.userName]
+ * @param {number}  [opts.originalAmount]  — base price before discount
+ * @param {number}  [opts.discountPercent] — 0 if no promo
+ * @param {string}  [opts.promoCode]       — promo code string or null
+ */
+async function createSbpPayment({ userId, finalAmount, userName = '', originalAmount, discountPercent = 0, promoCode = null }) {
   const merchantId = process.env.PLATEGA_MERCHANT_ID;
   const secret     = process.env.PLATEGA_SECRET;
   if (!merchantId || !secret) throw new Error('PLATEGA credentials not configured');
 
   const payload = `enma_sub_${userId}_${Date.now()}`;
+  const amount  = parseFloat(finalAmount.toFixed(2));
 
   const resp = await fetch(`${PLATEGA_BASE}/transaction/process`, {
     method:  'POST',
@@ -21,8 +32,8 @@ async function createSbpPayment(userId, amount, userName = '') {
     },
     body: JSON.stringify({
       paymentMethod:  2,
-      paymentDetails: { amount: Number(amount), currency: 'RUB' },
-      description:    `Enma Pro — ${userName || `пользователь`}`,
+      paymentDetails: { amount, currency: 'RUB' },
+      description:    `Enma Pro — ${userName || 'пользователь'}`,
       return:         APP_URL,
       failedUrl:      APP_URL,
       payload,
@@ -38,17 +49,22 @@ async function createSbpPayment(userId, amount, userName = '') {
   const data = await resp.json();
   const { transactionId, redirect, expiresIn, status } = data;
 
-  await db.collection('payments').add({
+  const paymentDoc = {
     transactionId,
     userId,
-    amount:    Number(amount),
-    currency:  'RUB',
-    method:    'sbp',
-    status:    status || 'PENDING',
+    amount,
+    originalAmount: originalAmount ?? amount,
+    currency:       'RUB',
+    method:         'sbp',
+    status:         status || 'PENDING',
     payload,
-    confirmedAt: null,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+    confirmedAt:    null,
+    createdAt:      admin.firestore.FieldValue.serverTimestamp(),
+  };
+  if (discountPercent) paymentDoc.discountPercent = discountPercent;
+  if (promoCode)       paymentDoc.promoCode       = promoCode;
+
+  await db.collection('payments').add(paymentDoc);
 
   return { url: redirect, transactionId, expiresIn };
 }
@@ -61,8 +77,8 @@ async function getSbpPaymentStatus(transactionId, userId) {
     .get();
 
   if (snap.empty) return null;
-  const data = snap.docs[0].data();
-  return { status: data.status, amount: data.amount };
+  const d = snap.docs[0].data();
+  return { status: d.status, amount: d.amount, originalAmount: d.originalAmount };
 }
 
-module.exports = { createSbpPayment, getSbpPaymentStatus };
+module.exports = { createSbpPayment, getSbpPaymentStatus, BASE_PRICE };

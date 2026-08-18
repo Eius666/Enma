@@ -13,7 +13,8 @@ const { handleReferralStart, ensureReferralCode }          = require('../_lib/re
 const { handleReferralCommand, handleWalletCommand, handleBalanceCommand, checkUserState } = require('../_lib/referral/commands');
 const { processSubscriptionPayment }                       = require('../_lib/referral/earnings');
 const { saveMessage, loadHistory }                         = require('../_lib/ai/chatHistory');
-const { createSbpPayment }                                 = require('../_lib/platega');
+const { createSbpPayment, BASE_PRICE }                     = require('../_lib/platega');
+const { validatePromoCode, applyPromoToUser, getUserPromo } = require('../_lib/promoCodes');
 
 const TG = 'https://api.telegram.org';
 
@@ -365,19 +366,28 @@ module.exports = async (req, res) => {
           if (userId) await handleWalletCommand(token, chatId, userId).catch(() => {});
           await answerCbQuery(token, cq.id);
         }
-      } else if (data.startsWith('sbp_')) {
-        const amount = parseInt(data.slice(4), 10);
+      } else if (data === 'sbp_1000') {
         const cbChatId = cq.from?.id;
-        if (amount > 0 && cbChatId) {
+        if (cbChatId) {
           try {
-            const cbSnap = await db.collection('users').where('chatId', '==', cbChatId).limit(1).get().catch(() => ({ empty: true }));
+            const cbSnap   = await db.collection('users').where('chatId', '==', cbChatId).limit(1).get().catch(() => ({ empty: true }));
             const cbUserId = cbSnap.empty ? null : cbSnap.docs[0].id;
             if (cbUserId) {
-              const userName = cq.from?.username ? `@${cq.from.username}` : '';
-              const { url, expiresIn } = await createSbpPayment(cbUserId, amount, userName);
+              const userName  = cq.from?.username ? `@${cq.from.username}` : '';
+              const promo     = await getUserPromo(cbUserId).catch(() => null);
+              const discount  = promo ? promo.discountPercent : 0;
+              const finalAmount = promo ? Math.round(BASE_PRICE * (1 - discount / 100)) : BASE_PRICE;
+              const { url, expiresIn } = await createSbpPayment({
+                userId:          cbUserId,
+                finalAmount,
+                userName,
+                originalAmount:  BASE_PRICE,
+                discountPercent: discount,
+                promoCode:       promo ? promo.code : null,
+              });
               await answerCbQuery(token, cq.id);
               await sendMessage(token, cbChatId,
-                `💳 Платёж на <b>${amount} ₽</b> через СБП\n\nСсылка действительна ${expiresIn || '15 минут'}.`,
+                `💳 Платёж на <b>${finalAmount} ₽</b> через СБП\n\nСсылка действительна ${expiresIn || '15 минут'}.`,
                 { reply_markup: { inline_keyboard: [[{ text: '🏦 Оплатить через СБП', url }]] } }
               );
             } else {
@@ -509,18 +519,38 @@ module.exports = async (req, res) => {
       }
 
       if (text === '/pay' || text === '/оплата') {
+        const promo = await getUserPromo(userId).catch(() => null);
+        const finalAmount = promo
+          ? Math.round(BASE_PRICE * (1 - promo.discountPercent / 100))
+          : BASE_PRICE;
+        const btnLabel = promo
+          ? `Оплатить ${finalAmount} ₽/мес (скидка ${promo.discountPercent}%)`
+          : `Оплатить ${BASE_PRICE} ₽/мес`;
         await sendMessage(token, chatId,
-          '💳 <b>Оплата через СБП</b>\n\nВыберите сумму для активации Enma Pro на 30 дней:',
-          {
-            reply_markup: {
-              inline_keyboard: [[
-                { text: '299 ₽', callback_data: 'sbp_299' },
-                { text: '499 ₽', callback_data: 'sbp_499' },
-                { text: '999 ₽', callback_data: 'sbp_999' },
-              ]],
-            },
-          }
+          '💳 <b>Enma Pro — 30 дней</b>\n\nАктивирует безлимитный доступ к AI-ассистенту.',
+          { reply_markup: { inline_keyboard: [[{ text: btnLabel, callback_data: 'sbp_1000' }]] } }
         );
+        res.status(200).json({ ok: true }); return;
+      }
+      if (text.startsWith('/promo ') || text.startsWith('/промокод ')) {
+        const parts = text.split(' ');
+        const code  = parts[1]?.trim();
+        if (!code) {
+          await sendMessage(token, chatId, '❓ Укажи код: /promo ENMATECH90');
+          res.status(200).json({ ok: true }); return;
+        }
+        const result = await validatePromoCode(code).catch(() => ({ valid: false, error: 'error' }));
+        if (result.valid) {
+          await applyPromoToUser(userId, result.code);
+          const finalAmount = Math.round(BASE_PRICE * (1 - result.discountPercent / 100));
+          await sendMessage(token, chatId,
+            `🎉 Промокод <b>${result.code}</b> активирован!\n\n` +
+            `Скидка ${result.discountPercent}%. Оплати подписку за <b>${finalAmount} ₽</b> вместо ${BASE_PRICE} ₽ 💸\n\n` +
+            `Жми /pay для оплаты`
+          );
+        } else {
+          await sendMessage(token, chatId, '❌ Промокод не найден или больше не действует');
+        }
         res.status(200).json({ ok: true }); return;
       }
       if (text === '/subscribe' || text.startsWith('/subscribe ')) {
@@ -582,7 +612,8 @@ module.exports = async (req, res) => {
           '/banks — мои банки и методы оплаты\n' +
           '/goals — цели накопления\n' +
           '/export — выгрузить последние транзакции\n\n' +
-          '/pay — оплата через СБП\n' +
+          '/pay — оплата через СБП (1000 ₽/мес)\n' +
+          '/promo — активировать промокод\n' +
           '/subscribe — подписка через Telegram Stars\n' +
           '/referral — пригласить друга и получить бонус\n' +
           '/balance — баланс реферальных бонусов\n' +

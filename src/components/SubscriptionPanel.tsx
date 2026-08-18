@@ -25,7 +25,7 @@ interface SubscriptionPanelProps {
   onSubscriptionChange: (sub: Subscription | null) => void;
 }
 
-const SBP_PRESETS = [299, 499, 999];
+const SBP_BASE_PRICE = 1000;
 
 const T = {
   en: {
@@ -46,11 +46,14 @@ const T = {
     activeSub: 'Your subscription is active until {date}',
     sbpTitle: 'Pay via SBP (Russia)',
     sbpSubtitle: 'Fast bank transfer, 30 days Pro',
-    sbpCustom: 'Custom amount (₽)',
-    sbpPay: 'Pay via SBP',
+    sbpPay: 'Pay 1 000 ₽/mo via SBP',
     sbpWaiting: 'Waiting for payment…',
     sbpConfirmed: 'Payment confirmed! Pro is active 🎉',
     sbpError: 'Failed to create payment. Try again.',
+    sbpPromoPlaceholder: 'Promo code',
+    sbpPromoApply: 'Apply',
+    sbpPromoValid: 'Promo applied — {percent}% off',
+    sbpPromoInvalid: 'Code not found or expired',
     currentPlan: 'Current plan',
     proList: ['Unlimited projects', 'Advanced analytics', 'Priority support'],
     businessList: [
@@ -78,11 +81,14 @@ const T = {
     activeSub: 'Подписка активна до {date}',
     sbpTitle: 'Оплата через СБП',
     sbpSubtitle: 'Быстрый перевод из приложения банка, 30 дней Pro',
-    sbpCustom: 'Своя сумма (₽)',
-    sbpPay: 'Оплатить через СБП',
+    sbpPay: 'Оплатить 1 000 ₽/мес через СБП',
     sbpWaiting: 'Ожидание оплаты…',
     sbpConfirmed: 'Платёж подтверждён! Pro активна 🎉',
     sbpError: 'Не удалось создать платёж. Попробуйте ещё раз.',
+    sbpPromoPlaceholder: 'Промокод',
+    sbpPromoApply: 'Применить',
+    sbpPromoValid: 'Скидка {percent}% активирована',
+    sbpPromoInvalid: 'Промокод не найден или больше не действует',
     currentPlan: 'Текущий план',
     proList: ['Безлимит проектов', 'Расширенная аналитика', 'Приоритетная поддержка'],
     businessList: ['Всё из Pro', 'Совместная работа', 'API-доступ', 'Кастомный брендинг'],
@@ -116,10 +122,12 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
     'idle'
   );
 
-  const [sbpAmount, setSbpAmount]   = useState<number>(SBP_PRESETS[1]);
-  const [sbpCustom, setSbpCustom]   = useState('');
-  const [sbpStatus, setSbpStatus]   = useState<'idle' | 'creating' | 'pending' | 'confirmed' | 'error'>('idle');
-  const [, setSbpTxId]              = useState<string | null>(null);
+  const [sbpStatus,    setSbpStatus]    = useState<'idle' | 'creating' | 'pending' | 'confirmed' | 'error'>('idle');
+  const [promoInput,   setPromoInput]   = useState('');
+  const [promoCode,    setPromoCode]    = useState('');
+  const [promoDiscount, setPromoDiscount] = useState(0);
+  const [promoMsg,     setPromoMsg]     = useState<{ type: 'valid' | 'invalid'; text: string } | null>(null);
+  const [promoChecking, setPromoChecking] = useState(false);
   const sbpPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isConnected = !!wallet;
@@ -157,17 +165,38 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
 
   useEffect(() => stopSbpPoll, []);
 
+  const handleApplyPromo = useCallback(async () => {
+    const code = promoInput.trim().toUpperCase();
+    if (!code) return;
+    setPromoChecking(true);
+    setPromoMsg(null);
+    try {
+      const resp = await fetch(`/api/payment/create?promoCode=${encodeURIComponent(code)}`);
+      const data = await resp.json();
+      if (data.valid) {
+        setPromoCode(code);
+        setPromoDiscount(data.discountPercent);
+        setPromoMsg({ type: 'valid', text: t.sbpPromoValid.replace('{percent}', String(data.discountPercent)) });
+      } else {
+        setPromoCode('');
+        setPromoDiscount(0);
+        setPromoMsg({ type: 'invalid', text: t.sbpPromoInvalid });
+      }
+    } catch {
+      setPromoMsg({ type: 'invalid', text: t.sbpPromoInvalid });
+    } finally {
+      setPromoChecking(false);
+    }
+  }, [promoInput, t.sbpPromoValid, t.sbpPromoInvalid]);
+
   const handleSbpPay = useCallback(async () => {
     if (!user) return;
-    const amount = sbpCustom ? parseInt(sbpCustom, 10) : sbpAmount;
-    if (!amount || amount < 1) return;
-
     setSbpStatus('creating');
     try {
       const resp = await fetch('/api/payment/create', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ userId: user.uid, amount, userName: user.email || '' }),
+        body:    JSON.stringify({ userId: user.uid, userName: user.email || '', promoCode: promoCode || undefined }),
       });
       const data = await resp.json();
       if (!data.ok || !data.url) throw new Error(data.error || 'No URL');
@@ -179,7 +208,6 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
         window.open(data.url, '_blank', 'noopener,noreferrer');
       }
 
-      setSbpTxId(data.transactionId);
       setSbpStatus('pending');
 
       sbpPollRef.current = setInterval(async () => {
@@ -204,7 +232,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       setSbpStatus('error');
       setTimeout(() => setSbpStatus('idle'), 4000);
     }
-  }, [user, sbpAmount, sbpCustom]);
+  }, [user, promoCode]);
 
   const planConfig = PLANS[selectedPlan];
   const priceUsd =
@@ -470,27 +498,46 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
           <span className="subscription-panel__sbp-subtitle">{t.sbpSubtitle}</span>
         </div>
 
-        <div className="subscription-panel__sbp-presets">
-          {SBP_PRESETS.map(preset => (
-            <button
-              key={preset}
-              type="button"
-              className={`subscription-panel__sbp-preset${sbpAmount === preset && !sbpCustom ? ' subscription-panel__sbp-preset--active' : ''}`}
-              onClick={() => { setSbpAmount(preset); setSbpCustom(''); }}
-            >
-              {preset} ₽
-            </button>
-          ))}
+        {/* Promo code input */}
+        <div className="subscription-panel__sbp-promo-row">
+          <input
+            className="subscription-panel__sbp-input"
+            type="text"
+            placeholder={t.sbpPromoPlaceholder}
+            value={promoInput}
+            onChange={e => setPromoInput(e.target.value.toUpperCase())}
+            onKeyDown={e => { if (e.key === 'Enter') handleApplyPromo(); }}
+          />
+          <button
+            type="button"
+            className="subscription-panel__sbp-promo-btn"
+            onClick={handleApplyPromo}
+            disabled={promoChecking || !promoInput.trim()}
+          >
+            {promoChecking ? '…' : t.sbpPromoApply}
+          </button>
         </div>
 
-        <input
-          className="subscription-panel__sbp-input"
-          type="number"
-          min="1"
-          placeholder={t.sbpCustom}
-          value={sbpCustom}
-          onChange={e => setSbpCustom(e.target.value)}
-        />
+        {promoMsg && (
+          <span className={`subscription-panel__sbp-promo-msg subscription-panel__sbp-promo-msg--${promoMsg.type}`}>
+            {promoMsg.text}
+          </span>
+        )}
+
+        {/* Price display */}
+        <div className="subscription-panel__sbp-price">
+          {promoDiscount > 0 ? (
+            <>
+              <span className="subscription-panel__sbp-price-original">{SBP_BASE_PRICE} ₽</span>
+              <span className="subscription-panel__sbp-price-final">
+                {Math.round(SBP_BASE_PRICE * (1 - promoDiscount / 100))} ₽
+              </span>
+            </>
+          ) : (
+            <span className="subscription-panel__sbp-price-final">{SBP_BASE_PRICE} ₽</span>
+          )}
+          <span className="subscription-panel__sbp-price-period">/мес</span>
+        </div>
 
         <button
           type="button"
