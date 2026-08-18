@@ -13,7 +13,7 @@ import {
   PlanType,
   SubscriptionPeriod,
 } from '../subscription';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { User } from 'firebase/auth';
 import './Subscription.css';
@@ -396,6 +396,14 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
             const d = await r.json();
             if (d.status === 'CONFIRMED') {
               stopPoll();
+              // Fetch subscription from Firestore directly and update state
+              try {
+                const subSnap = await getDoc(doc(db, 'subscriptions', user.uid));
+                if (subSnap.exists()) {
+                  const sub = subSnap.data() as Subscription;
+                  if (isSubscriptionActive(sub)) onSubscriptionChange(sub);
+                }
+              } catch { /* onSnapshot will pick it up */ }
               setPayStatus('verified');
               setTimeout(() => setPayStatus('idle'), 5000);
             } else if (d.status === 'CANCELED' || d.status === 'EXPIRED') {

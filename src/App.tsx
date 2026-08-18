@@ -22,7 +22,7 @@ import {
   signInAnonymously,
   signOut
 } from 'firebase/auth';
-import { Timestamp, doc, getDoc, serverTimestamp, setDoc, collection, query, where, orderBy, onSnapshot, limit } from 'firebase/firestore';
+import { Timestamp, doc, getDoc, serverTimestamp, setDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
 import './App.v2.css';
 import { auth, db } from './firebase';
 import { useTelegramWebApp } from './hooks/useTelegramWebApp';
@@ -1360,17 +1360,13 @@ const App: React.FC = () => {
       setSubscription(null);
       return;
     }
-    const q = query(
-      collection(db, 'subscriptions'),
-      where('userId', '==', user.uid),
-      orderBy('updatedAt', 'desc'),
-      limit(1)
-    );
+    // Direct doc ref — callback.js stores subscription at subscriptions/{userId}.
+    // No composite index needed, guaranteed real-time.
     const unsubscribe = onSnapshot(
-      q,
+      doc(db, 'subscriptions', user.uid),
       snapshot => {
-        if (!snapshot.empty) {
-          const sub = snapshot.docs[0].data() as Subscription;
+        if (snapshot.exists()) {
+          const sub = snapshot.data() as Subscription;
           setSubscription(isSubscriptionActive(sub) ? sub : null);
         } else {
           setSubscription(null);
