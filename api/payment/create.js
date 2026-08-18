@@ -14,10 +14,14 @@ module.exports = async function handler(req, res) {
     if (req.method === 'GET') {
       const { transactionId, uid, promoCode } = req.query;
 
-      // Promo validation sub-route
-      if (promoCode) {
-        const result = await validatePromoCode(promoCode);
-        return res.status(200).json({ ok: true, ...result });
+      // Promo validation sub-route (?validatePromo=CODE or ?promoCode=CODE)
+      const validateCode = req.query.validatePromo || promoCode;
+      if (validateCode && !transactionId) {
+        const result = await validatePromoCode(validateCode);
+        const finalAmount = result.valid
+          ? Math.round(BASE_PRICE * (1 - result.discountPercent / 100))
+          : BASE_PRICE;
+        return res.status(200).json({ ok: true, ...result, finalAmount });
       }
 
       if (!transactionId || !uid) {

@@ -4,7 +4,7 @@
 
 export type PlanType = 'pro' | 'business';
 export type SubscriptionPeriod = 'month' | 'year';
-export type PaymentCurrency = 'ton' | 'usdt' | 'stars';
+export type PaymentCurrency = 'ton' | 'usdt' | 'stars' | 'sbp';
 export type SubscriptionStatus = 'active' | 'expired' | 'cancelled';
 export type PaymentStatus = 'pending' | 'confirmed' | 'failed' | 'refunded';
 
@@ -94,6 +94,8 @@ export const isSubscriptionActive = (subscription: Subscription): boolean => {
   if (subscription.status !== 'active') return false;
   return new Date(subscription.endDate) > new Date();
 };
+
+export const SBP_MONTHLY_PRICE = 1000;
 
 // Enma treasury wallet for receiving subscription payments
 export const ENMA_WALLET_ADDRESS = 'UQAmqtbkNs6OYMhQl83f_iesYhBrJJTPa7-wuIZCLEbSDplH';

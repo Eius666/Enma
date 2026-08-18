@@ -758,3 +758,220 @@ body.theme-light .subscription-panel__sbp-price-original {
 body.theme-light .subscription-panel__sbp-price-period {
   color: rgba(0, 0, 0, 0.35);
 }
+
+/* ━━━ Method selector ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.subscription-panel__methods {
+  display: flex;
+  gap: 8px;
+}
+
+.subscription-panel__method-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.6);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+body.theme-light .subscription-panel__method-btn {
+  border-color: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.03);
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.subscription-panel__method-btn--active {
+  border-color: var(--notes-accent, #7B68EE);
+  background: rgba(123, 104, 238, 0.14);
+  color: var(--notes-accent, #7B68EE);
+}
+
+.subscription-panel__method-btn:active:not(.subscription-panel__method-btn--active) {
+  opacity: 0.7;
+}
+
+.subscription-panel__method-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.subscription-panel__method-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.subscription-panel__method-sub {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* ━━━ TON Connect wrap ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.subscription-panel__ton-connect-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+/* ━━━ Promo code ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.subscription-panel__promo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.subscription-panel__promo-row {
+  display: flex;
+  gap: 8px;
+}
+
+.subscription-panel__promo-input {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+  letter-spacing: 0.04em;
+  transition: border-color 0.2s;
+}
+
+.subscription-panel__promo-input:focus {
+  border-color: var(--notes-accent, #7B68EE);
+}
+
+.subscription-panel__promo-input::placeholder {
+  color: rgba(255, 255, 255, 0.28);
+  letter-spacing: 0;
+}
+
+body.theme-light .subscription-panel__promo-input {
+  border-color: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.03);
+  color: #1a1a2e;
+}
+
+body.theme-light .subscription-panel__promo-input::placeholder {
+  color: rgba(0, 0, 0, 0.28);
+}
+
+.subscription-panel__promo-apply-btn {
+  flex-shrink: 0;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(123, 104, 238, 0.18);
+  color: var(--notes-accent, #7B68EE);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+
+.subscription-panel__promo-apply-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.subscription-panel__promo-apply-btn:active:not(:disabled) {
+  opacity: 0.7;
+}
+
+.subscription-panel__promo-applied {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(46, 204, 113, 0.12);
+  border: 1px solid rgba(46, 204, 113, 0.3);
+  font-size: 13px;
+  font-weight: 500;
+  color: #2ecc71;
+}
+
+.subscription-panel__promo-reset {
+  background: none;
+  border: none;
+  color: rgba(46, 204, 113, 0.7);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 0 0 8px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.subscription-panel__promo-reset:hover {
+  color: #ff4757;
+}
+
+.subscription-panel__promo-msg {
+  font-size: 12px;
+  font-weight: 500;
+  padding-left: 2px;
+}
+
+.subscription-panel__promo-msg--valid   { color: #2ecc71; }
+.subscription-panel__promo-msg--invalid { color: #ff4757; }
+
+/* ━━━ Price block ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.subscription-panel__price-block {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.subscription-panel__price-old {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.3);
+  text-decoration: line-through;
+}
+
+body.theme-light .subscription-panel__price-old {
+  color: rgba(0, 0, 0, 0.28);
+}
+
+.subscription-panel__price-main {
+  font-size: 24px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+body.theme-light .subscription-panel__price-main {
+  color: #1a1a2e;
+}
+
+.subscription-panel__price-main--discounted {
+  color: #4ade80;
+}
+
+.subscription-panel__price-period {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+body.theme-light .subscription-panel__price-period {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+/* ━━━ Pay button verified state ━━━━━━━━━━━━━━━━━━━━ */
+
+.subscription-panel__pay-btn--verified {
+  background: linear-gradient(135deg, #2ecc71, #27ae60) !important;
+  box-shadow: 0 4px 16px rgba(46, 204, 113, 0.35) !important;
+}
