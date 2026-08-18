@@ -95,7 +95,10 @@ export const isSubscriptionActive = (subscription: Subscription): boolean => {
   return new Date(subscription.endDate) > new Date();
 };
 
-export const SBP_MONTHLY_PRICE = 1000;
+export const SBP_PRICES: Record<PlanType, Record<SubscriptionPeriod, number>> = {
+  pro:      { month: 1000,  year: 12000 },
+  business: { month: 1500,  year: 15000 },
+};
 
 // Enma treasury wallet for receiving subscription payments
 export const ENMA_WALLET_ADDRESS = 'UQAmqtbkNs6OYMhQl83f_iesYhBrJJTPa7-wuIZCLEbSDplH';

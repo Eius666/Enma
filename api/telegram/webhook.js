@@ -366,7 +366,7 @@ module.exports = async (req, res) => {
           if (userId) await handleWalletCommand(token, chatId, userId).catch(() => {});
           await answerCbQuery(token, cq.id);
         }
-      } else if (data === 'sbp_1000') {
+      } else if (data === 'sbp_pay') {
         const cbChatId = cq.from?.id;
         if (cbChatId) {
           try {
@@ -528,7 +528,7 @@ module.exports = async (req, res) => {
           : `Оплатить ${BASE_PRICE} ₽/мес`;
         await sendMessage(token, chatId,
           '💳 <b>Enma Pro — 30 дней</b>\n\nАктивирует безлимитный доступ к AI-ассистенту.',
-          { reply_markup: { inline_keyboard: [[{ text: btnLabel, callback_data: 'sbp_1000' }]] } }
+          { reply_markup: { inline_keyboard: [[{ text: btnLabel, callback_data: 'sbp_pay' }]] } }
         );
         res.status(200).json({ ok: true }); return;
       }

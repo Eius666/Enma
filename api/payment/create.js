@@ -1,7 +1,17 @@
 'use strict';
 
-const { createSbpPayment, getSbpPaymentStatus, BASE_PRICE } = require('../_lib/platega');
-const { validatePromoCode } = require('../_lib/promoCodes');
+const { createSbpPayment, getSbpPaymentStatus } = require('../_lib/platega');
+const { validatePromoCode }                      = require('../_lib/promoCodes');
+
+// Mirror of src/subscription.ts SBP_PRICES
+const SBP_PRICES = {
+  pro:      { month: 1000,  year: 12000 },
+  business: { month: 1500,  year: 15000 },
+};
+
+function getBasePrice(plan, period) {
+  return SBP_PRICES[plan]?.[period] ?? 1000;
+}
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -12,18 +22,19 @@ module.exports = async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      const { transactionId, uid, promoCode } = req.query;
+      const { transactionId, uid } = req.query;
 
-      // Promo validation sub-route (?validatePromo=CODE or ?promoCode=CODE)
-      const validateCode = req.query.validatePromo || promoCode;
+      // Promo validation (?validatePromo=CODE)
+      const validateCode = req.query.validatePromo || req.query.promoCode;
       if (validateCode && !transactionId) {
         const result = await validatePromoCode(validateCode);
         const finalAmount = result.valid
-          ? Math.round(BASE_PRICE * (1 - result.discountPercent / 100))
-          : BASE_PRICE;
+          ? Math.round(1000 * (1 - result.discountPercent / 100))
+          : 1000;
         return res.status(200).json({ ok: true, ...result, finalAmount });
       }
 
+      // Payment status (?transactionId=...&uid=...)
       if (!transactionId || !uid) {
         return res.status(400).json({ ok: false, error: 'Missing transactionId or uid' });
       }
@@ -33,10 +44,14 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      const { userId, userName, promoCode } = req.body || {};
+      const { userId, userName, promoCode, plan = 'pro', period = 'month' } = req.body || {};
       if (!userId) return res.status(400).json({ ok: false, error: 'Missing userId' });
 
-      let finalAmount      = BASE_PRICE;
+      const planKey   = ['pro', 'business'].includes(plan)    ? plan   : 'pro';
+      const periodKey = ['month', 'year'].includes(period)    ? period : 'month';
+      const BASE      = getBasePrice(planKey, periodKey);
+
+      let finalAmount      = BASE;
       let discountPercent  = 0;
       let validatedPromo   = null;
 
@@ -44,7 +59,7 @@ module.exports = async function handler(req, res) {
         const promoResult = await validatePromoCode(promoCode);
         if (promoResult.valid) {
           discountPercent = promoResult.discountPercent;
-          finalAmount     = Math.round(BASE_PRICE * (1 - discountPercent / 100));
+          finalAmount     = Math.round(BASE * (1 - discountPercent / 100));
           validatedPromo  = promoResult.code;
         }
       }
@@ -53,9 +68,11 @@ module.exports = async function handler(req, res) {
         userId,
         finalAmount,
         userName:        userName || '',
-        originalAmount:  BASE_PRICE,
+        originalAmount:  BASE,
         discountPercent,
         promoCode:       validatedPromo,
+        plan:            planKey,
+        period:          periodKey,
       });
 
       return res.status(200).json({ ok: true, ...result, finalAmount, discountPercent });

@@ -975,19 +975,16 @@ body.theme-light .subscription-panel__price-period {
   box-shadow: 0 4px 16px rgba(46, 204, 113, 0.35) !important;
 }
 
-/* ━━━ Responsive: 320px — 3 method buttons fit in a row ━━━ */
+/* ━━━ Responsive: 360px — 4 method buttons → 2×2 grid ━━━ */
 
 @media (max-width: 360px) {
+  .subscription-panel__methods {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
   .subscription-panel__method-btn {
-    padding: 12px 6px;
-    gap: 6px;
-  }
-
-  .subscription-panel__method-label {
-    font-size: 12px;
-  }
-
-  .subscription-panel__method-sub {
-    font-size: 9px;
+    padding: 12px 8px;
   }
 }

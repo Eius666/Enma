@@ -2,13 +2,16 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTonConnectUI, useTonAddress, useTonWallet } from '@tonconnect/ui-react';
 import {
   PLANS,
-  SBP_MONTHLY_PRICE,
+  SBP_PRICES,
   ENMA_WALLET_ADDRESS,
   priceToNanotons,
+  priceToUsdtUnits,
   priceToStars,
   calcEndDate,
   isSubscriptionActive,
   Subscription,
+  PlanType,
+  SubscriptionPeriod,
 } from '../subscription';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -17,7 +20,7 @@ import './Subscription.css';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type PayMethod = 'stars' | 'ton' | 'sbp';
+type PayMethod = 'stars' | 'ton' | 'usdt' | 'sbp';
 type PayStatus = 'idle' | 'sending' | 'verifying' | 'verified' | 'error';
 
 interface SubscriptionPanelProps {
@@ -30,12 +33,11 @@ interface SubscriptionPanelProps {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const METHODS: { id: PayMethod; icon: string; label: string; sub: Record<string, string> }[] = [
-  { id: 'sbp',   icon: '💳', label: 'СБП',   sub: { en: 'Bank / SBP',      ru: 'Карта / СБП' } },
-  { id: 'ton',   icon: '💎', label: 'TON',   sub: { en: 'Crypto',           ru: 'Криптовалюта' } },
-  { id: 'stars', icon: '⭐', label: 'Stars', sub: { en: 'Via Telegram',     ru: 'Через Telegram' } },
+  { id: 'stars', icon: '⭐', label: 'Stars', sub: { en: 'Via Telegram',   ru: 'Через Telegram'   } },
+  { id: 'ton',   icon: '💎', label: 'TON',   sub: { en: 'Crypto',         ru: 'Криптовалюта'     } },
+  { id: 'usdt',  icon: '💲', label: 'USDT',  sub: { en: 'Stablecoin',     ru: 'Криптодоллар'     } },
+  { id: 'sbp',   icon: '💳', label: 'СБП',   sub: { en: 'Bank card',      ru: 'Банк. карта'      } },
 ];
-
-const PRO_USD = PLANS.pro.monthlyPrice; // $10
 
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -44,8 +46,14 @@ const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const T = {
   en: {
     title:           'Enma Premium',
-    subtitle:        'Unlimited AI assistant · 30 days',
+    subtitle:        'Extended capabilities · 30 days',
     activeSub:       'Active until {date}',
+    pro:             'Pro',
+    business:        'Business',
+    currentPlan:     'Current plan',
+    monthly:         '1 month',
+    yearly:          '1 year',
+    saveLabel:       'Save {pct}%',
     pay:             'Pay',
     connectFirst:    'Connect wallet first',
     processing:      'Processing…',
@@ -57,11 +65,35 @@ const T = {
     promoValid:      '{percent}% off',
     promoInvalid:    'Code not found or expired',
     perMonth:        '/mo',
+    perYear:         '/yr',
+    proList: [
+      'AI expense analysis',
+      'Unlimited transactions',
+      'Statistics & analytics',
+      'Data export',
+      'Savings goals',
+      'Multiple banks',
+      'Priority support',
+    ],
+    businessList: [
+      'Everything in Pro',
+      'Team collaboration',
+      'API access',
+      'Unlimited categories',
+      'Advanced analytics',
+      'Custom branding',
+    ],
   },
   ru: {
     title:           'Enma Premium',
-    subtitle:        'Безлимитный AI-ассистент · 30 дней',
+    subtitle:        'Расширенные возможности · 30 дней',
     activeSub:       'Активна до {date}',
+    pro:             'Pro',
+    business:        'Business',
+    currentPlan:     'Текущий план',
+    monthly:         '1 месяц',
+    yearly:          '1 год',
+    saveLabel:       'Выгода {pct}%',
     pay:             'Оплатить',
     connectFirst:    'Подключите кошелёк',
     processing:      'Обработка…',
@@ -73,6 +105,24 @@ const T = {
     promoValid:      'Скидка {percent}%',
     promoInvalid:    'Промокод не найден или недействителен',
     perMonth:        '/мес',
+    perYear:         '/год',
+    proList: [
+      'AI-анализ расходов',
+      'Неограниченные транзакции',
+      'Статистика и аналитика',
+      'Экспорт данных',
+      'Цели накоплений',
+      'Несколько банков',
+      'Приоритетная поддержка',
+    ],
+    businessList: [
+      'Всё из Pro',
+      'Совместная работа',
+      'API-доступ',
+      'Безлимит категорий',
+      'Продвинутая аналитика',
+      'Кастомный брендинг',
+    ],
   },
 };
 
@@ -91,13 +141,17 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
   const userAddress    = useTonAddress();
   const wallet         = useTonWallet();
 
+  // Plan + period
+  const [plan,   setPlan]   = useState<PlanType>('pro');
+  const [period, setPeriod] = useState<SubscriptionPeriod>('month');
+
   // Payment method
   const [method, setMethod] = useState<PayMethod>('sbp');
 
-  // TON rate (only needed for TON method display)
+  // TON rate (lazy fetch when TON/USDT selected)
   const [tonUsdRate, setTonUsdRate] = useState(5.0);
   useEffect(() => {
-    if (method !== 'ton') return;
+    if (method !== 'ton' && method !== 'usdt') return;
     fetch('https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd')
       .then(r => r.json())
       .then(d => { if (d['the-open-network']?.usd) setTonUsdRate(d['the-open-network'].usd); })
@@ -115,32 +169,43 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
   const [payStatus, setPayStatus] = useState<PayStatus>('idle');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const stopPoll = () => {
+  const stopPoll = useCallback(() => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-  };
-  useEffect(() => stopPoll, []);
+  }, []);
+  useEffect(() => stopPoll, [stopPoll]);
 
   // ── Price calculation ──────────────────────────────────────────────────────
 
   const discountMult = promoDiscount > 0 ? (1 - promoDiscount / 100) : 1;
+  const baseUsd = period === 'month' ? PLANS[plan].monthlyPrice : PLANS[plan].yearlyPrice;
 
   const displayPrice = useMemo(() => {
-    const usd = PRO_USD * discountMult;
+    const sbp = SBP_PRICES[plan][period];
+    const usd = baseUsd * discountMult;
     switch (method) {
       case 'ton':   return `${(usd / tonUsdRate).toFixed(2)} TON`;
+      case 'usdt':  return `${usd.toFixed(2)} USDT`;
       case 'stars': return `${priceToStars(usd).toLocaleString()} ⭐`;
-      case 'sbp':   return `${Math.round(SBP_MONTHLY_PRICE * discountMult)} ₽`;
+      case 'sbp':   return `${Math.round(sbp * discountMult)} ₽`;
     }
-  }, [method, discountMult, tonUsdRate]);
+  }, [method, discountMult, tonUsdRate, baseUsd, plan, period]);
 
   const originalPriceDisplay = useMemo(() => {
     if (!promoDiscount) return null;
+    const sbp = SBP_PRICES[plan][period];
     switch (method) {
-      case 'ton':   return `${(PRO_USD / tonUsdRate).toFixed(2)} TON`;
-      case 'stars': return `${priceToStars(PRO_USD).toLocaleString()} ⭐`;
-      case 'sbp':   return `${SBP_MONTHLY_PRICE} ₽`;
+      case 'ton':   return `${(baseUsd / tonUsdRate).toFixed(2)} TON`;
+      case 'usdt':  return `${baseUsd.toFixed(2)} USDT`;
+      case 'stars': return `${priceToStars(baseUsd).toLocaleString()} ⭐`;
+      case 'sbp':   return `${sbp} ₽`;
     }
-  }, [method, promoDiscount, tonUsdRate]);
+  }, [method, promoDiscount, tonUsdRate, baseUsd, plan, period]);
+
+  const periodLabel = period === 'month' ? t.perMonth : t.perYear;
+
+  const savePct = Math.round(
+    (1 - PLANS[plan].yearlyPrice / (PLANS[plan].monthlyPrice * 12)) * 100
+  );
 
   // ── Promo validation ───────────────────────────────────────────────────────
 
@@ -182,7 +247,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
     setPayStatus('sending');
 
     try {
-      // ── Stars (stub) ──────────────────────────────────────────────────────
+      // ── Stars ─────────────────────────────────────────────────────────────
       if (method === 'stars') {
         window.open('https://t.me/YourArc_bot', '_blank');
         setPayStatus('idle');
@@ -195,24 +260,17 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
 
         const paymentId   = createId();
         const now         = new Date();
-        const endDate     = calcEndDate(now, 'month');
-        const discountUsd = PRO_USD * discountMult;
+        const endDate     = calcEndDate(now, period);
+        const discountUsd = baseUsd * discountMult;
         const amountTon   = discountUsd / tonUsdRate;
         const amountRaw   = priceToNanotons(discountUsd, tonUsdRate);
 
         await setDoc(doc(db, 'payments', paymentId), {
-          id:            paymentId,
-          userId:        user.uid,
-          plan:          'pro',
-          period:        'month',
-          currency:      'ton',
-          amountUsd:     discountUsd,
-          amountTon,
-          amountRaw,
-          status:        'pending',
-          senderAddress: userAddress ?? null,
-          createdAt:     now.toISOString(),
-          updatedAt:     serverTimestamp(),
+          id: paymentId, userId: user.uid, plan, period,
+          currency: 'ton', amountUsd: discountUsd, amountTon, amountRaw,
+          status: 'pending', senderAddress: userAddress ?? null,
+          promoCode: promoCode || null, discountPercent: promoDiscount,
+          createdAt: now.toISOString(), updatedAt: serverTimestamp(),
         });
 
         const result = await tonConnectUI.sendTransaction({
@@ -220,7 +278,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
           messages: [{
             address: ENMA_WALLET_ADDRESS,
             amount:  amountRaw,
-            payload: `enma:pro:month:${paymentId}`,
+            payload: `enma:${plan}:${period}:${paymentId}`,
           }],
         });
 
@@ -237,17 +295,64 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
             if (d.status === 'confirmed') {
               stopPoll();
               const newSub: Subscription = {
-                id:            createId(),
-                userId:        user.uid,
-                plan:          'pro',
-                period:        'month',
-                status:        'active',
-                startDate:     now.toISOString(),
-                endDate,
+                id: createId(), userId: user.uid, plan, period,
+                status: 'active', startDate: now.toISOString(), endDate,
                 walletAddress: userAddress ?? undefined,
-                paymentMethod: 'ton',
-                createdAt:     now.toISOString(),
-                updatedAt:     now.toISOString(),
+                paymentMethod: 'ton', createdAt: now.toISOString(), updatedAt: now.toISOString(),
+              };
+              onSubscriptionChange(newSub);
+              setPayStatus('verified');
+              setTimeout(() => setPayStatus('idle'), 5000);
+            }
+          } catch { /* keep polling */ }
+        }, 5000);
+        return;
+      }
+
+      // ── USDT ──────────────────────────────────────────────────────────────
+      if (method === 'usdt') {
+        if (!wallet) { setPayStatus('idle'); return; }
+
+        const paymentId   = createId();
+        const now         = new Date();
+        const endDate     = calcEndDate(now, period);
+        const discountUsd = baseUsd * discountMult;
+        const amountRaw   = priceToUsdtUnits(discountUsd);
+
+        await setDoc(doc(db, 'payments', paymentId), {
+          id: paymentId, userId: user.uid, plan, period,
+          currency: 'usdt', amountUsd: discountUsd, amountRaw,
+          status: 'pending', senderAddress: userAddress ?? null,
+          promoCode: promoCode || null, discountPercent: promoDiscount,
+          createdAt: now.toISOString(), updatedAt: serverTimestamp(),
+        });
+
+        const result = await tonConnectUI.sendTransaction({
+          validUntil: Math.floor(Date.now() / 1000) + 600,
+          messages: [{
+            address: ENMA_WALLET_ADDRESS,
+            amount:  '50000000',
+            payload: `enma:${plan}:${period}:${paymentId}:usdt:${amountRaw}`,
+          }],
+        });
+
+        await setDoc(doc(db, 'payments', paymentId), {
+          txHash: result.boc, updatedAt: serverTimestamp(),
+        }, { merge: true });
+
+        setPayStatus('verifying');
+
+        pollRef.current = setInterval(async () => {
+          try {
+            const r = await fetch(`/api/ton/verify?paymentId=${paymentId}`);
+            const d = await r.json();
+            if (d.status === 'confirmed') {
+              stopPoll();
+              const newSub: Subscription = {
+                id: createId(), userId: user.uid, plan, period,
+                status: 'active', startDate: now.toISOString(), endDate,
+                walletAddress: userAddress ?? undefined,
+                paymentMethod: 'usdt', createdAt: now.toISOString(), updatedAt: now.toISOString(),
               };
               onSubscriptionChange(newSub);
               setPayStatus('verified');
@@ -266,6 +371,8 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
           body:    JSON.stringify({
             userId:    user.uid,
             userName:  user.email || '',
+            plan,
+            period,
             promoCode: promoCode || undefined,
           }),
         });
@@ -303,7 +410,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       setPayStatus('error');
       setTimeout(() => setPayStatus('idle'), 4000);
     }
-  }, [method, user, wallet, userAddress, promoCode, discountMult, tonUsdRate, tonConnectUI, onSubscriptionChange, payStatus]);
+  }, [method, user, wallet, userAddress, plan, period, promoCode, discountMult, baseUsd, tonUsdRate, tonConnectUI, onSubscriptionChange, payStatus, stopPoll]);
 
   // ── Button label ───────────────────────────────────────────────────────────
 
@@ -312,13 +419,14 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
     if (payStatus === 'verifying') return t.verifying;
     if (payStatus === 'verified')  return t.verified;
     if (payStatus === 'error')     return t.paymentError;
-    if (method === 'ton' && !wallet) return t.connectFirst;
-    return `${t.pay} ${displayPrice}${t.perMonth}`;
-  }, [payStatus, method, wallet, displayPrice, t]);
+    if ((method === 'ton' || method === 'usdt') && !wallet) return t.connectFirst;
+    return `${t.pay} ${displayPrice}${periodLabel}`;
+  }, [payStatus, method, wallet, displayPrice, periodLabel, t]);
 
-  const isActive = subscription && isSubscriptionActive(subscription);
+  const isActive   = subscription && isSubscriptionActive(subscription);
+  const activePlan = isActive ? subscription.plan : null;
   const btnDisabled = payStatus === 'sending' || payStatus === 'verifying'
-    || (method === 'ton' && !wallet && payStatus === 'idle');
+    || ((method === 'ton' || method === 'usdt') && !wallet && payStatus === 'idle');
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -344,7 +452,49 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
         </div>
       )}
 
-      {/* Method selector */}
+      {/* Plan selector */}
+      <div className="subscription-panel__plans">
+        {(['pro', 'business'] as PlanType[]).map(p => (
+          <button
+            key={p}
+            type="button"
+            className={[
+              'subscription-panel__plan-card',
+              plan === p          ? 'subscription-panel__plan-card--selected' : '',
+              activePlan === p    ? 'subscription-panel__plan-card--active'   : '',
+            ].filter(Boolean).join(' ')}
+            onClick={() => setPlan(p)}
+          >
+            {activePlan === p && (
+              <span className="subscription-panel__plan-badge">{t.currentPlan}</span>
+            )}
+            <span className="subscription-panel__plan-name">
+              {p === 'pro' ? t.pro : t.business}
+            </span>
+            <ul className="subscription-panel__plan-features">
+              {(p === 'pro' ? t.proList : t.businessList).map(f => (
+                <li key={f}>{f}</li>
+              ))}
+            </ul>
+          </button>
+        ))}
+      </div>
+
+      {/* Period selector */}
+      <div className="subscription-panel__periods">
+        {(['month', 'year'] as SubscriptionPeriod[]).map(p => (
+          <button
+            key={p}
+            type="button"
+            className={`subscription-panel__period-btn${period === p ? ' subscription-panel__period-btn--active' : ''}`}
+            onClick={() => setPeriod(p)}
+          >
+            {p === 'month' ? t.monthly : `${t.yearly} · ${t.saveLabel.replace('{pct}', String(savePct))}`}
+          </button>
+        ))}
+      </div>
+
+      {/* Method selector — 4 buttons */}
       <div className="subscription-panel__methods">
         {METHODS.map(m => (
           <button
@@ -360,14 +510,12 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
         ))}
       </div>
 
-      {/* TON Connect — only for TON method */}
-      {method === 'ton' && !wallet && (
-        <div className="subscription-panel__ton-connect-wrap">
-          {/* TonConnectButton renders itself via the UI kit */}
-        </div>
+      {/* TON Connect — only for TON/USDT */}
+      {(method === 'ton' || method === 'usdt') && !wallet && (
+        <div className="subscription-panel__ton-connect-wrap" />
       )}
 
-      {/* Promo code (always visible) */}
+      {/* Promo code */}
       <div className="subscription-panel__promo">
         {promoCode ? (
           <div className="subscription-panel__promo-applied">
@@ -409,7 +557,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
         <span className={`subscription-panel__price-main${promoDiscount ? ' subscription-panel__price-main--discounted' : ''}`}>
           {displayPrice}
         </span>
-        <span className="subscription-panel__price-period">{t.perMonth}</span>
+        <span className="subscription-panel__price-period">{periodLabel}</span>
       </div>
 
       {/* Pay button */}

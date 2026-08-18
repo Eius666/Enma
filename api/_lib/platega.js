@@ -15,7 +15,7 @@ const BASE_PRICE    = 1000;
  * @param {number}  [opts.discountPercent] — 0 if no promo
  * @param {string}  [opts.promoCode]       — promo code string or null
  */
-async function createSbpPayment({ userId, finalAmount, userName = '', originalAmount, discountPercent = 0, promoCode = null }) {
+async function createSbpPayment({ userId, finalAmount, userName = '', originalAmount, discountPercent = 0, promoCode = null, plan = 'pro', period = 'month' }) {
   const merchantId = process.env.PLATEGA_MERCHANT_ID;
   const secret     = process.env.PLATEGA_SECRET;
   if (!merchantId || !secret) throw new Error('PLATEGA credentials not configured');
@@ -61,6 +61,8 @@ async function createSbpPayment({ userId, finalAmount, userName = '', originalAm
     confirmedAt:    null,
     createdAt:      admin.firestore.FieldValue.serverTimestamp(),
   };
+  paymentDoc.plan   = plan;
+  paymentDoc.period = period;
   if (discountPercent) paymentDoc.discountPercent = discountPercent;
   if (promoCode)       paymentDoc.promoCode       = promoCode;
 
