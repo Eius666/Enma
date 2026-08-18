@@ -20,6 +20,7 @@ import {
   User,
   onAuthStateChanged,
   signInAnonymously,
+  signInWithCustomToken,
   signOut
 } from 'firebase/auth';
 import { Timestamp, doc, getDoc, serverTimestamp, setDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
@@ -762,9 +763,30 @@ const App: React.FC = () => {
     if (authLoading || user || anonAttemptedRef.current) return;
     if (!telegram?.initDataUnsafe?.user?.id) return;
     anonAttemptedRef.current = true;
-    signInAnonymously(auth).catch(error => {
-      console.warn('Failed to sign in anonymously', error);
-    });
+
+    (async () => {
+      // Try custom token first (gives permanent UID tied to Telegram ID)
+      try {
+        if (telegram.initData) {
+          const res = await fetch('/api/auth/telegram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData: telegram.initData }),
+          });
+          if (res.ok) {
+            const { token } = await res.json();
+            if (token) {
+              await signInWithCustomToken(auth, token);
+              return;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Custom token auth failed, falling back to anonymous', err);
+      }
+      // Fallback: anonymous (covers dev/localhost without valid initData)
+      signInAnonymously(auth).catch(err => console.warn('Anonymous sign-in failed', err));
+    })();
   }, [authLoading, user, telegram]);
 
 
