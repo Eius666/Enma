@@ -13,6 +13,7 @@ const { handleReferralStart, ensureReferralCode }          = require('../_lib/re
 const { handleReferralCommand, handleWalletCommand, handleBalanceCommand, checkUserState } = require('../_lib/referral/commands');
 const { processSubscriptionPayment }                       = require('../_lib/referral/earnings');
 const { saveMessage, loadHistory }                         = require('../_lib/ai/chatHistory');
+const { createSbpPayment }                                 = require('../_lib/platega');
 
 const TG = 'https://api.telegram.org';
 
@@ -364,6 +365,29 @@ module.exports = async (req, res) => {
           if (userId) await handleWalletCommand(token, chatId, userId).catch(() => {});
           await answerCbQuery(token, cq.id);
         }
+      } else if (data.startsWith('sbp_')) {
+        const amount = parseInt(data.slice(4), 10);
+        const cbChatId = cq.from?.id;
+        if (amount > 0 && cbChatId) {
+          try {
+            const cbSnap = await db.collection('users').where('chatId', '==', cbChatId).limit(1).get().catch(() => ({ empty: true }));
+            const cbUserId = cbSnap.empty ? null : cbSnap.docs[0].id;
+            if (cbUserId) {
+              const userName = cq.from?.username ? `@${cq.from.username}` : '';
+              const { url, expiresIn } = await createSbpPayment(cbUserId, amount, userName);
+              await answerCbQuery(token, cq.id);
+              await sendMessage(token, cbChatId,
+                `💳 Платёж на <b>${amount} ₽</b> через СБП\n\nСсылка действительна ${expiresIn || '15 минут'}.`,
+                { reply_markup: { inline_keyboard: [[{ text: '🏦 Оплатить через СБП', url }]] } }
+              );
+            } else {
+              await answerCbQuery(token, cq.id, '❌ Аккаунт не найден');
+            }
+          } catch (err) {
+            console.error('[pay] sbp error:', err.message);
+            await answerCbQuery(token, cq.id, '❌ Ошибка создания платежа');
+          }
+        }
       } else if (data === 'delete_confirm') {
         const cbChatId = cq.from?.id;
         if (cbChatId) {
@@ -484,6 +508,21 @@ module.exports = async (req, res) => {
         res.status(200).json({ ok: true }); return;
       }
 
+      if (text === '/pay' || text === '/оплата') {
+        await sendMessage(token, chatId,
+          '💳 <b>Оплата через СБП</b>\n\nВыберите сумму для активации Enma Pro на 30 дней:',
+          {
+            reply_markup: {
+              inline_keyboard: [[
+                { text: '299 ₽', callback_data: 'sbp_299' },
+                { text: '499 ₽', callback_data: 'sbp_499' },
+                { text: '999 ₽', callback_data: 'sbp_999' },
+              ]],
+            },
+          }
+        );
+        res.status(200).json({ ok: true }); return;
+      }
       if (text === '/subscribe' || text.startsWith('/subscribe ')) {
         await handleSubscribeCommand(token, chatId);
         res.status(200).json({ ok: true }); return;
@@ -543,7 +582,8 @@ module.exports = async (req, res) => {
           '/banks — мои банки и методы оплаты\n' +
           '/goals — цели накопления\n' +
           '/export — выгрузить последние транзакции\n\n' +
-          '/subscribe — подписка (безлимит)\n' +
+          '/pay — оплата через СБП\n' +
+          '/subscribe — подписка через Telegram Stars\n' +
           '/referral — пригласить друга и получить бонус\n' +
           '/balance — баланс реферальных бонусов\n' +
           '/wallet — TON-кошелёк\n\n' +

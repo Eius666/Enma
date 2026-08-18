@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTonConnectUI, useTonAddress, useTonWallet } from '@tonconnect/ui-react';
 import {
   PlanType,
@@ -25,6 +25,8 @@ interface SubscriptionPanelProps {
   onSubscriptionChange: (sub: Subscription | null) => void;
 }
 
+const SBP_PRESETS = [299, 499, 999];
+
 const T = {
   en: {
     title: 'Enma Premium',
@@ -42,6 +44,13 @@ const T = {
     paymentSent: 'Payment sent! Waiting for confirmation...',
     paymentError: 'Payment failed. Try again.',
     activeSub: 'Your subscription is active until {date}',
+    sbpTitle: 'Pay via SBP (Russia)',
+    sbpSubtitle: 'Fast bank transfer, 30 days Pro',
+    sbpCustom: 'Custom amount (₽)',
+    sbpPay: 'Pay via SBP',
+    sbpWaiting: 'Waiting for payment…',
+    sbpConfirmed: 'Payment confirmed! Pro is active 🎉',
+    sbpError: 'Failed to create payment. Try again.',
     currentPlan: 'Current plan',
     proList: ['Unlimited projects', 'Advanced analytics', 'Priority support'],
     businessList: [
@@ -67,6 +76,13 @@ const T = {
     paymentSent: 'Платёж отправлен! Ожидаем подтверждение...',
     paymentError: 'Платёж не прошёл. Попробуйте ещё раз.',
     activeSub: 'Подписка активна до {date}',
+    sbpTitle: 'Оплата через СБП',
+    sbpSubtitle: 'Быстрый перевод из приложения банка, 30 дней Pro',
+    sbpCustom: 'Своя сумма (₽)',
+    sbpPay: 'Оплатить через СБП',
+    sbpWaiting: 'Ожидание оплаты…',
+    sbpConfirmed: 'Платёж подтверждён! Pro активна 🎉',
+    sbpError: 'Не удалось создать платёж. Попробуйте ещё раз.',
     currentPlan: 'Текущий план',
     proList: ['Безлимит проектов', 'Расширенная аналитика', 'Приоритетная поддержка'],
     businessList: ['Всё из Pro', 'Совместная работа', 'API-доступ', 'Кастомный брендинг'],
@@ -100,6 +116,12 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
     'idle'
   );
 
+  const [sbpAmount, setSbpAmount]   = useState<number>(SBP_PRESETS[1]);
+  const [sbpCustom, setSbpCustom]   = useState('');
+  const [sbpStatus, setSbpStatus]   = useState<'idle' | 'creating' | 'pending' | 'confirmed' | 'error'>('idle');
+  const [, setSbpTxId]              = useState<string | null>(null);
+  const sbpPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const isConnected = !!wallet;
 
   useEffect(() => {
@@ -125,6 +147,64 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       setSelectedCurrency('ton');
     }
   }, [selectedPeriod, selectedCurrency]);
+
+  const stopSbpPoll = () => {
+    if (sbpPollRef.current) {
+      clearInterval(sbpPollRef.current);
+      sbpPollRef.current = null;
+    }
+  };
+
+  useEffect(() => stopSbpPoll, []);
+
+  const handleSbpPay = useCallback(async () => {
+    if (!user) return;
+    const amount = sbpCustom ? parseInt(sbpCustom, 10) : sbpAmount;
+    if (!amount || amount < 1) return;
+
+    setSbpStatus('creating');
+    try {
+      const resp = await fetch('/api/payment/create', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ userId: user.uid, amount, userName: user.email || '' }),
+      });
+      const data = await resp.json();
+      if (!data.ok || !data.url) throw new Error(data.error || 'No URL');
+
+      const tgWebApp = (window as Window & { Telegram?: { WebApp?: { openLink?: (u: string) => void } } }).Telegram?.WebApp;
+      if (tgWebApp?.openLink) {
+        tgWebApp.openLink(data.url);
+      } else {
+        window.open(data.url, '_blank', 'noopener,noreferrer');
+      }
+
+      setSbpTxId(data.transactionId);
+      setSbpStatus('pending');
+
+      sbpPollRef.current = setInterval(async () => {
+        try {
+          const statusResp = await fetch(`/api/payment/create?transactionId=${data.transactionId}&uid=${user.uid}`);
+          const statusData = await statusResp.json();
+          if (statusData.status === 'CONFIRMED') {
+            setSbpStatus('confirmed');
+            stopSbpPoll();
+            setTimeout(() => setSbpStatus('idle'), 5000);
+          } else if (statusData.status === 'CANCELED' || statusData.status === 'EXPIRED') {
+            setSbpStatus('error');
+            stopSbpPoll();
+            setTimeout(() => setSbpStatus('idle'), 4000);
+          }
+        } catch {
+          // keep polling
+        }
+      }, 3000);
+    } catch (err) {
+      console.error('[SBP]', err);
+      setSbpStatus('error');
+      setTimeout(() => setSbpStatus('idle'), 4000);
+    }
+  }, [user, sbpAmount, sbpCustom]);
 
   const planConfig = PLANS[selectedPlan];
   const priceUsd =
@@ -383,6 +463,49 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
         {paymentStatus === 'sent' && t.paymentSent}
         {paymentStatus === 'error' && t.paymentError}
       </button>
+      {/* ── SBP section ── */}
+      <div className="subscription-panel__sbp">
+        <div className="subscription-panel__sbp-header">
+          <span className="subscription-panel__sbp-title">{t.sbpTitle}</span>
+          <span className="subscription-panel__sbp-subtitle">{t.sbpSubtitle}</span>
+        </div>
+
+        <div className="subscription-panel__sbp-presets">
+          {SBP_PRESETS.map(preset => (
+            <button
+              key={preset}
+              type="button"
+              className={`subscription-panel__sbp-preset${sbpAmount === preset && !sbpCustom ? ' subscription-panel__sbp-preset--active' : ''}`}
+              onClick={() => { setSbpAmount(preset); setSbpCustom(''); }}
+            >
+              {preset} ₽
+            </button>
+          ))}
+        </div>
+
+        <input
+          className="subscription-panel__sbp-input"
+          type="number"
+          min="1"
+          placeholder={t.sbpCustom}
+          value={sbpCustom}
+          onChange={e => setSbpCustom(e.target.value)}
+        />
+
+        <button
+          type="button"
+          className="subscription-panel__sbp-btn"
+          disabled={sbpStatus === 'creating' || sbpStatus === 'pending'}
+          onClick={handleSbpPay}
+        >
+          {sbpStatus === 'idle'      && t.sbpPay}
+          {sbpStatus === 'creating'  && '⏳ …'}
+          {sbpStatus === 'pending'   && t.sbpWaiting}
+          {sbpStatus === 'confirmed' && t.sbpConfirmed}
+          {sbpStatus === 'error'     && t.sbpError}
+        </button>
+      </div>
+
     </div>
   );
 };

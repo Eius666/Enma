@@ -544,3 +544,140 @@ body.theme-light .subscription-panel__pay-btn--current {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── SBP payment block ────────────────────────────── */
+
+.subscription-panel__sbp {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+body.theme-light .subscription-panel__sbp {
+  border-top-color: rgba(0, 0, 0, 0.07);
+}
+
+.subscription-panel__sbp-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.subscription-panel__sbp-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--notes-text, #e8e8f0);
+}
+
+body.theme-light .subscription-panel__sbp-title {
+  color: #1a1a2e;
+}
+
+.subscription-panel__sbp-subtitle {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+body.theme-light .subscription-panel__sbp-subtitle {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.subscription-panel__sbp-presets {
+  display: flex;
+  gap: 8px;
+}
+
+.subscription-panel__sbp-preset {
+  flex: 1;
+  padding: 9px 4px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+body.theme-light .subscription-panel__sbp-preset {
+  border-color: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.03);
+  color: #444;
+}
+
+.subscription-panel__sbp-preset--active {
+  border-color: var(--notes-accent, #7B68EE);
+  background: rgba(123, 104, 238, 0.14);
+  color: var(--notes-accent, #7B68EE);
+}
+
+.subscription-panel__sbp-preset:active {
+  opacity: 0.75;
+}
+
+.subscription-panel__sbp-input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+.subscription-panel__sbp-input:focus {
+  border-color: var(--notes-accent, #7B68EE);
+}
+
+.subscription-panel__sbp-input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+body.theme-light .subscription-panel__sbp-input {
+  border-color: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.03);
+  color: #1a1a2e;
+}
+
+body.theme-light .subscription-panel__sbp-input::placeholder {
+  color: rgba(0, 0, 0, 0.3);
+}
+
+.subscription-panel__sbp-btn {
+  width: 100%;
+  padding: 13px;
+  border-radius: 12px;
+  border: none;
+  background: #0088cc;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.12s;
+  box-shadow: 0 4px 14px rgba(0, 136, 204, 0.35);
+}
+
+.subscription-panel__sbp-btn:hover {
+  opacity: 0.9;
+}
+
+.subscription-panel__sbp-btn:active {
+  opacity: 0.8;
+  transform: scale(0.98);
+}
+
+.subscription-panel__sbp-btn:disabled {
+  opacity: 0.65;
+  cursor: default;
+  transform: none;
+}
