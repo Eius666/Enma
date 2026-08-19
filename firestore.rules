@@ -2,146 +2,219 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // -------------------------------------------------------------------------
-    // Auth strategy note
-    // -------------------------------------------------------------------------
-    // Enma uses Firebase Authentication (signInWithEmailAndPassword +
-    // signInAnonymously).  All client-side Firestore reads/writes are therefore
-    // protected by `request.auth.uid` matching the document's owner field.
-    //
-    // Server-side writes (api/ routes) go through the Firebase Admin SDK which
-    // bypasses these rules entirely — security there is enforced in the route
-    // code itself (see api/_lib/verifyWebhookSig.js, rateLimit.js).
-    // -------------------------------------------------------------------------
+    // ─────────────────────────────────────────────────────────────────────────
+    // Auth strategy:
+    //   Client writes → protected by these rules (request.auth.uid)
+    //   Server writes → Admin SDK (api/ routes) bypasses rules entirely
+    // ─────────────────────────────────────────────────────────────────────────
 
-    // Helper: is the caller authenticated?
+    // ── Core helpers ─────────────────────────────────────────────────────────
+
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // Helper: does the caller own this document (by userId field)?
     function ownsDoc() {
       return isAuthenticated() && resource.data.userId == request.auth.uid;
     }
 
-    // Helper: does the incoming write claim the caller's own uid?
     function writesOwnUid() {
       return isAuthenticated() && request.resource.data.userId == request.auth.uid;
     }
 
-    // -------------------------------------------------------------------------
+    // ── Subscription helpers ──────────────────────────────────────────────────
+    // Reads users/{uid}.isPro set by server on payment confirmation.
+
+    function hasPaidPlan(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid)) &&
+        get(/databases/$(database)/documents/users/$(uid)).data.get('isPro', false) == true;
+    }
+
+    // ── Free-tier counter helpers ────────────────────────────────────────────
+    // freeUsage/{uid} stores counters updated atomically by the client.
+    // Rules rely on these counters; client-side freeLimits.ts keeps them accurate.
+
+    function freeUsageExists(uid) {
+      return exists(/databases/$(database)/documents/freeUsage/$(uid));
+    }
+
+    function freeUsage(uid) {
+      return get(/databases/$(database)/documents/freeUsage/$(uid)).data;
+    }
+
+    function freeTxOk(uid) {
+      return !freeUsageExists(uid) ||
+        freeUsage(uid).get('transactionCount', 0) < 30;
+    }
+
+    function freeHabitOk(uid) {
+      return !freeUsageExists(uid) ||
+        freeUsage(uid).get('habitCount', 0) < 3;
+    }
+
+    function freeNoteOk(uid) {
+      return !freeUsageExists(uid) ||
+        freeUsage(uid).get('noteCount', 0) < 10;
+    }
+
+    function freeTaskOk(uid) {
+      return !freeUsageExists(uid) ||
+        freeUsage(uid).get('dailyTaskCount', 0) < 5;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // /users/{userId}
-    // -------------------------------------------------------------------------
-    // Stores the Firebase UID → Telegram chatId mapping written by App.tsx.
+    // ─────────────────────────────────────────────────────────────────────────
     match /users/{userId} {
-      // Users may only read/write their own top-level user document.
       allow read, write: if isAuthenticated() && request.auth.uid == userId;
 
-      // Sub-collections (workspaces, etc.) inherit the parent restriction.
       match /{subcollection}/{docId} {
         allow read, write: if isAuthenticated() && request.auth.uid == userId;
       }
     }
 
-    // -------------------------------------------------------------------------
+    // ─────────────────────────────────────────────────────────────────────────
     // /transactions/{transactionId}
-    // -------------------------------------------------------------------------
-    // Flat collection; every document carries a userId field.
+    // ─────────────────────────────────────────────────────────────────────────
     match /transactions/{transactionId} {
-      allow read:             if ownsDoc();
-      allow create:           if writesOwnUid();
-      allow update, delete:   if ownsDoc();
+      allow read:           if ownsDoc();
+      allow create:         if writesOwnUid() &&
+                               (hasPaidPlan(request.auth.uid) || freeTxOk(request.auth.uid));
+      allow update, delete: if ownsDoc();
     }
 
-    // -------------------------------------------------------------------------
+    // ─────────────────────────────────────────────────────────────────────────
+    // /habits/{habitId}
+    // ─────────────────────────────────────────────────────────────────────────
+    match /habits/{habitId} {
+      allow read:           if ownsDoc();
+      allow create:         if writesOwnUid() &&
+                               (hasPaidPlan(request.auth.uid) || freeHabitOk(request.auth.uid));
+      allow update, delete: if ownsDoc();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // /notes/{noteId}
+    // ─────────────────────────────────────────────────────────────────────────
+    match /notes/{noteId} {
+      allow read:           if ownsDoc();
+      allow create:         if writesOwnUid() &&
+                               (hasPaidPlan(request.auth.uid) || freeNoteOk(request.auth.uid));
+      allow update, delete: if ownsDoc();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // /tasks/{taskId}
+    // ─────────────────────────────────────────────────────────────────────────
+    match /tasks/{taskId} {
+      allow read:           if ownsDoc();
+      allow create:         if writesOwnUid() &&
+                               (hasPaidPlan(request.auth.uid) || freeTaskOk(request.auth.uid));
+      allow update, delete: if ownsDoc();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // /freeUsage/{userId}
+    // Counter doc: updated atomically by the client (freeLimits.ts).
+    // ─────────────────────────────────────────────────────────────────────────
+    match /freeUsage/{userId} {
+      allow read:  if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAuthenticated() && request.auth.uid == userId &&
+                      request.resource.data.userId == userId;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // /aiUsage/{userId}
+    // Written exclusively by Admin SDK (api/ serverless routes).
+    // Clients can only read their own usage.
+    // ─────────────────────────────────────────────────────────────────────────
+    match /aiUsage/{userId} {
+      allow read:  if isAuthenticated() && request.auth.uid == userId;
+      allow write: if false;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // /rateLimits/{docId}
+    // docId format: "{userId}_{action}"
+    // Client reads/writes only docs prefixed with their own uid.
+    // ─────────────────────────────────────────────────────────────────────────
+    match /rateLimits/{docId} {
+      allow read:  if isAuthenticated() && docId.matches(request.auth.uid + '_.*');
+      allow write: if isAuthenticated() &&
+                      request.resource.data.get('userId', '') == request.auth.uid &&
+                      docId.matches(request.auth.uid + '_.*');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // /reminders/{reminderId}
-    // -------------------------------------------------------------------------
+    // ─────────────────────────────────────────────────────────────────────────
     match /reminders/{reminderId} {
-      allow read:             if ownsDoc();
-      allow create:           if writesOwnUid();
-      allow update, delete:   if ownsDoc();
+      allow read:           if ownsDoc();
+      allow create:         if writesOwnUid();
+      allow update, delete: if ownsDoc();
     }
 
-    // -------------------------------------------------------------------------
+    // ─────────────────────────────────────────────────────────────────────────
     // /categories/{categoryId}
-    // -------------------------------------------------------------------------
-    // Top-level categories collection referenced by lib/firestore.ts.
+    // ─────────────────────────────────────────────────────────────────────────
     match /categories/{categoryId} {
-      allow read:             if ownsDoc();
-      allow create:           if writesOwnUid();
-      allow update, delete:   if ownsDoc();
+      allow read:           if ownsDoc();
+      allow create:         if writesOwnUid();
+      allow update, delete: if ownsDoc();
     }
 
-    // -------------------------------------------------------------------------
+    // ─────────────────────────────────────────────────────────────────────────
     // /telegramUsers/{docId}
-    // -------------------------------------------------------------------------
-    // Written by App.tsx (doc ID = "tg_{telegramUserId}") to record the link
-    // between a Telegram user and their Firebase UID.
-    // The document carries a firebaseUid field; we match that to the caller.
+    // ─────────────────────────────────────────────────────────────────────────
     match /telegramUsers/{docId} {
       allow read:   if isAuthenticated() && resource.data.firebaseUid == request.auth.uid;
       allow create: if isAuthenticated() && request.resource.data.firebaseUid == request.auth.uid;
-      allow update: if isAuthenticated() && resource.data.firebaseUid == request.auth.uid
-                                        && request.resource.data.firebaseUid == request.auth.uid;
+      allow update: if isAuthenticated() &&
+                       resource.data.firebaseUid == request.auth.uid &&
+                       request.resource.data.firebaseUid == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.firebaseUid == request.auth.uid;
     }
 
-    // -------------------------------------------------------------------------
+    // ─────────────────────────────────────────────────────────────────────────
     // /subscriptions/{userId}
-    // -------------------------------------------------------------------------
-    // Written exclusively by the server (Admin SDK) on payment confirmation.
-    // Clients may only read their own subscription document.
+    // Written by Admin SDK on payment confirmation only.
+    // ─────────────────────────────────────────────────────────────────────────
     match /subscriptions/{userId} {
-      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow read:  if isAuthenticated() && request.auth.uid == userId;
+      allow write: if false;
     }
 
-    // -------------------------------------------------------------------------
+    // ─────────────────────────────────────────────────────────────────────────
     // /payments/{paymentId}
-    // -------------------------------------------------------------------------
-    // Client may create a pending payment for themselves (no confirmedAt allowed).
-    // Only the server (Admin SDK via api/ton/verify.js) writes status:'confirmed'.
+    // Client creates pending payment; server confirms via Admin SDK.
+    // ─────────────────────────────────────────────────────────────────────────
     match /payments/{paymentId} {
-      allow read: if ownsDoc();
-      allow create: if writesOwnUid()
-        && request.resource.data.status == 'pending'
-        && !('confirmedAt' in request.resource.data);
+      allow read:   if ownsDoc();
+      allow create: if writesOwnUid() &&
+                       request.resource.data.status == 'pending' &&
+                       !('confirmedAt' in request.resource.data);
     }
 
-    // -------------------------------------------------------------------------
-    // /notes/{noteId}
-    // -------------------------------------------------------------------------
-    match /notes/{noteId} {
-      allow read:           if ownsDoc();
-      allow create:         if writesOwnUid();
-      allow update, delete: if ownsDoc();
+    // ─────────────────────────────────────────────────────────────────────────
+    // /messages/{messageId}
+    // Bot conversation history — written by Admin SDK via chatHistory.js.
+    // ─────────────────────────────────────────────────────────────────────────
+    match /messages/{messageId} {
+      allow read:  if ownsDoc();
+      allow write: if false;
     }
 
-    // -------------------------------------------------------------------------
-    // /habits/{habitId}
-    // -------------------------------------------------------------------------
-    // Flat collection; every document carries a userId field.
-    match /habits/{habitId} {
-      allow read:           if ownsDoc();
-      allow create:         if writesOwnUid();
-      allow update, delete: if ownsDoc();
+    // ─────────────────────────────────────────────────────────────────────────
+    // /canonicalUids/{docId}
+    // Written server-side by api/auth/telegram.js only.
+    // ─────────────────────────────────────────────────────────────────────────
+    match /canonicalUids/{docId} {
+      allow read, write: if false;
     }
 
-    // -------------------------------------------------------------------------
-    // /tasks/{taskId}
-    // -------------------------------------------------------------------------
-    // Flat collection; every document carries a userId field.
-    match /tasks/{taskId} {
-      allow read:           if ownsDoc();
-      allow create:         if writesOwnUid();
-      allow update, delete: if ownsDoc();
-    }
-
-    // -------------------------------------------------------------------------
-    // Catch-all deny
-    // -------------------------------------------------------------------------
-    // Any collection not explicitly listed above is denied to authenticated AND
-    // unauthenticated callers.  This prevents accidentally exposing new
-    // collections before rules are written for them.
+    // ─────────────────────────────────────────────────────────────────────────
+    // Catch-all deny — any collection not listed above is fully blocked.
+    // ─────────────────────────────────────────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;
     }
