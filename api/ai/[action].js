@@ -502,9 +502,11 @@ async function handleEntityCreate(req, res) {
 // Admin: grant subscription (temporary, remove after use)
 // ─────────────────────────────────────────────────────────────────────────────
 
+const ADMIN_ALLOWED_UIDS = ['2MhVQ2hZD0cgDcYzxlHzhumml9l1'];
+
 async function handleAdminGrant(req, res) {
-  const secret = req.headers['x-admin-secret'];
-  if (!secret || secret !== process.env.ADMIN_GRANT_SECRET) {
+  const { userId } = req.body ?? {};
+  if (!ADMIN_ALLOWED_UIDS.includes(userId)) {
     return res.status(403).json({ error: 'forbidden' });
   }
 
