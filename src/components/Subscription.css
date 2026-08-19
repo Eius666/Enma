@@ -1431,3 +1431,76 @@ body.theme-light .subscription-panel__feature-card--premium {
 body.theme-light .subscription-panel__feature-text {
   color: rgba(0, 0, 0, 0.55);
 }
+
+/* ━━━ Plan feature list (vertical) ━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.subscription-panel__feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.subscription-panel__feature-list-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.35);
+  margin-bottom: 2px;
+}
+
+body.theme-light .subscription-panel__feature-list-label {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+.subscription-panel__feature-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.subscription-panel__feature-list-item--pro {
+  background: rgba(123, 104, 238, 0.06);
+  border-color: rgba(123, 104, 238, 0.14);
+}
+
+.subscription-panel__feature-list-item--premium {
+  background: rgba(162, 155, 254, 0.07);
+  border-color: rgba(162, 155, 254, 0.16);
+}
+
+body.theme-light .subscription-panel__feature-list-item {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.07);
+}
+
+body.theme-light .subscription-panel__feature-list-item--pro {
+  background: rgba(123, 104, 238, 0.05);
+  border-color: rgba(123, 104, 238, 0.12);
+}
+
+body.theme-light .subscription-panel__feature-list-item--premium {
+  background: rgba(108, 92, 231, 0.05);
+  border-color: rgba(108, 92, 231, 0.12);
+}
+
+.subscription-panel__feature-list-icon {
+  font-size: 20px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.subscription-panel__feature-list-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.3;
+}
+
+body.theme-light .subscription-panel__feature-list-text {
+  color: rgba(0, 0, 0, 0.7);
+}

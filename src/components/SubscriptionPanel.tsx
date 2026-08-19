@@ -79,6 +79,7 @@ const T = {
     perYear:         '/yr',
     freePlanTitle:   'Free plan',
     freePlanText:    'Basic features with limits',
+    whatIncluded:     "What's included",
     upgradePrompt:    'Upgrade to unlock full access',
     upgradeFromPro:   'You have Pro. Upgrade to Premium for AI images and chat.',
     alreadyPremium:   "You're on the top plan!",
@@ -130,6 +131,7 @@ const T = {
     perYear:         '/год',
     freePlanTitle:   'Бесплатный тариф',
     freePlanText:    'Базовые функции с ограничениями',
+    whatIncluded:     'Что входит',
     upgradePrompt:    'Обновите план для полного доступа',
     upgradeFromPro:   'Вы на Pro. Обновитесь до Premium для AI-изображений и чата.',
     alreadyPremium:   'Вы уже на максимальном тарифе!',
@@ -538,17 +540,15 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
         })}
       </div>
 
-      {/* Feature highlights slider — always visible */}
-      <div className="subscription-panel__feature-slider">
+      {/* Feature list — what's included in the selected plan */}
+      <div className="subscription-panel__feature-list">
+        <span className="subscription-panel__feature-list-label">{t.whatIncluded}</span>
         {(plan === 'free' ? t.freeList : plan === 'pro' ? t.proList : t.premiumList).map((feature, i) => {
           const icons = plan === 'free' ? FREE_FEATURE_ICONS : plan === 'pro' ? PRO_FEATURE_ICONS : PREMIUM_FEATURE_ICONS;
           return (
-            <div
-              key={feature}
-              className={`subscription-panel__feature-card subscription-panel__feature-card--${plan}`}
-            >
-              <span className="subscription-panel__feature-icon">{icons[i] ?? '✦'}</span>
-              <span className="subscription-panel__feature-text">{feature}</span>
+            <div key={feature} className={`subscription-panel__feature-list-item subscription-panel__feature-list-item--${plan}`}>
+              <span className="subscription-panel__feature-list-icon">{icons[i] ?? '✦'}</span>
+              <span className="subscription-panel__feature-list-text">{feature}</span>
             </div>
           );
         })}
