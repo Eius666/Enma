@@ -563,7 +563,7 @@ module.exports = async (req, res) => {
           if (endDate > new Date()) {
             const daysLeft = Math.ceil((endDate - new Date()) / (1000 * 60 * 60 * 24));
             const dateStr = endDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
-            const planLabel = sub.plan === 'business' ? 'Business' : 'Pro';
+            const planLabel = sub.plan === 'premium' ? 'Premium' : 'Pro';
             await sendMessage(token, chatId,
               `✨ <b>Enma ${planLabel}</b> активна\n\nДо: <b>${dateStr}</b>\nОсталось: <b>${daysLeft} дн.</b>`
             );

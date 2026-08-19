@@ -40,7 +40,7 @@ import { ToastProvider } from './components/ui/Toast';
 import SettingsScreen from './components/SettingsScreen';
 import NotesList from './components/NotesList';
 import NoteEditor from './components/NoteEditor';
-import { Subscription, isSubscriptionActive } from './subscription';
+import { Subscription, isSubscriptionActive, getActivePlan } from './subscription';
 import './components/Subscription.css';
 import './components/Notes.css';
 import './components/Finance.css';
@@ -1471,7 +1471,9 @@ const App: React.FC = () => {
               {avatarInitials}
             </div>
             {subscription && isSubscriptionActive(subscription) && (
-              <span className="header-avatar-pro-label">PRO</span>
+              <span className="header-avatar-pro-label">
+                {getActivePlan(subscription).toUpperCase()}
+              </span>
             )}
           </div>
           <span className="header-greeting">

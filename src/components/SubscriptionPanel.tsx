@@ -10,7 +10,7 @@ import {
   calcEndDate,
   isSubscriptionActive,
   Subscription,
-  PlanType,
+  PaidPlan,
   SubscriptionPeriod,
 } from '../subscription';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -45,11 +45,11 @@ const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 const T = {
   en: {
-    title:           'Enma Premium',
-    subtitle:        'Extended capabilities · 30 days',
+    title:           'Enma Plans',
+    subtitle:        'Choose the plan that fits you',
     activeSub:       'Active until {date}',
     pro:             'Pro',
-    business:        'Business',
+    premium:         'Premium',
     currentPlan:     'Current plan',
     monthly:         '1 month',
     yearly:          '1 year',
@@ -58,7 +58,7 @@ const T = {
     connectFirst:    'Connect wallet first',
     processing:      'Processing…',
     verifying:       'Waiting for confirmation…',
-    verified:        'Confirmed! Pro is active 🎉',
+    verified:        'Confirmed! Plan is active',
     paymentError:    'Payment failed. Try again.',
     promoPlaceholder:'Promo code',
     promoApply:      'Apply',
@@ -67,29 +67,28 @@ const T = {
     perMonth:        '/mo',
     perYear:         '/yr',
     proList: [
-      'AI expense analysis',
+      '20 AI requests / month',
       'Unlimited transactions',
       'Statistics & analytics',
       'Data export',
       'Savings goals',
       'Multiple banks',
-      'Priority support',
     ],
-    businessList: [
-      'Everything in Pro',
-      'Team collaboration',
-      'API access',
-      'Unlimited categories',
-      'Advanced analytics',
-      'Custom branding',
+    premiumList: [
+      '100 AI requests / month',
+      '30 AI image generations / month',
+      '10 AI PDF reports / month',
+      'AI chat consultant',
+      'Family access (up to 3)',
+      'Priority support',
     ],
   },
   ru: {
-    title:           'Enma Premium',
-    subtitle:        'Расширенные возможности · 30 дней',
+    title:           'Тарифы Enma',
+    subtitle:        'Выберите подходящий план',
     activeSub:       'Активна до {date}',
     pro:             'Pro',
-    business:        'Business',
+    premium:         'Premium',
     currentPlan:     'Текущий план',
     monthly:         '1 месяц',
     yearly:          '1 год',
@@ -98,7 +97,7 @@ const T = {
     connectFirst:    'Подключите кошелёк',
     processing:      'Обработка…',
     verifying:       'Ожидаем подтверждение…',
-    verified:        'Оплата прошла! Pro активна 🎉',
+    verified:        'Оплата прошла! Тариф активирован',
     paymentError:    'Не удалось. Попробуйте ещё раз.',
     promoPlaceholder:'Промокод',
     promoApply:      'Применить',
@@ -107,21 +106,20 @@ const T = {
     perMonth:        '/мес',
     perYear:         '/год',
     proList: [
-      'AI-анализ расходов',
+      '20 AI-запросов в месяц',
       'Неограниченные транзакции',
       'Статистика и аналитика',
       'Экспорт данных',
       'Цели накоплений',
       'Несколько банков',
-      'Приоритетная поддержка',
     ],
-    businessList: [
-      'Всё из Pro',
-      'Совместная работа',
-      'API-доступ',
-      'Безлимит категорий',
-      'Продвинутая аналитика',
-      'Кастомный брендинг',
+    premiumList: [
+      '100 AI-запросов в месяц',
+      '30 AI-генераций изображений',
+      '10 AI-отчётов в PDF',
+      'AI-чат консультант',
+      'Семейный доступ (до 3 чел.)',
+      'Приоритетная поддержка',
     ],
   },
 };
@@ -142,7 +140,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
   const wallet         = useTonWallet();
 
   // Plan + period
-  const [plan,   setPlan]   = useState<PlanType>('pro');
+  const [plan,   setPlan]   = useState<PaidPlan>('pro');
   const [period, setPeriod] = useState<SubscriptionPeriod>('month');
 
   // Payment method
@@ -473,7 +471,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
 
       {/* Plan selector */}
       <div className="subscription-panel__plans">
-        {(['pro', 'business'] as PlanType[]).map(p => (
+        {(['pro', 'premium'] as PaidPlan[]).map(p => (
           <button
             key={p}
             type="button"
@@ -488,10 +486,10 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
               <span className="subscription-panel__plan-badge">{t.currentPlan}</span>
             )}
             <span className="subscription-panel__plan-name">
-              {p === 'pro' ? t.pro : t.business}
+              {p === 'pro' ? t.pro : t.premium}
             </span>
             <ul className="subscription-panel__plan-features">
-              {(p === 'pro' ? t.proList : t.businessList).map(f => (
+              {(p === 'pro' ? t.proList : t.premiumList).map(f => (
                 <li key={f}>{f}</li>
               ))}
             </ul>

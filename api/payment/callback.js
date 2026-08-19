@@ -123,7 +123,7 @@ module.exports = async function handler(req, res) {
       const durationLabel = period === 'year' ? '1 год' : '30 дней';
       await notifyUser(chatId,
         `✅ Платёж на <b>${amountText}</b> подтверждён!\n\n` +
-        `Enma ${plan === 'business' ? 'Business' : 'Pro'} активна на ${durationLabel} 🎉`
+        `Enma ${plan === 'premium' ? 'Premium' : 'Pro'} активна на ${durationLabel} 🎉`
       );
     }
 

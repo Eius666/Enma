@@ -5,8 +5,8 @@ const { validatePromoCode }                      = require('../_lib/promoCodes')
 
 // Mirror of src/subscription.ts SBP_PRICES
 const SBP_PRICES = {
-  pro:      { month: 1000,  year: 12000 },
-  business: { month: 1500,  year: 15000 },
+  pro:     { month: 750,  year: 7200  },
+  premium: { month: 1000, year: 9600  },
 };
 
 function getBasePrice(plan, period) {
@@ -47,7 +47,7 @@ module.exports = async function handler(req, res) {
       const { userId, userName, promoCode, plan = 'pro', period = 'month' } = req.body || {};
       if (!userId) return res.status(400).json({ ok: false, error: 'Missing userId' });
 
-      const planKey   = ['pro', 'business'].includes(plan)    ? plan   : 'pro';
+      const planKey   = ['pro', 'premium'].includes(plan)    ? plan   : 'pro';
       const periodKey = ['month', 'year'].includes(period)    ? period : 'month';
       const BASE      = getBasePrice(planKey, periodKey);
 

@@ -13,6 +13,7 @@ import {
 } from 'react-icons/fa';
 import { User } from 'firebase/auth';
 import type { Subscription } from '../subscription';
+import { isSubscriptionActive } from '../subscription';
 import WalletConnect from './WalletConnect';
 import SubscriptionPanel from './SubscriptionPanel';
 import './Settings.css';
@@ -63,7 +64,8 @@ const T = {
     rowTerms: 'Terms of Service',
     legalNote: 'By using the service you agree to the Privacy Policy and Terms of Service.',
     subFree: 'Free',
-    subActive: 'Active',
+    subPro: 'Pro — Active',
+    subPremium: 'Premium — Active',
     currencies: {
       USD: 'US Dollar', EUR: 'Euro', RUB: 'Russian Ruble',
       BYN: 'Belarusian Ruble', CNY: 'Chinese Yuan',
@@ -95,7 +97,8 @@ const T = {
     rowTerms: 'Пользовательское соглашение',
     legalNote: 'Используя сервис, вы соглашаетесь с политикой конфиденциальности и пользовательским соглашением.',
     subFree: 'Бесплатно',
-    subActive: 'Активна',
+    subPro: 'Pro — Активна',
+    subPremium: 'Premium — Активна',
     currencies: {
       USD: 'Доллар США', EUR: 'Евро', RUB: 'Российский рубль',
       BYN: 'Белорусский рубль', CNY: 'Китайский юань',
@@ -133,7 +136,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [bankInput,    setBankInput]    = useState('');
 
   const userEmail = user?.email ?? '—';
-  const subLabel = subscription ? t.subActive : t.subFree;
+  const subLabel = subscription && isSubscriptionActive(subscription)
+    ? (subscription.plan === 'premium' ? t.subPremium : t.subPro)
+    : t.subFree;
 
   const openLink = (url: string) => {
     const tgWebApp = (window as Window & { Telegram?: { WebApp?: { openLink?: (u: string) => void } } }).Telegram?.WebApp;

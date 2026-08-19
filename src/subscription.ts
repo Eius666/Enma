@@ -2,33 +2,50 @@
 // Enma Subscription & Payment Types
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-export type PlanType = 'pro' | 'business';
+export type PlanType = 'free' | 'pro' | 'premium';
+export type PaidPlan = 'pro' | 'premium';
 export type SubscriptionPeriod = 'month' | 'year';
 export type PaymentCurrency = 'ton' | 'usdt' | 'stars' | 'sbp';
 export type SubscriptionStatus = 'active' | 'expired' | 'cancelled';
 export type PaymentStatus = 'pending' | 'confirmed' | 'failed' | 'refunded';
 
 export interface PlanConfig {
-  id: PlanType;
+  id: PaidPlan;
   name: { en: string; ru: string };
   monthlyPrice: number;
   yearlyPrice: number;
 }
 
-export const PLANS: Record<PlanType, PlanConfig> = {
+export const PLANS: Record<PaidPlan, PlanConfig> = {
   pro: {
     id: 'pro',
     name: { en: 'Pro', ru: 'Про' },
-    monthlyPrice: 10,
-    yearlyPrice: 120,
+    monthlyPrice: 8,
+    yearlyPrice: 80,
   },
-  business: {
-    id: 'business',
-    name: { en: 'Business', ru: 'Бизнес' },
-    monthlyPrice: 15,
-    yearlyPrice: 180,
+  premium: {
+    id: 'premium',
+    name: { en: 'Premium', ru: 'Премиум' },
+    monthlyPrice: 11,
+    yearlyPrice: 107,
   },
 };
+
+export const AI_LIMITS = {
+  free:    { textRequests: 0,   imageRequests: 0,  pdfReports: 0  },
+  pro:     { textRequests: 20,  imageRequests: 0,  pdfReports: 0  },
+  premium: { textRequests: 100, imageRequests: 30, pdfReports: 10 },
+} as const;
+
+export const FREE_LIMITS = {
+  dailyTasks:          5,
+  habits:              3,
+  monthlyTransactions: 30,
+  notes:               10,
+  banks:               1,
+} as const;
+
+export const TRIAL_DAYS = 7;
 
 export const DEFAULT_TON_USD_RATE = 5.0;
 export const USDT_DECIMALS = 6;
@@ -57,6 +74,7 @@ export interface Subscription {
   status: SubscriptionStatus;
   startDate: string;
   endDate: string;
+  trialEndDate?: string;
   walletAddress?: string;
   paymentMethod: PaymentCurrency;
   createdAt: string;
@@ -67,7 +85,7 @@ export interface Payment {
   id: string;
   userId: string;
   subscriptionId: string;
-  plan: PlanType;
+  plan: PaidPlan;
   period: SubscriptionPeriod;
   currency: PaymentCurrency;
   amountUsd: number;
@@ -95,9 +113,19 @@ export const isSubscriptionActive = (subscription: Subscription): boolean => {
   return new Date(subscription.endDate) > new Date();
 };
 
-export const SBP_PRICES: Record<PlanType, Record<SubscriptionPeriod, number>> = {
-  pro:      { month: 1000,  year: 12000 },
-  business: { month: 1500,  year: 15000 },
+export const isInTrial = (sub: Subscription): boolean => {
+  if (!sub.trialEndDate) return false;
+  return new Date(sub.trialEndDate) > new Date();
+};
+
+export const getActivePlan = (sub: Subscription | null): PlanType => {
+  if (!sub || !isSubscriptionActive(sub)) return 'free';
+  return sub.plan;
+};
+
+export const SBP_PRICES: Record<PaidPlan, Record<SubscriptionPeriod, number>> = {
+  pro:     { month: 750,  year: 7200  },
+  premium: { month: 1000, year: 9600  },
 };
 
 // Enma treasury wallet for receiving subscription payments
