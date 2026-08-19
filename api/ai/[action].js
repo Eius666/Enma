@@ -499,6 +499,40 @@ async function handleEntityCreate(req, res) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Admin: grant subscription (temporary, remove after use)
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function handleAdminGrant(req, res) {
+  const secret = req.headers['x-admin-secret'];
+  if (!secret || secret !== process.env.ADMIN_GRANT_SECRET) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+
+  const { userId, plan, months } = req.body ?? {};
+  if (!userId || !plan) return res.status(400).json({ error: 'userId and plan required' });
+
+  const now = new Date();
+  const endDate = new Date(now);
+  endDate.setMonth(endDate.getMonth() + (Number(months) || 1));
+
+  const sub = {
+    id: `admin-grant-${Date.now()}`,
+    userId,
+    plan,
+    period: 'month',
+    status: 'active',
+    startDate: now.toISOString(),
+    endDate: endDate.toISOString(),
+    paymentMethod: 'admin',
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+  };
+
+  await db.collection('subscriptions').doc(userId).set(sub);
+  return res.json({ ok: true, sub });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Router
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -516,6 +550,7 @@ module.exports = async (req, res) => {
       case 'image':   return await handleImage(req, res);
       case 'report':        return await handleReport(req, res);
       case 'entityCreate':  return await handleEntityCreate(req, res);
+      case 'adminGrant':    return await handleAdminGrant(req, res);
       default:
         return res.status(404).json({ error: `Unknown AI action: ${action}` });
     }
