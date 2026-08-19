@@ -26,6 +26,14 @@ const initAdmin = () => {
 const firebaseAdmin = initAdmin();
 const db = firebaseAdmin.firestore();
 
+// Lazily returns the default Storage bucket.
+// Throws a clear error if FIREBASE_STORAGE_BUCKET env var is absent.
+function getBucket() {
+  const name = process.env.FIREBASE_STORAGE_BUCKET;
+  if (!name) throw new Error('FIREBASE_STORAGE_BUCKET is not configured');
+  return firebaseAdmin.storage().bucket(name);
+}
+
 /**
  * Read the user's selected currency from their Firestore document.
  * Falls back to 'USD' (the base currency) if the document or field is missing.
@@ -46,4 +54,4 @@ async function getUserTimezone(userId) {
   return (typeof tz === 'string' && tz.length > 0) ? tz : DEFAULT_TZ;
 }
 
-module.exports = { admin: firebaseAdmin, db, getUserCurrency, getUserTimezone };
+module.exports = { admin: firebaseAdmin, db, getBucket, getUserCurrency, getUserTimezone };

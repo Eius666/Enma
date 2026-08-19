@@ -21,7 +21,7 @@ import { db } from '../firebase';
 import type { ChecklistItem } from './NotesList';
 import type { Subscription } from '../subscription';
 import { getActivePlan, FREE_LIMITS } from '../subscription';
-import { incrementFreeUsageAtomic, subscribeFreeUsage } from '../lib/usageCounters';
+import { subscribeFreeUsage } from '../lib/usageCounters';
 import Paywall, { LimitBanner } from './Paywall';
 import './Notes.css';
 
@@ -188,34 +188,61 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
     ) => {
       if (!user) return;
 
-      if (isNew && isFree && !limitPassedRef.current) {
-        const result = await incrementFreeUsageAtomic(user.uid, 'note')
-          .catch(() => ({ allowed: true, used: 0, limit }));
-        setUsedNotes(result.used);
-        if (!result.allowed) { setShowPaywall(true); return; }
-        limitPassedRef.current = true;
+      if (isNew && !limitPassedRef.current) {
+        // First save of this note — create via API (handles free limit check atomically)
+        setSavingState('saving');
+        try {
+          const resp = await fetch('/api/entity/create', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId:     user.uid,
+              entityType: 'note',
+              docId:      id,
+              data:       { id, ...patch },
+            }),
+          });
+          if (resp.status === 429) {
+            const body = await resp.json().catch(() => ({}));
+            setUsedNotes(body.current ?? limit);
+            setShowPaywall(true);
+            setSavingState('idle');
+            return;
+          }
+          if (!resp.ok) {
+            console.error('NoteEditor create error', resp.status);
+            setSavingState('idle');
+            return;
+          }
+          limitPassedRef.current = true;
+          setUpdatedAt(new Date());
+          setSavingState('saved');
+          setTimeout(() => setSavingState('idle'), 1500);
+        } catch (err) {
+          console.error('NoteEditor create error', err);
+          setSavingState('idle');
+        }
+        return;
       }
 
+      // Update existing note (or already-created new note on subsequent auto-saves)
       setSavingState('saving');
       try {
-        const now = serverTimestamp();
-        const data = {
-          ...patch,
-          userId: user.uid,
-          updatedAt: now,
-        };
-        const ref = doc(db, 'notes', id);
-        await setDoc(ref, { ...data, createdAt: now }, { merge: true });
+        await setDoc(
+          doc(db, 'notes', id),
+          { ...patch, userId: user.uid, updatedAt: serverTimestamp() },
+          { merge: true }
+        );
         setUpdatedAt(new Date());
         setSavingState('saved');
         setTimeout(() => setSavingState('idle'), 1500);
       } catch (err) {
-        console.warn('NoteEditor save error', err);
+        console.error('NoteEditor save error', err);
         setSavingState('idle');
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [user, isFree, isNew, limit]
+    [user, isNew, limit]
   );
 
   const scheduleSave = useCallback(

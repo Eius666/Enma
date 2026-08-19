@@ -13,7 +13,7 @@ import type { Currency, Transaction } from '../types/app';
 import { getCurrencySymbol } from '../utils/formatCurrency';
 import type { Subscription } from '../subscription';
 import { getActivePlan, FREE_LIMITS } from '../subscription';
-import { incrementFreeUsageAtomic, decrementFreeUsageAtomic, subscribeFreeUsage } from '../lib/usageCounters';
+import { subscribeFreeUsage } from '../lib/usageCounters';
 import Paywall, { LimitBanner } from './Paywall';
 import './Finance.css';
 
@@ -227,31 +227,63 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
       return;
     }
 
-    let atomicDone = false;
-    if (isNew && isFree) {
-      const result = await incrementFreeUsageAtomic(user.uid, 'transaction')
-        .catch(() => ({ allowed: true, used: 0, limit }));
-      setUsedTx(result.used);
-      if (!result.allowed) { setShowPaywall(true); return; }
-      atomicDone = true;
-    }
-
+    setSaving(true);
     const preset = PRESET_CATS.find(p => p.id === selectedCatId);
     const id = transactionId ?? makeId();
-    setSaving(true);
+
+    if (isNew) {
+      try {
+        const data: Record<string, unknown> = {
+          id,
+          type:        txType,
+          amount:      convertToBase(amount),
+          description: description.trim(),
+          date:        dateInputToIso(date),
+          categoryId:  preset?.id ?? '',
+          category:    preset ? catDisplayName(preset) : '',
+        };
+        if (selectedBank) data.bank = selectedBank;
+        const resp = await fetch('/api/entity/create', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.uid, entityType: 'transaction', docId: id, data }),
+        });
+        if (resp.status === 429) {
+          const body = await resp.json().catch(() => ({}));
+          setUsedTx(body.current ?? limit);
+          setShowPaywall(true);
+          setSaving(false);
+          return;
+        }
+        if (!resp.ok) {
+          console.error('FinanceEditor create error', resp.status);
+          setSaving(false);
+          return;
+        }
+        if (selectedBank) {
+          try { localStorage.setItem(LAST_BANK_KEY, selectedBank); } catch { /* ignore */ }
+        }
+        onBack();
+      } catch (err) {
+        console.error('FinanceEditor create error', err);
+        setSaving(false);
+      }
+      return;
+    }
+
+    // Update existing transaction
     try {
       const payload: Record<string, unknown> = {
         id,
-        userId: user.uid,
-        type: txType,
-        amount: convertToBase(amount),
+        userId:      user.uid,
+        type:        txType,
+        amount:      convertToBase(amount),
         description: description.trim(),
-        date: dateInputToIso(date),
-        categoryId: preset?.id ?? '',
-        category: preset ? catDisplayName(preset) : '',
-        updatedAt: serverTimestamp(),
+        date:        dateInputToIso(date),
+        categoryId:  preset?.id ?? '',
+        category:    preset ? catDisplayName(preset) : '',
+        updatedAt:   serverTimestamp(),
       };
-      if (!transactionId) payload.createdAt = serverTimestamp();
       if (selectedBank) payload.bank = selectedBank;
       await setDoc(doc(db, 'transactions', id), payload, { merge: true });
       if (selectedBank) {
@@ -259,8 +291,7 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
       }
       onBack();
     } catch (err) {
-      if (atomicDone) decrementFreeUsageAtomic(user.uid, 'transaction').catch(() => {});
-      console.warn('FinanceEditor save error', err);
+      console.error('FinanceEditor save error', err);
       setSaving(false);
     }
   };

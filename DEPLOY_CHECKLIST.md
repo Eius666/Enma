@@ -15,6 +15,7 @@
 - [ ] `vercel env add TELEGRAM_BOT_TOKEN`
 - [ ] `vercel env add FIREBASE_SERVICE_ACCOUNT` (JSON stringified)
 - [ ] `vercel env add FIREBASE_DATABASE_URL`
+- [ ] `vercel env add FIREBASE_STORAGE_BUCKET` (e.g. `your-project.appspot.com`) — required for AI image persistence
 - [ ] Confirm none of the above appear in `src/` (grep passes: no OPENAI_API_KEY, no PLATEGA_SECRET)
 
 ## API Routes Smoke Tests
@@ -71,11 +72,6 @@ curl -X POST https://your-app.vercel.app/api/ai/image \
 - [ ] No `any` types in new code (`usageCounters.ts`, `openai.ts`, `subscription.ts`)
 
 ## Known Limitations (acceptable for initial launch)
-
-- DALL-E generated images are returned as temporary OpenAI URLs (~1 hour TTL). They are
-  NOT persisted to Firebase Storage. Users who try to re-open a note with an AI image
-  after 1 hour will see a broken image. Fix: add server-side image proxy + Storage upload
-  in `api/ai/[action].js` `handleImage`.
 
 - `freeUsage` counters are written by the client via Firestore transactions (atomic),
   not the Admin SDK. The Firestore Rule enforces `userId == request.auth.uid` on writes,

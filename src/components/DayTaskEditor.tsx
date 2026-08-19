@@ -13,7 +13,7 @@ import type { DayTask } from './DayList';
 import { PRIORITY_COLORS } from './DayList';
 import type { Subscription } from '../subscription';
 import { getActivePlan, FREE_LIMITS } from '../subscription';
-import { incrementFreeUsageAtomic, decrementFreeUsageAtomic, subscribeFreeUsage } from '../lib/usageCounters';
+import { subscribeFreeUsage } from '../lib/usageCounters';
 import Paywall, { LimitBanner } from './Paywall';
 import './Day.css';
 
@@ -149,36 +149,66 @@ const DayTaskEditor: React.FC<DayTaskEditorProps> = ({
 
   const handleSave = async () => {
     if (!user || !title.trim()) return;
+    setSaving(true);
 
-    let atomicDone = false;
-    if (isNew && isFree) {
-      const result = await incrementFreeUsageAtomic(user.uid, 'task')
-        .catch(() => ({ allowed: true, used: 0, limit }));
-      setUsedTasks(result.used);
-      if (!result.allowed) { setShowPaywall(true); return; }
-      atomicDone = true;
+    const id = taskId ?? makeId();
+
+    if (isNew) {
+      try {
+        const resp = await fetch('/api/entity/create', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId:     user.uid,
+            entityType: 'task',
+            docId:      id,
+            data: {
+              id,
+              title:       title.trim(),
+              description: description.trim(),
+              date,
+              time:      time || null,
+              priority,
+              completed: initialTask?.completed ?? false,
+            },
+          }),
+        });
+        if (resp.status === 429) {
+          const body = await resp.json().catch(() => ({}));
+          setUsedTasks(body.current ?? limit);
+          setShowPaywall(true);
+          setSaving(false);
+          return;
+        }
+        if (!resp.ok) {
+          console.error('DayTaskEditor create error', resp.status);
+          setSaving(false);
+          return;
+        }
+        onBack();
+      } catch (err) {
+        console.error('DayTaskEditor create error', err);
+        setSaving(false);
+      }
+      return;
     }
 
-    setSaving(true);
-    const id = taskId ?? makeId();
+    // Update existing task
     try {
-      const payload: Record<string, unknown> = {
+      await setDoc(doc(db, 'tasks', id), {
         id,
-        userId: user.uid,
-        title: title.trim(),
+        userId:      user.uid,
+        title:       title.trim(),
         description: description.trim(),
         date,
-        time: time || null,
+        time:      time || null,
         priority,
         completed: initialTask?.completed ?? false,
         updatedAt: serverTimestamp(),
-      };
-      if (isNew) payload.createdAt = serverTimestamp();
-      await setDoc(doc(db, 'tasks', id), payload, { merge: true });
+      }, { merge: true });
       onBack();
     } catch (err) {
-      if (atomicDone) decrementFreeUsageAtomic(user.uid, 'task').catch(() => {});
-      console.warn('DayTaskEditor save error', err);
+      console.error('DayTaskEditor save error', err);
       setSaving(false);
     }
   };

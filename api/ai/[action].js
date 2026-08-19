@@ -1,6 +1,6 @@
 'use strict';
 
-const { db, admin } = require('../_lib/firebaseAdmin');
+const { db, admin, getBucket } = require('../_lib/firebaseAdmin');
 const { rateLimit }  = require('../_lib/rateLimit');
 
 // Mirror of src/subscription.ts AI_LIMITS
@@ -9,6 +9,7 @@ const AI_LIMITS = {
   pro:     { textRequests: 20, imageRequests: 0,  pdfReports: 0  },
   premium: { textRequests: 100, imageRequests: 30, pdfReports: 10 },
 };
+
 
 const currentMonth = () => new Date().toISOString().slice(0, 7);
 
@@ -60,17 +61,34 @@ async function callImage(prompt) {
   const resp = await fetch(`${cfg.baseURL}/images/generations`, {
     method:  'POST',
     headers: { Authorization: `Bearer ${cfg.apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: cfg.imageModel, prompt, n: 1, size: '1024x1024' }),
+    body: JSON.stringify({
+      model:           cfg.imageModel,
+      prompt,
+      n:               1,
+      size:            '1024x1024',
+      response_format: 'b64_json',
+    }),
   });
   if (!resp.ok) {
     const text = await resp.text();
     throw new Error(`Image API error ${resp.status}: ${text.slice(0, 300)}`);
   }
   const data = await resp.json();
+  const item = data.data?.[0] ?? {};
   return {
-    url:           data.data?.[0]?.url ?? null,
-    revisedPrompt: data.data?.[0]?.revised_prompt ?? null,
+    b64:           item.b64_json ?? null,
+    url:           item.url ?? null,        // fallback if model does not return b64_json
+    revisedPrompt: item.revised_prompt ?? null,
   };
+}
+
+async function uploadToStorage(userId, buffer) {
+  const bucket   = getBucket();
+  const filename = `ai-images/${userId}/${Date.now()}.png`;
+  const file     = bucket.file(filename);
+  await file.save(buffer, { contentType: 'image/png', resumable: false });
+  await file.makePublic();
+  return `https://storage.googleapis.com/${bucket.name}/${filename}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -279,8 +297,13 @@ async function handleChat(req, res) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ENTITY_COLLECTIONS / ENTITY_URL_FIELDS: maps entityType to its Firestore collection
+// and the field where the persistent Storage URL is stored.
+const ENTITY_COLLECTIONS = { note: 'notes', habit: 'habits' };
+const ENTITY_URL_FIELDS  = { note: 'coverUrl', habit: 'iconUrl' };
+
 async function handleImage(req, res) {
-  const { userId, prompt } = req.body ?? {};
+  const { userId, prompt, entityId, entityType } = req.body ?? {};
   if (!userId || !prompt) {
     return res.status(400).json({ error: 'Missing userId or prompt' });
   }
@@ -295,13 +318,54 @@ async function handleImage(req, res) {
     return usage.limit === 0 ? sendPlanRestricted(res) : sendLimit(res, usage.used, usage.limit);
   }
 
+  // Step 1: generate image
+  let imageResult;
   try {
-    const result = await callImage(prompt);
-    return res.status(200).json({ ...result, remaining: usage.remaining });
+    imageResult = await callImage(prompt);
   } catch (err) {
-    console.error('[ai/image] error:', err.message);
+    console.error('[ai/image] generation error:', err.message);
     return res.status(500).json({ error: 'Image generation failed' });
   }
+
+  if (!imageResult.b64 && !imageResult.url) {
+    return res.status(500).json({ error: 'No image data returned from AI' });
+  }
+
+  // Step 2: upload to Firebase Storage (permanent URL)
+  let publicUrl;
+  if (imageResult.b64) {
+    try {
+      const buffer = Buffer.from(imageResult.b64, 'base64');
+      publicUrl = await uploadToStorage(userId, buffer);
+    } catch (err) {
+      console.error('[ai/image] Storage upload error:', err.message);
+      return res.status(500).json({ error: 'Image upload to Storage failed' });
+    }
+  } else {
+    // Model returned a temporary URL instead of b64_json (e.g. some OpenRouter models)
+    publicUrl = imageResult.url;
+    console.warn('[ai/image] b64_json not returned; using temporary URL as fallback');
+  }
+
+  // Step 3: persist URL to the entity document if caller supplied entityId + entityType
+  if (entityId && entityType) {
+    const collection = ENTITY_COLLECTIONS[entityType];
+    const field      = ENTITY_URL_FIELDS[entityType];
+    if (collection && field) {
+      try {
+        await db.collection(collection).doc(entityId).update({ [field]: publicUrl });
+      } catch (fsErr) {
+        // Non-fatal: client received the URL and can store it locally
+        console.warn('[ai/image] Firestore entity update failed:', fsErr.message);
+      }
+    }
+  }
+
+  return res.status(200).json({
+    url:           publicUrl,
+    revisedPrompt: imageResult.revisedPrompt,
+    remaining:     usage.remaining,
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

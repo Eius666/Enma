@@ -13,7 +13,7 @@ import { db } from '../firebase';
 import type { HabitDoc } from './HabitsList';
 import type { Subscription } from '../subscription';
 import { getActivePlan, FREE_LIMITS } from '../subscription';
-import { incrementFreeUsageAtomic, decrementFreeUsageAtomic, subscribeFreeUsage } from '../lib/usageCounters';
+import { subscribeFreeUsage } from '../lib/usageCounters';
 import Paywall, { LimitBanner } from './Paywall';
 import './Habits.css';
 
@@ -227,38 +227,70 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
 
   const handleSave = async () => {
     if (!user || !title.trim()) return;
+    setSaving(true);
 
-    let atomicDone = false;
-    if (isNew && isFree) {
-      const result = await incrementFreeUsageAtomic(user.uid, 'habit')
-        .catch(() => ({ allowed: true, used: 0, limit }));
-      setUsedHabits(result.used);
-      if (!result.allowed) { setShowPaywall(true); return; }
-      atomicDone = true;
+    const id = habitId ?? makeId();
+
+    if (isNew) {
+      try {
+        const resp = await fetch('/api/entity/create', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId:     user.uid,
+            entityType: 'habit',
+            docId:      id,
+            data: {
+              id,
+              title:        title.trim(),
+              description:  description.trim(),
+              color,
+              repeatType,
+              repeatDays:   repeatType === 'custom' ? repeatDays : [],
+              reminderTime: reminderTime || null,
+              completedDates,
+              archived,
+            },
+          }),
+        });
+        if (resp.status === 429) {
+          const body = await resp.json().catch(() => ({}));
+          setUsedHabits(body.current ?? limit);
+          setShowPaywall(true);
+          setSaving(false);
+          return;
+        }
+        if (!resp.ok) {
+          console.error('HabitEditor create error', resp.status);
+          setSaving(false);
+          return;
+        }
+        onBack();
+      } catch (err) {
+        console.error('HabitEditor create error', err);
+        setSaving(false);
+      }
+      return;
     }
 
-    setSaving(true);
-    const id = habitId ?? makeId();
+    // Update existing habit
     try {
-      const payload: Record<string, unknown> = {
+      await setDoc(doc(db, 'habits', id), {
         id,
-        userId: user.uid,
-        title: title.trim(),
-        description: description.trim(),
+        userId:       user.uid,
+        title:        title.trim(),
+        description:  description.trim(),
         color,
         repeatType,
-        repeatDays: repeatType === 'custom' ? repeatDays : [],
+        repeatDays:   repeatType === 'custom' ? repeatDays : [],
         reminderTime: reminderTime || null,
         completedDates,
         archived,
-        updatedAt: serverTimestamp(),
-      };
-      if (isNew) payload.createdAt = serverTimestamp();
-      await setDoc(doc(db, 'habits', id), payload, { merge: true });
+        updatedAt:    serverTimestamp(),
+      }, { merge: true });
       onBack();
     } catch (err) {
-      if (atomicDone) decrementFreeUsageAtomic(user.uid, 'habit').catch(() => {});
-      console.warn('HabitEditor save error', err);
+      console.error('HabitEditor save error', err);
       setSaving(false);
     }
   };

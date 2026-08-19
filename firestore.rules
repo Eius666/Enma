@@ -84,7 +84,7 @@ service cloud.firestore {
     // match the current UTC month/date, the counter is treated as 0.
 
     function freeData(uid) {
-      let path = /databases/$(database)/documents/freeUsage/$(uid);
+      let path = /databases/$(database)/documents/users/$(uid)/freeUsage/counters;
       return exists(path) ? get(path).data : {};
     }
 
@@ -115,9 +115,16 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if isAuthenticated() && request.auth.uid == userId;
 
-      // Direct subcollections (aiChats, and future top-level sub-docs)
-      match /{subcollection}/{docId} {
+      // AI chat history — written server-side by api/ai/[action].js (Admin SDK)
+      match /aiChats/{docId} {
         allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      }
+
+      // Free usage counters — written exclusively by Admin SDK (api/ai/freeIncrement).
+      // Client writes are blocked so a user cannot zero their own counter directly.
+      match /freeUsage/{docId} {
+        allow read:  if isAuthenticated() && request.auth.uid == userId;
+        allow write: if false;
       }
 
       // ── Workspace subcollections ─────────────────────────────────────────
@@ -198,17 +205,6 @@ service cloud.firestore {
       allow create:         if writesOwnUid() &&
                                (hasPaidAccess(request.auth.uid) || freeTaskOk(request.auth.uid));
       allow update, delete: if ownsDoc();
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // /freeUsage/{userId}
-    // Counter document updated atomically by the client (usageCounters.ts).
-    // The userId field must match the document ID to prevent cross-user counter writes.
-    // ─────────────────────────────────────────────────────────────────────────
-    match /freeUsage/{userId} {
-      allow read:  if isAuthenticated() && request.auth.uid == userId;
-      allow write: if isAuthenticated() && request.auth.uid == userId &&
-                      request.resource.data.userId == userId;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
