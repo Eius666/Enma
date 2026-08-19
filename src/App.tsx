@@ -963,12 +963,7 @@ const App: React.FC = () => {
         if (data && Array.isArray(data.banks)) {
           setBanks(data.banks as string[]);
         }
-        if (data?.isPro && data?.subscription?.status === 'active' && data?.subscription?.endDate) {
-          const sub = data.subscription as Subscription;
-          if (isSubscriptionActive(sub)) {
-            setSubscription(sub);
-          }
-        }
+        // Subscription is loaded exclusively from subscriptions/{userId} listener below.
       },
       err => console.warn('Failed to listen to user doc', err)
     );
