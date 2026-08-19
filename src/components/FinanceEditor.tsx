@@ -243,7 +243,7 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
           category:    preset ? catDisplayName(preset) : '',
         };
         if (selectedBank) data.bank = selectedBank;
-        const resp = await fetch('/api/entity/create', {
+        const resp = await fetch('/api/ai/entityCreate', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: user.uid, entityType: 'transaction', docId: id, data }),

@@ -233,7 +233,7 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
 
     if (isNew) {
       try {
-        const resp = await fetch('/api/entity/create', {
+        const resp = await fetch('/api/ai/entityCreate', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

@@ -404,6 +404,101 @@ async function handleReport(req, res) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Entity create — atomic free-limit check + document create + counter increment
+// Consolidated here to stay within Vercel Hobby 12-function limit.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ENTITY_COLLECTION_MAP = {
+  task:        'tasks',
+  habit:       'habits',
+  note:        'notes',
+  transaction: 'transactions',
+};
+
+const FREE_ENTITY_CONFIG = {
+  task:        { field: 'dailyTaskCount',   limit: 5,  windowField: 'date'  },
+  habit:       { field: 'habitCount',       limit: 3                        },
+  note:        { field: 'noteCount',        limit: 10                       },
+  transaction: { field: 'transactionCount', limit: 30, windowField: 'month' },
+};
+
+const currentDate = () => new Date().toISOString().slice(0, 10);
+
+async function handleEntityCreate(req, res) {
+  const { userId, entityType, data, docId } = req.body ?? {};
+
+  if (!userId || !entityType || !data || typeof data !== 'object') {
+    return res.status(400).json({ error: 'Missing userId, entityType, or data' });
+  }
+
+  const collection = ENTITY_COLLECTION_MAP[entityType];
+  if (!collection) {
+    return res.status(400).json({ error: `Unknown entityType: ${entityType}` });
+  }
+
+  const cfg       = FREE_ENTITY_CONFIG[entityType];
+  const entityRef = docId
+    ? db.collection(collection).doc(String(docId))
+    : db.collection(collection).doc();
+  const now     = admin.firestore.FieldValue.serverTimestamp();
+  const baseDoc = { ...data, userId, createdAt: now, updatedAt: now };
+
+  try {
+    const plan   = await getActivePlan(userId);
+    const isFree = plan === 'free';
+
+    if (isFree && cfg) {
+      const counterRef = db.collection('users').doc(userId)
+        .collection('freeUsage').doc('counters');
+
+      const win = cfg.windowField === 'month' ? currentMonth()
+                : cfg.windowField === 'date'  ? currentDate()
+                : null;
+
+      let limitExceeded = false;
+      let currentCount  = 0;
+
+      await db.runTransaction(async tx => {
+        const counterSnap = await tx.get(counterRef);
+        const counterData = counterSnap.exists ? counterSnap.data() : {};
+
+        const storedWin = win !== null ? String(counterData[cfg.windowField] ?? '') : null;
+        const used = (storedWin !== null && storedWin !== win)
+          ? 0
+          : Number(counterData[cfg.field] ?? 0);
+
+        currentCount = used;
+
+        if (used >= cfg.limit) {
+          limitExceeded = true;
+          return;
+        }
+
+        tx.set(entityRef, baseDoc);
+
+        const counterPatch = { userId, [cfg.field]: used + 1, updatedAt: now };
+        if (win !== null) counterPatch[cfg.windowField] = win;
+        tx.set(counterRef, counterPatch, { merge: true });
+      });
+
+      if (limitExceeded) {
+        return res.status(429).json({
+          error: 'Limit exceeded', code: 'free_limit',
+          limit: cfg.limit, current: currentCount,
+        });
+      }
+    } else {
+      await entityRef.set(baseDoc);
+    }
+
+    return res.status(200).json({ ok: true, id: entityRef.id });
+  } catch (err) {
+    console.error('[ai/entityCreate] error:', err.message);
+    return res.status(500).json({ error: 'Failed to create entity' });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Router
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -419,7 +514,8 @@ module.exports = async (req, res) => {
       case 'analyze': return await handleAnalyze(req, res);
       case 'chat':    return await handleChat(req, res);
       case 'image':   return await handleImage(req, res);
-      case 'report':  return await handleReport(req, res);
+      case 'report':        return await handleReport(req, res);
+      case 'entityCreate':  return await handleEntityCreate(req, res);
       default:
         return res.status(404).json({ error: `Unknown AI action: ${action}` });
     }

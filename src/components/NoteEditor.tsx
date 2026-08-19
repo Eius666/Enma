@@ -192,7 +192,7 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
         // First save of this note — create via API (handles free limit check atomically)
         setSavingState('saving');
         try {
-          const resp = await fetch('/api/entity/create', {
+          const resp = await fetch('/api/ai/entityCreate', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

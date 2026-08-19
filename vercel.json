@@ -6,7 +6,6 @@
     "api/cron/content-publish.js":  { "maxDuration": 30 },
     "api/cron/maintenance.js":      { "maxDuration": 30 },
     "api/ai/[action].js":           { "maxDuration": 30 },
-    "api/entity/create.js":         { "maxDuration": 15 },
     "api/payment/create.js":        { "maxDuration": 15 },
     "api/payment/callback.js":      { "maxDuration": 15 }
   },
