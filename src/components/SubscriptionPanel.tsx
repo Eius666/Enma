@@ -43,6 +43,10 @@ const METHODS: { id: PayMethod; icon: string; label: string; sub: Record<string,
   { id: 'usdt',  icon: '💲', label: 'USDT',  sub: { en: 'Stablecoin',   ru: 'Стейблкоин'  } },
 ];
 
+const FREE_FEATURE_ICONS    = ['📋', '💸', '🔄', '📝', '🏦'];
+const PRO_FEATURE_ICONS     = ['🤖', '💳', '♾️', '📝', '🏦'];
+const PREMIUM_FEATURE_ICONS = ['🤖', '🖼️', '📄', '💬', '👨‍👩‍👧', '⭐'];
+
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 // ── i18n ──────────────────────────────────────────────────────────────────────
@@ -560,12 +564,12 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
           className={[
             'subscription-panel__plan-card',
             'subscription-panel__plan-card--premium',
-            plan === 'premium'         ? 'subscription-panel__plan-card--selected' : '',
-            activePlan === 'premium'   ? 'subscription-panel__plan-card--active'   : '',
+            plan === 'premium'         ? 'subscription-panel__plan-card--selected'    : '',
+            activePlan === 'premium'   ? 'subscription-panel__plan-card--active-premium' : '',
           ].filter(Boolean).join(' ')}
           onClick={() => setPlan('premium')}
         >
-          {activePlan === 'premium' && <span className="subscription-panel__plan-badge">{t.currentPlan}</span>}
+          {activePlan === 'premium' && <span className="subscription-panel__plan-badge subscription-panel__plan-badge--premium">{t.currentPlan}</span>}
           <span className="subscription-panel__plan-name">{t.premium}</span>
           <span className="subscription-panel__plan-price">
             {SBP_PRICES.premium.month} ₽
@@ -574,6 +578,22 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
             {t.premiumList.map(f => <li key={f}>{f}</li>)}
           </ul>
         </button>
+      </div>
+
+      {/* Feature highlights slider — always visible */}
+      <div className="subscription-panel__feature-slider">
+        {(plan === 'free' ? t.freeList : plan === 'pro' ? t.proList : t.premiumList).map((feature, i) => {
+          const icons = plan === 'free' ? FREE_FEATURE_ICONS : plan === 'pro' ? PRO_FEATURE_ICONS : PREMIUM_FEATURE_ICONS;
+          return (
+            <div
+              key={feature}
+              className={`subscription-panel__feature-card subscription-panel__feature-card--${plan}`}
+            >
+              <span className="subscription-panel__feature-icon">{icons[i] ?? '✦'}</span>
+              <span className="subscription-panel__feature-text">{feature}</span>
+            </div>
+          );
+        })}
       </div>
 
       {/* Upgrade context hints */}

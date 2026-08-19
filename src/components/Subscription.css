@@ -1039,6 +1039,26 @@ body.theme-light .subscription-panel__price-period {
   display: block;
 }
 
+/* Premium active — violet/purple accent distinct from Pro's green */
+.subscription-panel__plan-card--active-premium {
+  border-color: rgba(162, 155, 254, 0.75);
+  background: rgba(162, 155, 254, 0.13);
+  box-shadow: 0 0 0 1px rgba(162, 155, 254, 0.25);
+}
+
+body.theme-light .subscription-panel__plan-card--active-premium {
+  border-color: rgba(108, 92, 231, 0.55);
+  background: rgba(108, 92, 231, 0.08);
+  box-shadow: 0 0 0 1px rgba(108, 92, 231, 0.18);
+}
+
+/* Premium "Current plan" badge — violet tint */
+.subscription-panel__plan-badge--premium {
+  background: rgba(162, 155, 254, 0.15);
+  color: #a29bfe;
+  border-color: rgba(162, 155, 254, 0.35);
+}
+
 /* Premium card accent border */
 .subscription-panel__plan-card--premium {
   border-color: rgba(162, 155, 254, 0.25);
@@ -1246,4 +1266,87 @@ body.theme-light .subscription-panel__upgrade-hint {
 body.theme-light .subscription-panel__upgrade-hint--success {
   background: rgba(0, 184, 148, 0.1);
   color: rgb(0, 150, 120);
+}
+
+/* ━━━ Plan feature slider ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.subscription-panel__feature-slider {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.subscription-panel__feature-slider::-webkit-scrollbar {
+  display: none;
+}
+
+.subscription-panel__feature-card {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  min-width: 88px;
+  scroll-snap-align: start;
+  text-align: center;
+}
+
+.subscription-panel__feature-card--free {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.subscription-panel__feature-card--pro {
+  border-color: rgba(123, 104, 238, 0.22);
+  background: rgba(123, 104, 238, 0.06);
+}
+
+.subscription-panel__feature-card--premium {
+  border-color: rgba(162, 155, 254, 0.28);
+  background: rgba(162, 155, 254, 0.07);
+}
+
+body.theme-light .subscription-panel__feature-card {
+  border-color: rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.03);
+}
+
+body.theme-light .subscription-panel__feature-card--free {
+  border-color: rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.03);
+}
+
+body.theme-light .subscription-panel__feature-card--pro {
+  border-color: rgba(123, 104, 238, 0.18);
+  background: rgba(123, 104, 238, 0.04);
+}
+
+body.theme-light .subscription-panel__feature-card--premium {
+  border-color: rgba(108, 92, 231, 0.2);
+  background: rgba(108, 92, 231, 0.04);
+}
+
+.subscription-panel__feature-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.subscription-panel__feature-text {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.65);
+  line-height: 1.35;
+  text-align: center;
+}
+
+body.theme-light .subscription-panel__feature-text {
+  color: rgba(0, 0, 0, 0.55);
 }
