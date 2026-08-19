@@ -11,16 +11,21 @@ import { FaArrowLeft, FaTrash } from 'react-icons/fa';
 import { db } from '../firebase';
 import type { DayTask } from './DayList';
 import { PRIORITY_COLORS } from './DayList';
+import type { Subscription } from '../subscription';
+import { getActivePlan, FREE_LIMITS } from '../subscription';
+import { checkFreeLimit, incrementFreeUsage } from '../lib/freeLimits';
+import Paywall, { LimitBanner } from './Paywall';
 import './Day.css';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface DayTaskEditorProps {
-  taskId: string | null;          // null = new task
+  taskId: string | null;
   initialTask?: DayTask | null;
-  initialDate?: string;           // pre-selected date for new tasks (YYYY-MM-DD)
+  initialDate?: string;
   user: User | null;
   language: 'en' | 'ru';
+  subscription?: Subscription | null;
   onBack: () => void;
 }
 
@@ -85,6 +90,7 @@ const DayTaskEditor: React.FC<DayTaskEditorProps> = ({
   initialDate,
   user,
   language,
+  subscription,
   onBack,
 }) => {
   const t     = T[language];
@@ -96,6 +102,18 @@ const DayTaskEditor: React.FC<DayTaskEditorProps> = ({
   const [time,        setTime]        = useState('');
   const [priority,    setPriority]    = useState<DayTask['priority']>('medium');
   const [saving,      setSaving]      = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [usedTasks,   setUsedTasks]   = useState<number | null>(null);
+
+  const plan    = getActivePlan(subscription ?? null);
+  const isFree  = plan === 'free';
+  const limit   = FREE_LIMITS.dailyTasks;
+  const near80  = usedTasks !== null && usedTasks >= Math.floor(limit * 0.8);
+
+  useEffect(() => {
+    if (!user || !isFree) return;
+    checkFreeLimit(user.uid, 'task').then(r => setUsedTasks(r.used)).catch(() => {});
+  }, [user, isFree]);
 
   const titleRef = useRef<HTMLInputElement>(null);
   const descRef  = useRef<HTMLTextAreaElement>(null);
@@ -131,6 +149,16 @@ const DayTaskEditor: React.FC<DayTaskEditorProps> = ({
 
   const handleSave = async () => {
     if (!user || !title.trim()) return;
+
+    if (isNew && isFree) {
+      const result = await checkFreeLimit(user.uid, 'task').catch(() => ({ allowed: true, used: 0, limit }));
+      setUsedTasks(result.used);
+      if (!result.allowed) {
+        setShowPaywall(true);
+        return;
+      }
+    }
+
     setSaving(true);
     const id = taskId ?? makeId();
     try {
@@ -147,6 +175,7 @@ const DayTaskEditor: React.FC<DayTaskEditorProps> = ({
       };
       if (isNew) payload.createdAt = serverTimestamp();
       await setDoc(doc(db, 'tasks', id), payload, { merge: true });
+      if (isNew && isFree) await incrementFreeUsage(user.uid, 'task').catch(() => {});
       onBack();
     } catch (err) {
       console.warn('DayTaskEditor save error', err);
@@ -175,6 +204,25 @@ const DayTaskEditor: React.FC<DayTaskEditorProps> = ({
 
   return (
     <div className="day-editor">
+
+      {showPaywall && (
+        <Paywall
+          featureName={language === 'ru' ? `задачи (лимит ${limit}/день)` : `tasks (limit ${limit}/day)`}
+          language={language}
+          onClose={() => setShowPaywall(false)}
+          onUpgrade={() => { setShowPaywall(false); onBack(); }}
+        />
+      )}
+
+      {isNew && isFree && near80 && !showPaywall && (
+        <LimitBanner
+          message={language === 'ru'
+            ? `Задачи: ${usedTasks}/${limit} за сегодня`
+            : `Tasks: ${usedTasks}/${limit} today`}
+          onUpgrade={() => setShowPaywall(true)}
+          upgradeLabel={language === 'ru' ? 'Убрать лимит' : 'Remove limit'}
+        />
+      )}
 
       {/* ── Toolbar ── */}
       <div className="day-editor__toolbar">

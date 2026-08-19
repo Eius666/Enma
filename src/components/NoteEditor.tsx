@@ -19,12 +19,17 @@ import {
 } from 'react-icons/fa';
 import { db } from '../firebase';
 import type { ChecklistItem } from './NotesList';
+import type { Subscription } from '../subscription';
+import { getActivePlan, FREE_LIMITS } from '../subscription';
+import { checkFreeLimit, incrementFreeUsage } from '../lib/freeLimits';
+import Paywall, { LimitBanner } from './Paywall';
 import './Notes.css';
 
 interface NoteEditorProps {
-  noteId: string | null;        // null = new note
+  noteId: string | null;
   user: User | null;
   language: 'en' | 'ru';
+  subscription?: Subscription | null;
   initialCategory?: string;
   onBack: () => void;
 }
@@ -83,11 +88,17 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
   noteId,
   user,
   language,
+  subscription,
   initialCategory,
   onBack,
 }) => {
   const t = T[language];
   const defaultCats = language === 'ru' ? DEFAULT_CATEGORIES_RU : DEFAULT_CATEGORIES_EN;
+  const isNew = !noteId;
+
+  const plan    = getActivePlan(subscription ?? null);
+  const isFree  = plan === 'free';
+  const limit   = FREE_LIMITS.notes;
 
   const [docId, setDocId] = useState<string | null>(noteId);
   const [title, setTitle] = useState('');
@@ -100,6 +111,16 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
   const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [menuOpen, setMenuOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [usedNotes, setUsedNotes] = useState<number | null>(null);
+  const limitPassedRef = useRef(false);
+
+  const near80 = usedNotes !== null && usedNotes >= Math.floor(limit * 0.8);
+
+  useEffect(() => {
+    if (!user || !isFree || !isNew) return;
+    checkFreeLimit(user.uid, 'note').then(r => setUsedNotes(r.used)).catch(() => {});
+  }, [user, isFree, isNew]);
 
   const titleRef = useRef<HTMLInputElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -166,6 +187,15 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
       }
     ) => {
       if (!user) return;
+
+      if (isNew && isFree && !limitPassedRef.current) {
+        const result = await checkFreeLimit(user.uid, 'note').catch(() => ({ allowed: true, used: 0, limit }));
+        setUsedNotes(result.used);
+        if (!result.allowed) { setShowPaywall(true); return; }
+        limitPassedRef.current = true;
+        await incrementFreeUsage(user.uid, 'note').catch(() => {});
+      }
+
       setSavingState('saving');
       try {
         const now = serverTimestamp();
@@ -175,9 +205,6 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
           updatedAt: now,
         };
         const ref = doc(db, 'notes', id);
-        // setDoc with merge:true acts as an upsert — creates the doc if absent,
-        // updates fields if it exists. We only set createdAt on the first write
-        // by using merge:true (Firestore won't overwrite createdAt if it exists).
         await setDoc(ref, { ...data, createdAt: now }, { merge: true });
         setUpdatedAt(new Date());
         setSavingState('saved');
@@ -325,6 +352,26 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
 
   return (
     <div className="note-editor">
+
+      {showPaywall && (
+        <Paywall
+          featureName={language === 'ru' ? `заметки (лимит ${limit})` : `notes (limit ${limit})`}
+          language={language}
+          onClose={() => setShowPaywall(false)}
+          onUpgrade={() => { setShowPaywall(false); onBack(); }}
+        />
+      )}
+
+      {isNew && isFree && near80 && !showPaywall && (
+        <LimitBanner
+          message={language === 'ru'
+            ? `Заметки: ${usedNotes}/${limit}`
+            : `Notes: ${usedNotes}/${limit}`}
+          onUpgrade={() => setShowPaywall(true)}
+          upgradeLabel={language === 'ru' ? 'Убрать лимит' : 'Remove limit'}
+        />
+      )}
+
       {/* ── Toolbar ── */}
       <div className="note-editor__toolbar">
         <button className="note-editor__back-btn" onClick={onBack} type="button">

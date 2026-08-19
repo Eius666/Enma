@@ -11,15 +11,20 @@ import { User } from 'firebase/auth';
 import { FaArrowLeft, FaEllipsisH, FaArchive, FaTrash } from 'react-icons/fa';
 import { db } from '../firebase';
 import type { HabitDoc } from './HabitsList';
+import type { Subscription } from '../subscription';
+import { getActivePlan, FREE_LIMITS } from '../subscription';
+import { checkFreeLimit, incrementFreeUsage } from '../lib/freeLimits';
+import Paywall, { LimitBanner } from './Paywall';
 import './Habits.css';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface HabitEditorProps {
-  habitId: string | null;        // null = new habit
+  habitId: string | null;
   initialHabit?: HabitDoc | null;
   user: User | null;
   language: 'en' | 'ru';
+  subscription?: Subscription | null;
   onBack: () => void;
 }
 
@@ -131,6 +136,7 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
   initialHabit,
   user,
   language,
+  subscription,
   onBack,
 }) => {
   const t = T[language];
@@ -148,6 +154,18 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
   const [archived,       setArchived]       = useState(false);
   const [saving,         setSaving]         = useState(false);
   const [menuOpen,       setMenuOpen]       = useState(false);
+  const [showPaywall,    setShowPaywall]    = useState(false);
+  const [usedHabits,     setUsedHabits]     = useState<number | null>(null);
+
+  const plan   = getActivePlan(subscription ?? null);
+  const isFree = plan === 'free';
+  const limit  = FREE_LIMITS.habits;
+  const near80 = usedHabits !== null && usedHabits >= Math.floor(limit * 0.8);
+
+  useEffect(() => {
+    if (!user || !isFree) return;
+    checkFreeLimit(user.uid, 'habit').then(r => setUsedHabits(r.used)).catch(() => {});
+  }, [user, isFree]);
 
   const menuRef  = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -209,6 +227,13 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
 
   const handleSave = async () => {
     if (!user || !title.trim()) return;
+
+    if (isNew && isFree) {
+      const result = await checkFreeLimit(user.uid, 'habit').catch(() => ({ allowed: true, used: 0, limit }));
+      setUsedHabits(result.used);
+      if (!result.allowed) { setShowPaywall(true); return; }
+    }
+
     setSaving(true);
     const id = habitId ?? makeId();
     try {
@@ -227,6 +252,7 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
       };
       if (isNew) payload.createdAt = serverTimestamp();
       await setDoc(doc(db, 'habits', id), payload, { merge: true });
+      if (isNew && isFree) await incrementFreeUsage(user.uid, 'habit').catch(() => {});
       onBack();
     } catch (err) {
       console.warn('HabitEditor save error', err);
@@ -286,6 +312,25 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
 
   return (
     <div className="hab-editor">
+
+      {showPaywall && (
+        <Paywall
+          featureName={language === 'ru' ? `привычки (лимит ${limit})` : `habits (limit ${limit})`}
+          language={language}
+          onClose={() => setShowPaywall(false)}
+          onUpgrade={() => { setShowPaywall(false); onBack(); }}
+        />
+      )}
+
+      {isNew && isFree && near80 && !showPaywall && (
+        <LimitBanner
+          message={language === 'ru'
+            ? `Привычки: ${usedHabits}/${limit}`
+            : `Habits: ${usedHabits}/${limit}`}
+          onUpgrade={() => setShowPaywall(true)}
+          upgradeLabel={language === 'ru' ? 'Убрать лимит' : 'Remove limit'}
+        />
+      )}
 
       {/* ── Toolbar ── */}
       <div className="hab-editor__toolbar">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   FaEnvelope,
   FaSignOutAlt,
@@ -13,7 +13,8 @@ import {
 } from 'react-icons/fa';
 import { User } from 'firebase/auth';
 import type { Subscription } from '../subscription';
-import { isSubscriptionActive } from '../subscription';
+import { isSubscriptionActive, isInTrial, getActivePlan, trialDaysRemaining, AI_LIMITS } from '../subscription';
+import { getAiUsage } from '../lib/aiLimits';
 import WalletConnect from './WalletConnect';
 import SubscriptionPanel from './SubscriptionPanel';
 import './Settings.css';
@@ -63,9 +64,13 @@ const T = {
     rowPrivacy: 'Privacy Policy',
     rowTerms: 'Terms of Service',
     legalNote: 'By using the service you agree to the Privacy Policy and Terms of Service.',
-    subFree: 'Free',
+    subFree: 'Free plan',
     subPro: 'Pro — Active',
     subPremium: 'Premium — Active',
+    subTrial: 'Premium trial — {days} days left',
+    aiUsageLabel: 'AI requests remaining',
+    aiImageLabel: 'AI images remaining',
+    manageSub: 'Manage subscription',
     currencies: {
       USD: 'US Dollar', EUR: 'Euro', RUB: 'Russian Ruble',
       BYN: 'Belarusian Ruble', CNY: 'Chinese Yuan',
@@ -96,9 +101,13 @@ const T = {
     rowPrivacy: 'Политика конфиденциальности',
     rowTerms: 'Пользовательское соглашение',
     legalNote: 'Используя сервис, вы соглашаетесь с политикой конфиденциальности и пользовательским соглашением.',
-    subFree: 'Бесплатно',
+    subFree: 'Бесплатный тариф',
     subPro: 'Pro — Активна',
     subPremium: 'Premium — Активна',
+    subTrial: 'Пробный Premium — осталось {days} дн.',
+    aiUsageLabel: 'AI-запросы',
+    aiImageLabel: 'AI-изображения',
+    manageSub: 'Управление подпиской',
     currencies: {
       USD: 'Доллар США', EUR: 'Евро', RUB: 'Российский рубль',
       BYN: 'Белорусский рубль', CNY: 'Китайский юань',
@@ -134,11 +143,36 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [langOpen,     setLangOpen]     = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [bankInput,    setBankInput]    = useState('');
+  const [aiTextUsed,   setAiTextUsed]   = useState<number | null>(null);
+  const [aiImgUsed,    setAiImgUsed]    = useState<number | null>(null);
 
-  const userEmail = user?.email ?? '—';
-  const subLabel = subscription && isSubscriptionActive(subscription)
-    ? (subscription.plan === 'premium' ? t.subPremium : t.subPro)
-    : t.subFree;
+  const subPanelRef = useRef<HTMLDivElement>(null);
+
+  const userEmail  = user?.email ?? '—';
+  const activePlan = getActivePlan(subscription);
+  const inTrial    = subscription ? isInTrial(subscription) : false;
+
+  const subLabel = inTrial
+    ? t.subTrial.replace('{days}', String(trialDaysRemaining(subscription!)))
+    : isSubscriptionActive(subscription!)
+      ? (subscription!.plan === 'premium' ? t.subPremium : t.subPro)
+      : t.subFree;
+
+  const aiLimits    = AI_LIMITS[activePlan];
+  const aiTextLimit = aiLimits.textRequests;
+  const aiImgLimit  = aiLimits.imageRequests;
+
+  useEffect(() => {
+    if (!user || activePlan === 'free') return;
+    getAiUsage(user.uid).then(usage => {
+      setAiTextUsed(usage.textRequests);
+      setAiImgUsed(usage.imageRequests);
+    }).catch(() => {});
+  }, [user, activePlan]);
+
+  const handleManageSub = () => {
+    subPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   const openLink = (url: string) => {
     const tgWebApp = (window as Window & { Telegram?: { WebApp?: { openLink?: (u: string) => void } } }).Telegram?.WebApp;
@@ -348,18 +382,66 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       {/* ━━━ Group: Payment ━━━ */}
       <div className="sett-group__label">{t.groupPayment}</div>
 
-      {/* Premium status row — card */}
+      {/* Subscription status card */}
       <div className="sett-group">
         <div className="sett-row sett-row--tall">
           <div className="sett-row__icon-wrap">
-            {/* Subscription star icon — no emoji */}
-            <FaStar className="sett-row__icon sett-row__icon--accent" />
+            <FaStar className={`sett-row__icon${activePlan !== 'free' ? ' sett-row__icon--accent' : ''}`} />
           </div>
           <div className="sett-row__body">
-            <span className="sett-row__label">Enma Premium</span>
-            <span className="sett-row__value sett-row__value--sub">{subLabel}</span>
+            <span className="sett-row__label">Enma {activePlan === 'free' ? '' : activePlan.charAt(0).toUpperCase() + activePlan.slice(1)}</span>
+            <span className={`sett-row__value sett-row__value--sub${inTrial ? ' sett-row__value--trial' : ''}`}>{subLabel}</span>
           </div>
+          {activePlan !== 'free' && (
+            <button
+              type="button"
+              className="sett-row__manage-btn"
+              onClick={handleManageSub}
+            >
+              {t.manageSub}
+            </button>
+          )}
         </div>
+
+        {/* AI usage meters — only when plan has AI */}
+        {aiTextLimit > 0 && aiTextUsed !== null && (
+          <>
+            <div className="sett-row__divider" />
+            <div className="sett-ai-usage">
+              <div className="sett-ai-usage__row">
+                <span className="sett-ai-usage__label">{t.aiUsageLabel}</span>
+                <span className="sett-ai-usage__count">
+                  {Math.max(0, aiTextLimit - aiTextUsed)}/{aiTextLimit}
+                </span>
+              </div>
+              <div className="sett-ai-usage__bar">
+                <div
+                  className="sett-ai-usage__fill"
+                  style={{ width: `${Math.min(100, (aiTextUsed / aiTextLimit) * 100)}%` }}
+                />
+              </div>
+            </div>
+          </>
+        )}
+        {aiImgLimit > 0 && aiImgUsed !== null && (
+          <>
+            <div className="sett-row__divider" />
+            <div className="sett-ai-usage">
+              <div className="sett-ai-usage__row">
+                <span className="sett-ai-usage__label">{t.aiImageLabel}</span>
+                <span className="sett-ai-usage__count">
+                  {Math.max(0, aiImgLimit - aiImgUsed)}/{aiImgLimit}
+                </span>
+              </div>
+              <div className="sett-ai-usage__bar">
+                <div
+                  className="sett-ai-usage__fill sett-ai-usage__fill--image"
+                  style={{ width: `${Math.min(100, (aiImgUsed / aiImgLimit) * 100)}%` }}
+                />
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* TON Wallet button — standalone, no card wrapper */}
@@ -368,7 +450,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       </div>
 
       {/* Subscription panel (full plan picker) */}
-      <div className="sett-subscription-wrap">
+      <div className="sett-subscription-wrap" ref={subPanelRef}>
         <SubscriptionPanel
           language={language}
           user={user}

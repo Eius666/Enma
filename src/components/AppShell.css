@@ -80,6 +80,11 @@
   line-height: 1;
 }
 
+/* Trial badge — green tint */
+.header-avatar-pro-label--trial {
+  color: #4ade80;
+}
+
 /* — Right side: email + icon buttons — */
 .header-right {
   display: flex;

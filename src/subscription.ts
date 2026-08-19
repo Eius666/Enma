@@ -70,6 +70,7 @@ export interface Subscription {
   id: string;
   userId: string;
   plan: PlanType;
+  trialPlan?: PlanType;
   period: SubscriptionPeriod;
   status: SubscriptionStatus;
   startDate: string;
@@ -119,8 +120,16 @@ export const isInTrial = (sub: Subscription): boolean => {
 };
 
 export const getActivePlan = (sub: Subscription | null): PlanType => {
-  if (!sub || !isSubscriptionActive(sub)) return 'free';
+  if (!sub) return 'free';
+  if (isInTrial(sub)) return sub.trialPlan ?? 'premium';
+  if (!isSubscriptionActive(sub)) return 'free';
   return sub.plan;
+};
+
+export const trialDaysRemaining = (sub: Subscription): number => {
+  if (!sub.trialEndDate) return 0;
+  const ms = new Date(sub.trialEndDate).getTime() - Date.now();
+  return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
 };
 
 export const SBP_PRICES: Record<PaidPlan, Record<SubscriptionPeriod, number>> = {

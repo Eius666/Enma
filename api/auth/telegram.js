@@ -104,11 +104,64 @@ module.exports = async (req, res) => {
   if (!telegramId) return res.status(400).json({ error: 'Missing user.id' });
 
   try {
-    const uid = await resolveCanonicalUid(telegramId, telegramId);
-    const token = await admin.auth().createCustomToken(uid);
-    return res.status(200).json({ token, uid });
+    const uid      = await resolveCanonicalUid(telegramId, telegramId);
+    const isNewUser = await setupNewUserIfNeeded(uid, tgUser);
+    const token    = await admin.auth().createCustomToken(uid);
+    return res.status(200).json({ token, uid, isNewUser });
   } catch (err) {
     console.error('[auth/telegram] error', err);
     return res.status(500).json({ error: 'Auth failed' });
   }
 };
+
+const TRIAL_DAYS = 7;
+
+async function setupNewUserIfNeeded(uid, tgUser) {
+  const userRef = db.collection('users').doc(uid);
+  const subRef  = db.collection('subscriptions').doc(uid);
+
+  const [userSnap, subSnap] = await Promise.all([userRef.get(), subRef.get()]);
+
+  if (subSnap.exists) return false;
+
+  const now      = new Date();
+  const trialEnd = new Date(now);
+  trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS);
+  trialEnd.setHours(23, 59, 59, 999);
+
+  await db.runTransaction(async tx => {
+    if (!userSnap.exists) {
+      tx.set(userRef, {
+        uid,
+        telegramId: tgUser.id,
+        chatId:     tgUser.id,
+        firstName:  tgUser.first_name ?? '',
+        lastName:   tgUser.last_name  ?? '',
+        username:   tgUser.username   ?? '',
+        isPro:      false,
+        trialUsed:  true,
+        createdAt:  admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt:  admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } else {
+      tx.update(userRef, { trialUsed: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    }
+
+    tx.set(subRef, {
+      id:           `trial_${uid}`,
+      userId:        uid,
+      plan:          'free',
+      trialPlan:     'premium',
+      period:        'month',
+      status:        'active',
+      startDate:     now.toISOString(),
+      endDate:       trialEnd.toISOString(),
+      trialEndDate:  trialEnd.toISOString(),
+      paymentMethod: 'trial',
+      createdAt:     now.toISOString(),
+      updatedAt:     admin.firestore.FieldValue.serverTimestamp(),
+    });
+  });
+
+  return true;
+}

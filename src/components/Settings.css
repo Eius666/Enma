@@ -497,3 +497,74 @@ body.theme-light .sett-subscription-wrap .subscription-panel {
   line-height: 1.5;
   opacity: 0.7;
 }
+
+/* ━━━ Trial sub-label ━━━ */
+.sett-row__value--trial {
+  color: #4ade80 !important;
+}
+
+/* ━━━ Manage subscription button ━━━ */
+.sett-row__manage-btn {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(162, 155, 254, 0.35);
+  background: rgba(162, 155, 254, 0.08);
+  color: #a29bfe;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+.sett-row__manage-btn:hover {
+  background: rgba(162, 155, 254, 0.16);
+}
+
+/* ━━━ AI usage meters ━━━ */
+.sett-ai-usage {
+  padding: 10px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sett-ai-usage__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sett-ai-usage__label {
+  font-size: 13px;
+  color: var(--notes-text-muted, rgba(255,255,255,0.55));
+}
+
+.sett-ai-usage__count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--notes-text, rgba(255,255,255,0.85));
+}
+
+.sett-ai-usage__bar {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+body.theme-light .sett-ai-usage__bar {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.sett-ai-usage__fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #7b68ee, #a29bfe);
+  transition: width 0.4s ease;
+}
+
+.sett-ai-usage__fill--image {
+  background: linear-gradient(90deg, #6c5ce7, #fd79a8);
+}

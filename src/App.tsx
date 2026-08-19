@@ -40,7 +40,8 @@ import { ToastProvider } from './components/ui/Toast';
 import SettingsScreen from './components/SettingsScreen';
 import NotesList from './components/NotesList';
 import NoteEditor from './components/NoteEditor';
-import { Subscription, isSubscriptionActive, getActivePlan } from './subscription';
+import { Subscription, isSubscriptionActive, isInTrial, getActivePlan, trialDaysRemaining } from './subscription';
+import OnboardingDemo from './components/OnboardingDemo';
 import './components/Subscription.css';
 import './components/Notes.css';
 import './components/Finance.css';
@@ -670,6 +671,8 @@ const App: React.FC = () => {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [banks, setBanks] = useState<string[]>([]);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [trialActivating, setTrialActivating] = useState(false);
 
   const t = (key: TranslationKey, params?: Record<string, string | number>) =>
     translate(language, key, params);
@@ -774,9 +777,10 @@ const App: React.FC = () => {
             body: JSON.stringify({ initData: telegram.initData }),
           });
           if (res.ok) {
-            const { token } = await res.json();
-            if (token) {
-              await signInWithCustomToken(auth, token);
+            const data = await res.json();
+            if (data.token) {
+              await signInWithCustomToken(auth, data.token);
+              if (data.isNewUser) setShowOnboarding(true);
               return;
             }
           }
@@ -1389,7 +1393,7 @@ const App: React.FC = () => {
       snapshot => {
         if (snapshot.exists()) {
           const sub = snapshot.data() as Subscription;
-          setSubscription(isSubscriptionActive(sub) ? sub : null);
+          setSubscription(isSubscriptionActive(sub) || isInTrial(sub) ? sub : null);
         } else {
           setSubscription(null);
         }
@@ -1398,6 +1402,20 @@ const App: React.FC = () => {
     );
     return unsubscribe;
   }, [user]);
+
+  const handleStartTrial = useCallback(async () => {
+    if (!user || trialActivating) return;
+    setTrialActivating(true);
+    try {
+      const res = await fetch('/api/payment/trial', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.uid }),
+      });
+      if (res.ok) setShowOnboarding(false);
+    } catch { /* ignore */ } finally {
+      setTrialActivating(false);
+    }
+  }, [user, trialActivating]);
 
   const convertAmount = (amount: number) => amount * (rates[currency] ?? 1);
   const convertToBase = (amount: number) => amount / (rates[currency] ?? 1);
@@ -1466,13 +1484,18 @@ const App: React.FC = () => {
           {/* Avatar + optional PRO label below (Instagram-story style) */}
           <div className="header-avatar-wrap" aria-hidden="true">
             <div
-              className={`header-avatar${subscription && isSubscriptionActive(subscription) ? ' header-avatar--pro' : ''}`}
+              className={`header-avatar${subscription && (isSubscriptionActive(subscription) || isInTrial(subscription)) ? ' header-avatar--pro' : ''}`}
             >
               {avatarInitials}
             </div>
-            {subscription && isSubscriptionActive(subscription) && (
-              <span className="header-avatar-pro-label">
-                {getActivePlan(subscription).toUpperCase()}
+            {subscription && (isSubscriptionActive(subscription) || isInTrial(subscription)) && (
+              <span className={`header-avatar-pro-label${isInTrial(subscription) && !isSubscriptionActive(subscription) ? ' header-avatar-pro-label--trial' : ''}`}>
+                {isInTrial(subscription) && !isSubscriptionActive(subscription)
+                  ? (language === 'ru'
+                    ? `TRIAL ${trialDaysRemaining(subscription)}д`
+                    : `TRIAL ${trialDaysRemaining(subscription)}d`)
+                  : getActivePlan(subscription).toUpperCase()
+                }
               </span>
             )}
           </div>
@@ -1514,6 +1537,14 @@ const App: React.FC = () => {
       </header>
 
       <main className="app-main">
+        {activeTab === 'day-flow' && dayView === 'list' && showOnboarding && (
+          <OnboardingDemo
+            language={language}
+            onStartTrial={handleStartTrial}
+            onDismiss={() => setShowOnboarding(false)}
+            trialLoading={trialActivating}
+          />
+        )}
         {activeTab === 'day-flow' && dayView === 'list' && (
           <DayList
             language={language}
@@ -1540,6 +1571,7 @@ const App: React.FC = () => {
             }
             user={user}
             language={language}
+            subscription={subscription}
             onBack={() => {
               setDayView('list');
               setActiveDayTaskId(null);
@@ -1570,6 +1602,7 @@ const App: React.FC = () => {
             initialDate={calPreDate ?? undefined}
             user={user}
             language={language}
+            subscription={subscription}
             onBack={() => {
               setCalView('calendar');
               setActiveCalTaskId(null);
@@ -1592,6 +1625,7 @@ const App: React.FC = () => {
             noteId={activeNoteId}
             user={user}
             language={language}
+            subscription={subscription}
             onBack={() => {
               setNotesView('list');
               setActiveNoteId(null);
@@ -1626,6 +1660,7 @@ const App: React.FC = () => {
             convertAmount={convertAmount}
             convertToBase={convertToBase}
             banks={banks}
+            subscription={subscription}
             onBack={() => {
               setFinanceView('list');
               setActiveTransactionId(null);
@@ -1654,6 +1689,7 @@ const App: React.FC = () => {
             }
             user={user}
             language={language}
+            subscription={subscription}
             onBack={() => {
               setHabitsView('list');
               setActiveHabitId(null);

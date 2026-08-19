@@ -11,11 +11,14 @@ import { FaArrowLeft, FaArrowUp, FaArrowDown, FaTrash } from 'react-icons/fa';
 import { db } from '../firebase';
 import type { Currency, Transaction } from '../types/app';
 import { getCurrencySymbol } from '../utils/formatCurrency';
+import type { Subscription } from '../subscription';
+import { getActivePlan, FREE_LIMITS } from '../subscription';
+import { checkFreeLimit, incrementFreeUsage } from '../lib/freeLimits';
+import Paywall, { LimitBanner } from './Paywall';
 import './Finance.css';
 
 interface FinanceEditorProps {
-  transactionId: string | null; // null = new transaction
-  /** Pre-loaded transaction data from parent state — avoids a getDoc round-trip. */
+  transactionId: string | null;
   initialTransaction?: Transaction | null;
   user: User | null;
   language: 'en' | 'ru';
@@ -23,6 +26,7 @@ interface FinanceEditorProps {
   convertAmount: (amount: number) => number;
   convertToBase: (amount: number) => number;
   banks: string[];
+  subscription?: Subscription | null;
   onBack: () => void;
 }
 
@@ -159,10 +163,12 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
   convertAmount,
   convertToBase,
   banks,
+  subscription,
   onBack,
 }) => {
   const t = T[language];
   const sym = getCurrencySymbol(currency);
+  const isNew = !transactionId;
 
   const [txType, setTxType] = useState<'income' | 'expense'>('expense');
   const [amountStr, setAmountStr] = useState('');
@@ -174,6 +180,18 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
   );
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(!transactionId || !!initialTransaction);
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [usedTx, setUsedTx] = useState<number | null>(null);
+
+  const plan   = getActivePlan(subscription ?? null);
+  const isFree = plan === 'free';
+  const limit  = FREE_LIMITS.monthlyTransactions;
+  const near80 = usedTx !== null && usedTx >= Math.floor(limit * 0.8);
+
+  useEffect(() => {
+    if (!user || !isFree) return;
+    checkFreeLimit(user.uid, 'transaction').then(r => setUsedTx(r.used)).catch(() => {});
+  }, [user, isFree]);
 
   // ── Load existing transaction ─────────────────────────────────────────────
   useEffect(() => {
@@ -208,6 +226,13 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
       alert(language === 'ru' ? 'Введите корректную сумму' : 'Enter a valid amount');
       return;
     }
+
+    if (isNew && isFree) {
+      const result = await checkFreeLimit(user.uid, 'transaction').catch(() => ({ allowed: true, used: 0, limit }));
+      setUsedTx(result.used);
+      if (!result.allowed) { setShowPaywall(true); return; }
+    }
+
     const preset = PRESET_CATS.find(p => p.id === selectedCatId);
     const id = transactionId ?? makeId();
     setSaving(true);
@@ -220,15 +245,13 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
         description: description.trim(),
         date: dateInputToIso(date),
         categoryId: preset?.id ?? '',
-        // Store plain name (no emoji) — FinanceList uses PRESET_COLOR_BY_ID for color
         category: preset ? catDisplayName(preset) : '',
         updatedAt: serverTimestamp(),
       };
-      if (!transactionId) {
-        payload.createdAt = serverTimestamp();
-      }
+      if (!transactionId) payload.createdAt = serverTimestamp();
       if (selectedBank) payload.bank = selectedBank;
       await setDoc(doc(db, 'transactions', id), payload, { merge: true });
+      if (isNew && isFree) await incrementFreeUsage(user.uid, 'transaction').catch(() => {});
       if (selectedBank) {
         try { localStorage.setItem(LAST_BANK_KEY, selectedBank); } catch { /* ignore */ }
       }
@@ -265,6 +288,26 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
 
   return (
     <div className="fin-editor">
+
+      {showPaywall && (
+        <Paywall
+          featureName={language === 'ru' ? `транзакции (лимит ${limit}/мес)` : `transactions (limit ${limit}/mo)`}
+          language={language}
+          onClose={() => setShowPaywall(false)}
+          onUpgrade={() => { setShowPaywall(false); onBack(); }}
+        />
+      )}
+
+      {isNew && isFree && near80 && !showPaywall && (
+        <LimitBanner
+          message={language === 'ru'
+            ? `Транзакции: ${usedTx}/${limit} в этом месяце`
+            : `Transactions: ${usedTx}/${limit} this month`}
+          onUpgrade={() => setShowPaywall(true)}
+          upgradeLabel={language === 'ru' ? 'Убрать лимит' : 'Remove limit'}
+        />
+      )}
+
       {/* ── Toolbar ── */}
       <div className="fin-editor__toolbar">
         <button className="fin-editor__back-btn" onClick={onBack} type="button">

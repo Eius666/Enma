@@ -1,0 +1,145 @@
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Paywall modal
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.paywall-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: paywall-fade-in 0.18s ease;
+}
+
+@keyframes paywall-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.paywall-modal {
+  width: 100%;
+  max-width: 480px;
+  background: #16162a;
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  padding: 24px 20px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: paywall-slide-up 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body.theme-light .paywall-modal {
+  background: #f4f4fb;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-bottom: none;
+}
+
+@keyframes paywall-slide-up {
+  from { transform: translateY(100%); opacity: 0.6; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.paywall-modal__icon {
+  font-size: 36px;
+  text-align: center;
+  line-height: 1;
+}
+
+.paywall-modal__title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  text-align: center;
+  margin: 0;
+}
+
+body.theme-light .paywall-modal__title {
+  color: #1b1d3a;
+}
+
+.paywall-modal__text {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.55);
+  text-align: center;
+  margin: 0;
+  line-height: 1.5;
+}
+
+body.theme-light .paywall-modal__text {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.paywall-modal__feature-name {
+  color: #a29bfe;
+  font-weight: 600;
+}
+
+.paywall-modal__upgrade-btn {
+  width: 100%;
+  padding: 15px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #7b68ee, #6c5ce7);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 4px 16px rgba(108, 92, 231, 0.4);
+}
+
+.paywall-modal__upgrade-btn:active {
+  transform: scale(0.98);
+}
+
+.paywall-modal__close-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 14px;
+  cursor: pointer;
+  text-align: center;
+  padding: 6px;
+  font-family: inherit;
+}
+
+body.theme-light .paywall-modal__close-btn {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+/* ── Soft limit banner (80% warning) ── */
+
+.limit-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  margin-bottom: 4px;
+}
+
+.limit-banner__text {
+  font-size: 13px;
+  color: rgba(245, 158, 11, 0.9);
+  line-height: 1.4;
+  flex: 1;
+}
+
+.limit-banner__btn {
+  background: none;
+  border: none;
+  color: #a29bfe;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  padding: 0;
+  font-family: inherit;
+}
