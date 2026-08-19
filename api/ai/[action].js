@@ -505,12 +505,10 @@ async function handleEntityCreate(req, res) {
 const ADMIN_ALLOWED_UIDS = ['2MhVQ2hZD0cgDcYzxlHzhumml9l1'];
 
 async function handleAdminGrant(req, res) {
-  const { userId } = req.body ?? {};
+  const { userId, plan, months } = req.body ?? {};
   if (!ADMIN_ALLOWED_UIDS.includes(userId)) {
     return res.status(403).json({ error: 'forbidden' });
   }
-
-  const { userId, plan, months } = req.body ?? {};
   if (!userId || !plan) return res.status(400).json({ error: 'userId and plan required' });
 
   const now = new Date();
