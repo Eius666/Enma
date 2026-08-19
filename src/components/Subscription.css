@@ -1221,3 +1221,29 @@ body.theme-light .subscription-panel__td--feature {
   color: #a29bfe;
   font-weight: 600;
 }
+
+.subscription-panel__upgrade-hint {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(162, 155, 254, 0.12);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.subscription-panel__upgrade-hint--success {
+  background: rgba(85, 239, 196, 0.12);
+  color: rgba(85, 239, 196, 0.9);
+}
+
+body.theme-light .subscription-panel__upgrade-hint {
+  background: rgba(108, 92, 231, 0.08);
+  color: rgba(0, 0, 0, 0.65);
+}
+
+body.theme-light .subscription-panel__upgrade-hint--success {
+  background: rgba(0, 184, 148, 0.1);
+  color: rgb(0, 150, 120);
+}

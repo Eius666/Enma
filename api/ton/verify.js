@@ -125,10 +125,11 @@ module.exports = async (req, res) => {
   batch.set(subRef, {
     userId,
     plan,
-    status: 'active',
-    expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+    status:        'active',
+    expiresAt:     admin.firestore.Timestamp.fromDate(expiresAt),
+    endDateMs:     expiresAt.getTime(),
     lastPaymentId: paymentId,
-    updatedAt: now,
+    updatedAt:     now,
   }, { merge: true });
 
   try {

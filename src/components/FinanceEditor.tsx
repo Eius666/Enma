@@ -13,7 +13,7 @@ import type { Currency, Transaction } from '../types/app';
 import { getCurrencySymbol } from '../utils/formatCurrency';
 import type { Subscription } from '../subscription';
 import { getActivePlan, FREE_LIMITS } from '../subscription';
-import { checkFreeLimit, incrementFreeUsage } from '../lib/freeLimits';
+import { incrementFreeUsageAtomic, decrementFreeUsageAtomic, subscribeFreeUsage } from '../lib/usageCounters';
 import Paywall, { LimitBanner } from './Paywall';
 import './Finance.css';
 
@@ -190,7 +190,7 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
 
   useEffect(() => {
     if (!user || !isFree) return;
-    checkFreeLimit(user.uid, 'transaction').then(r => setUsedTx(r.used)).catch(() => {});
+    return subscribeFreeUsage(user.uid, d => setUsedTx(d.transactionCount));
   }, [user, isFree]);
 
   // ── Load existing transaction ─────────────────────────────────────────────
@@ -227,10 +227,13 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
       return;
     }
 
+    let atomicDone = false;
     if (isNew && isFree) {
-      const result = await checkFreeLimit(user.uid, 'transaction').catch(() => ({ allowed: true, used: 0, limit }));
+      const result = await incrementFreeUsageAtomic(user.uid, 'transaction')
+        .catch(() => ({ allowed: true, used: 0, limit }));
       setUsedTx(result.used);
       if (!result.allowed) { setShowPaywall(true); return; }
+      atomicDone = true;
     }
 
     const preset = PRESET_CATS.find(p => p.id === selectedCatId);
@@ -251,12 +254,12 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
       if (!transactionId) payload.createdAt = serverTimestamp();
       if (selectedBank) payload.bank = selectedBank;
       await setDoc(doc(db, 'transactions', id), payload, { merge: true });
-      if (isNew && isFree) await incrementFreeUsage(user.uid, 'transaction').catch(() => {});
       if (selectedBank) {
         try { localStorage.setItem(LAST_BANK_KEY, selectedBank); } catch { /* ignore */ }
       }
       onBack();
     } catch (err) {
+      if (atomicDone) decrementFreeUsageAtomic(user.uid, 'transaction').catch(() => {});
       console.warn('FinanceEditor save error', err);
       setSaving(false);
     }

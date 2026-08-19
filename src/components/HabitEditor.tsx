@@ -13,7 +13,7 @@ import { db } from '../firebase';
 import type { HabitDoc } from './HabitsList';
 import type { Subscription } from '../subscription';
 import { getActivePlan, FREE_LIMITS } from '../subscription';
-import { checkFreeLimit, incrementFreeUsage } from '../lib/freeLimits';
+import { incrementFreeUsageAtomic, decrementFreeUsageAtomic, subscribeFreeUsage } from '../lib/usageCounters';
 import Paywall, { LimitBanner } from './Paywall';
 import './Habits.css';
 
@@ -164,7 +164,7 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
 
   useEffect(() => {
     if (!user || !isFree) return;
-    checkFreeLimit(user.uid, 'habit').then(r => setUsedHabits(r.used)).catch(() => {});
+    return subscribeFreeUsage(user.uid, d => setUsedHabits(d.habitCount));
   }, [user, isFree]);
 
   const menuRef  = useRef<HTMLDivElement>(null);
@@ -228,10 +228,13 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
   const handleSave = async () => {
     if (!user || !title.trim()) return;
 
+    let atomicDone = false;
     if (isNew && isFree) {
-      const result = await checkFreeLimit(user.uid, 'habit').catch(() => ({ allowed: true, used: 0, limit }));
+      const result = await incrementFreeUsageAtomic(user.uid, 'habit')
+        .catch(() => ({ allowed: true, used: 0, limit }));
       setUsedHabits(result.used);
       if (!result.allowed) { setShowPaywall(true); return; }
+      atomicDone = true;
     }
 
     setSaving(true);
@@ -252,9 +255,9 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
       };
       if (isNew) payload.createdAt = serverTimestamp();
       await setDoc(doc(db, 'habits', id), payload, { merge: true });
-      if (isNew && isFree) await incrementFreeUsage(user.uid, 'habit').catch(() => {});
       onBack();
     } catch (err) {
+      if (atomicDone) decrementFreeUsageAtomic(user.uid, 'habit').catch(() => {});
       console.warn('HabitEditor save error', err);
       setSaving(false);
     }

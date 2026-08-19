@@ -41,6 +41,7 @@ import SettingsScreen from './components/SettingsScreen';
 import NotesList from './components/NotesList';
 import NoteEditor from './components/NoteEditor';
 import { Subscription, isSubscriptionActive, isInTrial, getActivePlan, trialDaysRemaining } from './subscription';
+import { LimitBanner } from './components/Paywall';
 import OnboardingDemo from './components/OnboardingDemo';
 import './components/Subscription.css';
 import './components/Notes.css';
@@ -671,6 +672,12 @@ const App: React.FC = () => {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [banks, setBanks] = useState<string[]>([]);
+
+  // True when a trial existed, has now expired, and the user hasn't paid
+  const trialJustExpired = subscription !== null
+    && !!subscription.trialPlan
+    && !isInTrial(subscription)
+    && !isSubscriptionActive(subscription);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [trialActivating, setTrialActivating] = useState(false);
 
@@ -1393,7 +1400,7 @@ const App: React.FC = () => {
       snapshot => {
         if (snapshot.exists()) {
           const sub = snapshot.data() as Subscription;
-          setSubscription(isSubscriptionActive(sub) || isInTrial(sub) ? sub : null);
+          setSubscription(sub);
         } else {
           setSubscription(null);
         }
@@ -1537,6 +1544,15 @@ const App: React.FC = () => {
       </header>
 
       <main className="app-main">
+        {trialJustExpired && (
+          <LimitBanner
+            message={language === 'ru'
+              ? 'Пробный период закончился. Обновите до Pro, чтобы добавлять новые элементы.'
+              : 'Your trial ended. Upgrade to Pro to keep adding items.'}
+            onUpgrade={() => handleTabSwitch('settings')}
+            upgradeLabel={language === 'ru' ? 'Обновить' : 'Upgrade'}
+          />
+        )}
         {activeTab === 'day-flow' && dayView === 'list' && showOnboarding && (
           <OnboardingDemo
             language={language}

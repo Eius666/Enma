@@ -148,18 +148,20 @@ async function setupNewUserIfNeeded(uid, tgUser) {
     }
 
     tx.set(subRef, {
-      id:           `trial_${uid}`,
-      userId:        uid,
-      plan:          'free',
-      trialPlan:     'premium',
-      period:        'month',
-      status:        'active',
-      startDate:     now.toISOString(),
-      endDate:       trialEnd.toISOString(),
-      trialEndDate:  trialEnd.toISOString(),
-      paymentMethod: 'trial',
-      createdAt:     now.toISOString(),
-      updatedAt:     admin.firestore.FieldValue.serverTimestamp(),
+      id:              `trial_${uid}`,
+      userId:           uid,
+      plan:             'free',
+      trialPlan:        'premium',
+      period:           'month',
+      status:           'active',
+      startDate:        now.toISOString(),
+      endDate:          trialEnd.toISOString(),
+      endDateMs:        trialEnd.getTime(),
+      trialEndDate:     trialEnd.toISOString(),
+      trialEndDateMs:   trialEnd.getTime(),
+      paymentMethod:    'trial',
+      createdAt:        now.toISOString(),
+      updatedAt:        admin.firestore.FieldValue.serverTimestamp(),
     });
   });
 

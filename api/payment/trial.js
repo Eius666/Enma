@@ -30,18 +30,20 @@ module.exports = async (req, res) => {
 
     await db.runTransaction(async tx => {
       tx.set(subRef, {
-        id:           subId,
+        id:             subId,
         userId,
-        plan:         'free',
-        trialPlan:    'premium',
-        period:       'month',
-        status:       'active',
-        startDate:    now.toISOString(),
-        endDate:      trialEnd.toISOString(),
-        trialEndDate: trialEnd.toISOString(),
-        paymentMethod: 'trial',
-        createdAt:    now.toISOString(),
-        updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
+        plan:           'free',
+        trialPlan:      'premium',
+        period:         'month',
+        status:         'active',
+        startDate:      now.toISOString(),
+        endDate:        trialEnd.toISOString(),
+        endDateMs:      trialEnd.getTime(),
+        trialEndDate:   trialEnd.toISOString(),
+        trialEndDateMs: trialEnd.getTime(),
+        paymentMethod:  'trial',
+        createdAt:      now.toISOString(),
+        updatedAt:      admin.firestore.FieldValue.serverTimestamp(),
       });
 
       tx.set(userRef, { trialUsed: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });

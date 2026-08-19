@@ -21,7 +21,7 @@ import { db } from '../firebase';
 import type { ChecklistItem } from './NotesList';
 import type { Subscription } from '../subscription';
 import { getActivePlan, FREE_LIMITS } from '../subscription';
-import { checkFreeLimit, incrementFreeUsage } from '../lib/freeLimits';
+import { incrementFreeUsageAtomic, subscribeFreeUsage } from '../lib/usageCounters';
 import Paywall, { LimitBanner } from './Paywall';
 import './Notes.css';
 
@@ -119,7 +119,7 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
 
   useEffect(() => {
     if (!user || !isFree || !isNew) return;
-    checkFreeLimit(user.uid, 'note').then(r => setUsedNotes(r.used)).catch(() => {});
+    return subscribeFreeUsage(user.uid, d => setUsedNotes(d.noteCount));
   }, [user, isFree, isNew]);
 
   const titleRef = useRef<HTMLInputElement>(null);
@@ -189,11 +189,11 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
       if (!user) return;
 
       if (isNew && isFree && !limitPassedRef.current) {
-        const result = await checkFreeLimit(user.uid, 'note').catch(() => ({ allowed: true, used: 0, limit }));
+        const result = await incrementFreeUsageAtomic(user.uid, 'note')
+          .catch(() => ({ allowed: true, used: 0, limit }));
         setUsedNotes(result.used);
         if (!result.allowed) { setShowPaywall(true); return; }
         limitPassedRef.current = true;
-        await incrementFreeUsage(user.uid, 'note').catch(() => {});
       }
 
       setSavingState('saving');
@@ -214,7 +214,8 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
         setSavingState('idle');
       }
     },
-    [user]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user, isFree, isNew, limit]
   );
 
   const scheduleSave = useCallback(

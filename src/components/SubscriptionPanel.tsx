@@ -9,6 +9,8 @@ import {
   priceToStars,
   calcEndDate,
   isSubscriptionActive,
+  isInTrial,
+  getActivePlan,
   Subscription,
   PaidPlan,
   SubscriptionPeriod,
@@ -73,8 +75,10 @@ const T = {
     perYear:         '/yr',
     freePlanTitle:   'Free plan',
     freePlanText:    'Basic features with limits',
-    upgradePrompt:   'Upgrade to unlock full access',
-    tableTitle:      'Plan comparison',
+    upgradePrompt:    'Upgrade to unlock full access',
+    upgradeFromPro:   'You have Pro. Upgrade to Premium for AI images and chat.',
+    alreadyPremium:   "You're on the top plan!",
+    tableTitle:       'Plan comparison',
     featCol:         'Feature',
     freeCol:         'Free',
     proCol:          'Pro',
@@ -122,8 +126,10 @@ const T = {
     perYear:         '/год',
     freePlanTitle:   'Бесплатный тариф',
     freePlanText:    'Базовые функции с ограничениями',
-    upgradePrompt:   'Обновите план для полного доступа',
-    tableTitle:      'Сравнение тарифов',
+    upgradePrompt:    'Обновите план для полного доступа',
+    upgradeFromPro:   'Вы на Pro. Обновитесь до Premium для AI-изображений и чата.',
+    alreadyPremium:   'Вы уже на максимальном тарифе!',
+    tableTitle:       'Сравнение тарифов',
     featCol:         'Функция',
     freeCol:         'Free',
     proCol:          'Pro',
@@ -161,8 +167,9 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
   const userAddress    = useTonAddress();
   const wallet         = useTonWallet();
 
-  const isActive   = subscription && isSubscriptionActive(subscription);
-  const activePlan = isActive ? subscription.plan : null;
+  const effectivePlan = getActivePlan(subscription ?? null);
+  const isActive      = subscription && (isSubscriptionActive(subscription) || isInTrial(subscription));
+  const activePlan    = isActive ? effectivePlan : null;
 
   const [plan,   setPlan]   = useState<SelectedPlan>(activePlan ?? 'free');
   const [period, setPeriod] = useState<SubscriptionPeriod>('month');
@@ -568,6 +575,16 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
           </ul>
         </button>
       </div>
+
+      {/* Upgrade context hints */}
+      {effectivePlan === 'pro' && plan === 'premium' && (
+        <p className="subscription-panel__upgrade-hint">{t.upgradeFromPro}</p>
+      )}
+      {effectivePlan === 'premium' && isActive && (
+        <p className="subscription-panel__upgrade-hint subscription-panel__upgrade-hint--success">
+          {t.alreadyPremium}
+        </p>
+      )}
 
       {/* Payment section — hidden when Free selected */}
       {showPaymentSection && (

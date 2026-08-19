@@ -13,7 +13,7 @@ import type { DayTask } from './DayList';
 import { PRIORITY_COLORS } from './DayList';
 import type { Subscription } from '../subscription';
 import { getActivePlan, FREE_LIMITS } from '../subscription';
-import { checkFreeLimit, incrementFreeUsage } from '../lib/freeLimits';
+import { incrementFreeUsageAtomic, decrementFreeUsageAtomic, subscribeFreeUsage } from '../lib/usageCounters';
 import Paywall, { LimitBanner } from './Paywall';
 import './Day.css';
 
@@ -112,7 +112,7 @@ const DayTaskEditor: React.FC<DayTaskEditorProps> = ({
 
   useEffect(() => {
     if (!user || !isFree) return;
-    checkFreeLimit(user.uid, 'task').then(r => setUsedTasks(r.used)).catch(() => {});
+    return subscribeFreeUsage(user.uid, d => setUsedTasks(d.dailyTaskCount));
   }, [user, isFree]);
 
   const titleRef = useRef<HTMLInputElement>(null);
@@ -150,13 +150,13 @@ const DayTaskEditor: React.FC<DayTaskEditorProps> = ({
   const handleSave = async () => {
     if (!user || !title.trim()) return;
 
+    let atomicDone = false;
     if (isNew && isFree) {
-      const result = await checkFreeLimit(user.uid, 'task').catch(() => ({ allowed: true, used: 0, limit }));
+      const result = await incrementFreeUsageAtomic(user.uid, 'task')
+        .catch(() => ({ allowed: true, used: 0, limit }));
       setUsedTasks(result.used);
-      if (!result.allowed) {
-        setShowPaywall(true);
-        return;
-      }
+      if (!result.allowed) { setShowPaywall(true); return; }
+      atomicDone = true;
     }
 
     setSaving(true);
@@ -175,9 +175,9 @@ const DayTaskEditor: React.FC<DayTaskEditorProps> = ({
       };
       if (isNew) payload.createdAt = serverTimestamp();
       await setDoc(doc(db, 'tasks', id), payload, { merge: true });
-      if (isNew && isFree) await incrementFreeUsage(user.uid, 'task').catch(() => {});
       onBack();
     } catch (err) {
+      if (atomicDone) decrementFreeUsageAtomic(user.uid, 'task').catch(() => {});
       console.warn('DayTaskEditor save error', err);
       setSaving(false);
     }

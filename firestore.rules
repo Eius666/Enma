@@ -5,7 +5,7 @@ service cloud.firestore {
     // ─────────────────────────────────────────────────────────────────────────
     // Auth strategy:
     //   Client writes → protected by these rules (request.auth.uid)
-    //   Server writes → Admin SDK (api/ routes) bypasses rules entirely
+    //   Admin SDK writes (api/ routes) → bypass rules entirely
     // ─────────────────────────────────────────────────────────────────────────
 
     // ── Core helpers ─────────────────────────────────────────────────────────
@@ -22,100 +22,188 @@ service cloud.firestore {
       return isAuthenticated() && request.resource.data.userId == request.auth.uid;
     }
 
+    // ── Date helpers ──────────────────────────────────────────────────────────
+    // request.time is UTC — acceptable precision for server-side limit checks.
+
+    function monthStr() {
+      let m = request.time.month();
+      return string(request.time.year()) + '-' +
+        (m < 10 ? '0' + string(m) : string(m));
+    }
+
+    function dateStr() {
+      let m = request.time.month();
+      let d = request.time.day();
+      return string(request.time.year()) + '-' +
+        (m < 10 ? '0' + string(m) : string(m)) + '-' +
+        (d < 10 ? '0' + string(d) : string(d));
+    }
+
     // ── Subscription helpers ──────────────────────────────────────────────────
-    // Reads users/{uid}.isPro set by server on payment confirmation.
+    // Reads subscriptions/{uid} — written exclusively by Admin SDK.
+    // Each subscription document must include endDateMs (ms since epoch) so that
+    // these rules can compare it to request.time.toMillis().
+    //
+    // Paid plan:  plan == 'pro' | 'premium', status == 'active', endDateMs > now
+    // Trial:      plan == 'free', trialPlan == 'pro' | 'premium',
+    //             status == 'active', trialEndDateMs > now
 
-    function hasPaidPlan(uid) {
-      return exists(/databases/$(database)/documents/users/$(uid)) &&
-        get(/databases/$(database)/documents/users/$(uid)).data.get('isPro', false) == true;
+    function isActivePaidPlan(sub) {
+      return sub.status == 'active' &&
+        sub.get('endDateMs', 0) > request.time.toMillis() &&
+        (sub.plan == 'pro' || sub.plan == 'premium');
     }
 
-    // ── Free-tier counter helpers ────────────────────────────────────────────
-    // freeUsage/{uid} stores counters updated atomically by the client.
-    // Rules rely on these counters; client-side freeLimits.ts keeps them accurate.
-
-    function freeUsageExists(uid) {
-      return exists(/databases/$(database)/documents/freeUsage/$(uid));
+    function isActiveTrial(sub) {
+      return sub.plan == 'free' &&
+        sub.get('trialPlan', '') in ['pro', 'premium'] &&
+        sub.get('trialEndDateMs', 0) > request.time.toMillis();
     }
 
-    function freeUsage(uid) {
-      return get(/databases/$(database)/documents/freeUsage/$(uid)).data;
+    // Returns true when the user has any active paid plan or trial.
+    // Costs at most 1 exists() + 1 get() per call.
+    function hasPaidAccess(uid) {
+      let subPath = /databases/$(database)/documents/subscriptions/$(uid);
+      let hasSub  = exists(subPath);
+      let sub     = hasSub ? get(subPath).data : {};
+      return hasSub && (isActivePaidPlan(sub) || isActiveTrial(sub));
+    }
+
+    // ── Free-tier counter helpers ─────────────────────────────────────────────
+    // freeUsage/{uid} — single flat document per user, updated atomically by the
+    // client (usageCounters.ts). Fields:
+    //   month            — "YYYY-MM" of the current transactionCount window
+    //   transactionCount — monthly transaction count
+    //   date             — "YYYY-MM-DD" of the current dailyTaskCount window
+    //   dailyTaskCount   — daily task count
+    //   habitCount       — cumulative habit count
+    //   noteCount        — cumulative note count
+    //   bankCount        — cumulative bank/wallet count
+    //
+    // Time-windowed fields reset automatically: if the stored month/date doesn't
+    // match the current UTC month/date, the counter is treated as 0.
+
+    function freeData(uid) {
+      let path = /databases/$(database)/documents/freeUsage/$(uid);
+      return exists(path) ? get(path).data : {};
     }
 
     function freeTxOk(uid) {
-      return !freeUsageExists(uid) ||
-        freeUsage(uid).get('transactionCount', 0) < 30;
+      let d = freeData(uid);
+      // Allow if stored month is stale (new month) or count is under limit.
+      return d.get('month', '') != monthStr() || d.get('transactionCount', 0) < 30;
     }
 
     function freeHabitOk(uid) {
-      return !freeUsageExists(uid) ||
-        freeUsage(uid).get('habitCount', 0) < 3;
+      return freeData(uid).get('habitCount', 0) < 3;
     }
 
     function freeNoteOk(uid) {
-      return !freeUsageExists(uid) ||
-        freeUsage(uid).get('noteCount', 0) < 10;
+      return freeData(uid).get('noteCount', 0) < 10;
     }
 
     function freeTaskOk(uid) {
-      return !freeUsageExists(uid) ||
-        freeUsage(uid).get('dailyTaskCount', 0) < 5;
+      let d = freeData(uid);
+      // Allow if stored date is stale (new day) or count is under limit.
+      return d.get('date', '') != dateStr() || d.get('dailyTaskCount', 0) < 5;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // /users/{userId}
     // ─────────────────────────────────────────────────────────────────────────
+
     match /users/{userId} {
       allow read, write: if isAuthenticated() && request.auth.uid == userId;
 
+      // Direct subcollections (aiChats, and future top-level sub-docs)
       match /{subcollection}/{docId} {
         allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      }
+
+      // ── Workspace subcollections ─────────────────────────────────────────
+      // users/{uid}/workspaces/{wid} — workspace document (no limit on creation)
+      match /workspaces/{workspaceId} {
+        allow read:           if isAuthenticated() && request.auth.uid == userId;
+        allow create:         if isAuthenticated() && request.auth.uid == userId;
+        allow update, delete: if isAuthenticated() && request.auth.uid == userId;
+
+        // Transactions — 30/month for Free
+        match /transactions/{txId} {
+          allow read:           if isAuthenticated() && request.auth.uid == userId;
+          allow create:         if isAuthenticated() && request.auth.uid == userId &&
+                                   (hasPaidAccess(userId) || freeTxOk(userId));
+          allow update, delete: if isAuthenticated() && request.auth.uid == userId;
+        }
+
+        // Habits — 3 total for Free
+        match /habits/{habitId} {
+          allow read:           if isAuthenticated() && request.auth.uid == userId;
+          allow create:         if isAuthenticated() && request.auth.uid == userId &&
+                                   (hasPaidAccess(userId) || freeHabitOk(userId));
+          allow update, delete: if isAuthenticated() && request.auth.uid == userId;
+        }
+
+        // Notes — 10 total for Free
+        match /notes/{noteId} {
+          allow read:           if isAuthenticated() && request.auth.uid == userId;
+          allow create:         if isAuthenticated() && request.auth.uid == userId &&
+                                   (hasPaidAccess(userId) || freeNoteOk(userId));
+          allow update, delete: if isAuthenticated() && request.auth.uid == userId;
+        }
+
+        // Goals — no Free limit
+        match /goals/{goalId} {
+          allow read, write: if isAuthenticated() && request.auth.uid == userId;
+        }
+
+        // Habit logs — no Free limit
+        match /habitLogs/{logId} {
+          allow read, write: if isAuthenticated() && request.auth.uid == userId;
+        }
       }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // /transactions/{transactionId}
+    // Flat top-level collections (main app write path)
+    // userId is stored in each document and checked via ownsDoc() / writesOwnUid()
     // ─────────────────────────────────────────────────────────────────────────
+
+    // Finance transactions — 30/month for Free
     match /transactions/{transactionId} {
       allow read:           if ownsDoc();
       allow create:         if writesOwnUid() &&
-                               (hasPaidPlan(request.auth.uid) || freeTxOk(request.auth.uid));
+                               (hasPaidAccess(request.auth.uid) || freeTxOk(request.auth.uid));
       allow update, delete: if ownsDoc();
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // /habits/{habitId}
-    // ─────────────────────────────────────────────────────────────────────────
+    // Habits — 3 total for Free
     match /habits/{habitId} {
       allow read:           if ownsDoc();
       allow create:         if writesOwnUid() &&
-                               (hasPaidPlan(request.auth.uid) || freeHabitOk(request.auth.uid));
+                               (hasPaidAccess(request.auth.uid) || freeHabitOk(request.auth.uid));
       allow update, delete: if ownsDoc();
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // /notes/{noteId}
-    // ─────────────────────────────────────────────────────────────────────────
+    // Notes — 10 total for Free
     match /notes/{noteId} {
       allow read:           if ownsDoc();
       allow create:         if writesOwnUid() &&
-                               (hasPaidPlan(request.auth.uid) || freeNoteOk(request.auth.uid));
+                               (hasPaidAccess(request.auth.uid) || freeNoteOk(request.auth.uid));
       allow update, delete: if ownsDoc();
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // /tasks/{taskId}
-    // ─────────────────────────────────────────────────────────────────────────
+    // Day-flow tasks — 5/day for Free
     match /tasks/{taskId} {
       allow read:           if ownsDoc();
       allow create:         if writesOwnUid() &&
-                               (hasPaidPlan(request.auth.uid) || freeTaskOk(request.auth.uid));
+                               (hasPaidAccess(request.auth.uid) || freeTaskOk(request.auth.uid));
       allow update, delete: if ownsDoc();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // /freeUsage/{userId}
-    // Counter doc: updated atomically by the client (freeLimits.ts).
+    // Counter document updated atomically by the client (usageCounters.ts).
+    // The userId field must match the document ID to prevent cross-user counter writes.
     // ─────────────────────────────────────────────────────────────────────────
     match /freeUsage/{userId} {
       allow read:  if isAuthenticated() && request.auth.uid == userId;
@@ -125,8 +213,8 @@ service cloud.firestore {
 
     // ─────────────────────────────────────────────────────────────────────────
     // /aiUsage/{userId}
-    // Written exclusively by Admin SDK (api/ serverless routes).
-    // Clients can only read their own usage.
+    // Written exclusively by Admin SDK (API serverless routes).
+    // Clients can read their own usage to display progress bars; writes are blocked.
     // ─────────────────────────────────────────────────────────────────────────
     match /aiUsage/{userId} {
       allow read:  if isAuthenticated() && request.auth.uid == userId;
@@ -177,7 +265,8 @@ service cloud.firestore {
 
     // ─────────────────────────────────────────────────────────────────────────
     // /subscriptions/{userId}
-    // Written by Admin SDK on payment confirmation only.
+    // Written exclusively by Admin SDK on payment confirmation.
+    // Clients may only read their own subscription document.
     // ─────────────────────────────────────────────────────────────────────────
     match /subscriptions/{userId} {
       allow read:  if isAuthenticated() && request.auth.uid == userId;
@@ -186,7 +275,7 @@ service cloud.firestore {
 
     // ─────────────────────────────────────────────────────────────────────────
     // /payments/{paymentId}
-    // Client creates pending payment; server confirms via Admin SDK.
+    // Client creates a pending payment; server confirms it via Admin SDK.
     // ─────────────────────────────────────────────────────────────────────────
     match /payments/{paymentId} {
       allow read:   if ownsDoc();

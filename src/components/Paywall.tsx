@@ -1,25 +1,33 @@
 import React from 'react';
+import type { PlanType } from '../subscription';
 import './Paywall.css';
 
 interface PaywallProps {
   featureName: string;
   language: 'en' | 'ru';
+  currentPlan?: PlanType;
   onClose: () => void;
   onUpgrade: () => void;
 }
 
 const T = {
   en: {
-    title:      'Premium Feature',
-    text:       'Available in Premium. Upgrade your plan to use',
-    upgrade:    'Upgrade to Premium',
-    cancel:     'Maybe later',
+    titleFree:   'Upgrade Required',
+    titlePro:    'Premium Feature',
+    textFree:    'Upgrade to Pro or Premium to use',
+    textPro:     'Available in Premium. Upgrade to access',
+    upgradeFree: 'See Plans',
+    upgradePro:  'Upgrade to Premium',
+    cancel:      'Maybe later',
   },
   ru: {
-    title:      'Функция Premium',
-    text:       'Доступно в Premium. Обновите тариф, чтобы использовать',
-    upgrade:    'Перейти на Premium',
-    cancel:     'Позже',
+    titleFree:   'Нужен апгрейд',
+    titlePro:    'Функция Premium',
+    textFree:    'Перейдите на Pro или Premium, чтобы использовать',
+    textPro:     'Доступно в Premium. Обновите тариф, чтобы использовать',
+    upgradeFree: 'Посмотреть тарифы',
+    upgradePro:  'Перейти на Premium',
+    cancel:      'Позже',
   },
 };
 
@@ -38,8 +46,19 @@ export const LimitBanner: React.FC<LimitBannerProps> = ({ message, onUpgrade, up
   </div>
 );
 
-const Paywall: React.FC<PaywallProps> = ({ featureName, language, onClose, onUpgrade }) => {
-  const t = T[language];
+const Paywall: React.FC<PaywallProps> = ({
+  featureName,
+  language,
+  currentPlan = 'free',
+  onClose,
+  onUpgrade,
+}) => {
+  const t   = T[language];
+  const isPro = currentPlan === 'pro';
+
+  const title   = isPro ? t.titlePro   : t.titleFree;
+  const text    = isPro ? t.textPro    : t.textFree;
+  const btnText = isPro ? t.upgradePro : t.upgradeFree;
 
   return (
     <div className="paywall-overlay" onClick={onClose}>
@@ -50,13 +69,13 @@ const Paywall: React.FC<PaywallProps> = ({ featureName, language, onClose, onUpg
               fill="#a29bfe" stroke="#a29bfe" strokeWidth="0" />
           </svg>
         </div>
-        <h3 className="paywall-modal__title">{t.title}</h3>
+        <h3 className="paywall-modal__title">{title}</h3>
         <p className="paywall-modal__text">
-          {t.text}{' '}
+          {text}{' '}
           <span className="paywall-modal__feature-name">{featureName}</span>
         </p>
         <button className="paywall-modal__upgrade-btn" onClick={onUpgrade} type="button">
-          {t.upgrade}
+          {btnText}
         </button>
         <button className="paywall-modal__close-btn" onClick={onClose} type="button">
           {t.cancel}

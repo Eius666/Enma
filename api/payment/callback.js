@@ -62,7 +62,9 @@ module.exports = async function handler(req, res) {
       const period     = payment.period || 'month';
       const periodDays = period === 'year' ? 365 : 30;
       const startDate  = new Date().toISOString();
-      const endDate    = new Date(Date.now() + periodDays * 24 * 60 * 60 * 1000).toISOString();
+      const endDateObj = new Date(Date.now() + periodDays * 24 * 60 * 60 * 1000);
+      const endDate    = endDateObj.toISOString();
+      const endDateMs  = endDateObj.getTime();
       const paidAmount = amount || payment.amount;
 
       console.log(`[callback] CONFIRMED userId=${payment.userId} plan=${plan} period=${period} endDate=${endDate}`);
@@ -77,6 +79,7 @@ module.exports = async function handler(req, res) {
         status:        'active',
         startDate,
         endDate,
+        endDateMs,
         paymentId:     transactionId,
         paymentMethod: 'sbp',
         amountRub:     paidAmount,

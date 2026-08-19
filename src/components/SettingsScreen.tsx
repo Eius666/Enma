@@ -13,8 +13,9 @@ import {
 } from 'react-icons/fa';
 import { User } from 'firebase/auth';
 import type { Subscription } from '../subscription';
-import { isSubscriptionActive, isInTrial, getActivePlan, trialDaysRemaining, AI_LIMITS } from '../subscription';
-import { getAiUsage } from '../lib/aiLimits';
+import { isSubscriptionActive, isInTrial, getActivePlan, trialDaysRemaining, AI_LIMITS, FREE_LIMITS } from '../subscription';
+import { subscribeAiUsage, subscribeFreeUsage } from '../lib/usageCounters';
+import type { FreeUsageSnapshot } from '../lib/usageCounters';
 import WalletConnect from './WalletConnect';
 import SubscriptionPanel from './SubscriptionPanel';
 import './Settings.css';
@@ -71,6 +72,11 @@ const T = {
     aiUsageLabel: 'AI requests remaining',
     aiImageLabel: 'AI images remaining',
     manageSub: 'Manage subscription',
+    freeLimitsTitle: 'Free plan usage',
+    freeTasksLabel: 'Tasks today',
+    freeHabitsLabel: 'Habits',
+    freeNotesLabel: 'Notes',
+    freeTxLabel: 'Transactions this month',
     currencies: {
       USD: 'US Dollar', EUR: 'Euro', RUB: 'Russian Ruble',
       BYN: 'Belarusian Ruble', CNY: 'Chinese Yuan',
@@ -108,6 +114,11 @@ const T = {
     aiUsageLabel: 'AI-запросы',
     aiImageLabel: 'AI-изображения',
     manageSub: 'Управление подпиской',
+    freeLimitsTitle: 'Использование Free',
+    freeTasksLabel: 'Задачи сегодня',
+    freeHabitsLabel: 'Привычки',
+    freeNotesLabel: 'Заметки',
+    freeTxLabel: 'Транзакции за месяц',
     currencies: {
       USD: 'Доллар США', EUR: 'Евро', RUB: 'Российский рубль',
       BYN: 'Белорусский рубль', CNY: 'Китайский юань',
@@ -145,6 +156,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [bankInput,    setBankInput]    = useState('');
   const [aiTextUsed,   setAiTextUsed]   = useState<number | null>(null);
   const [aiImgUsed,    setAiImgUsed]    = useState<number | null>(null);
+  const [freeUsage,    setFreeUsage]    = useState<FreeUsageSnapshot | null>(null);
 
   const subPanelRef = useRef<HTMLDivElement>(null);
 
@@ -164,10 +176,15 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   useEffect(() => {
     if (!user || activePlan === 'free') return;
-    getAiUsage(user.uid).then(usage => {
-      setAiTextUsed(usage.textRequests);
-      setAiImgUsed(usage.imageRequests);
-    }).catch(() => {});
+    return subscribeAiUsage(user.uid, u => {
+      setAiTextUsed(u.textRequests);
+      setAiImgUsed(u.imageRequests);
+    });
+  }, [user, activePlan]);
+
+  useEffect(() => {
+    if (!user || activePlan !== 'free') return;
+    return subscribeFreeUsage(user.uid, setFreeUsage);
   }, [user, activePlan]);
 
   const handleManageSub = () => {
@@ -443,6 +460,37 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </>
         )}
       </div>
+
+      {/* Free plan usage meters — only for free users */}
+      {activePlan === 'free' && freeUsage && (
+        <div className="sett-group">
+          <div className="sett-row sett-row--label-only">
+            <span className="sett-ai-usage__label">{t.freeLimitsTitle}</span>
+          </div>
+          {([
+            { label: t.freeTasksLabel,  used: freeUsage.dailyTaskCount,   limit: FREE_LIMITS.dailyTasks          },
+            { label: t.freeHabitsLabel, used: freeUsage.habitCount,        limit: FREE_LIMITS.habits              },
+            { label: t.freeNotesLabel,  used: freeUsage.noteCount,         limit: FREE_LIMITS.notes               },
+            { label: t.freeTxLabel,     used: freeUsage.transactionCount,  limit: FREE_LIMITS.monthlyTransactions },
+          ] as const).map(({ label, used, limit }) => (
+            <React.Fragment key={label}>
+              <div className="sett-row__divider" />
+              <div className="sett-ai-usage">
+                <div className="sett-ai-usage__row">
+                  <span className="sett-ai-usage__label">{label}</span>
+                  <span className="sett-ai-usage__count">{used}/{limit}</span>
+                </div>
+                <div className="sett-ai-usage__bar">
+                  <div
+                    className="sett-ai-usage__fill"
+                    style={{ width: `${Math.min(100, (used / limit) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            </React.Fragment>
+          ))}
+        </div>
+      )}
 
       {/* TON Wallet button — standalone, no card wrapper */}
       <div className="sett-wallet-btn">

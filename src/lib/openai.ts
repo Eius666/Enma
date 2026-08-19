@@ -1,11 +1,9 @@
 // Client-side AI service layer.
 // All actual OpenAI calls run server-side via /api/ai/* routes (API key is server-only).
-// This module handles pre-flight checks (rate limit + AI usage limit) and caching.
+// Limit checks and rate limiting are enforced server-side; this module only handles
+// fetch, response parsing, and error conversion.
 
-import { checkAiLimit } from './aiLimits';
-import { checkRateLimit, markRateLimitUsed } from './rateLimit';
 import type { PlanType } from '../subscription';
-import type { AiRequestType } from './aiLimits';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Errors
@@ -24,27 +22,33 @@ export class AiLimitError extends Error {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Pre-flight guard — shared by all functions
+// Base fetch — converts 429 body into AiLimitError
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function preflight(
-  userId: string,
-  plan: PlanType,
-  type: AiRequestType,
-  rateAction: 'ai_text' | 'ai_image' | 'ai_chat',
-): Promise<void> {
-  const [rateResult, limitResult] = await Promise.all([
-    checkRateLimit(userId, rateAction),
-    checkAiLimit(userId, plan, type),
-  ]);
+async function aiPost<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const res = await fetch(path, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(body),
+  });
 
-  if (!rateResult.allowed) {
-    throw new AiLimitError('rate_limit', rateResult.retryAfterMs);
+  if (res.status === 429) {
+    const err = await res.json().catch(() => ({})) as {
+      code?: string;
+      retryAfterMs?: number;
+      used?: number;
+      limit?: number;
+    };
+    const code = (err.code ?? 'monthly_limit') as AiLimitError['type'];
+    throw new AiLimitError(code, err.retryAfterMs, err.used, err.limit);
   }
-  if (!limitResult.allowed) {
-    const errorType = limitResult.limit === 0 ? 'plan_restricted' : 'monthly_limit';
-    throw new AiLimitError(errorType, undefined, limitResult.used, limitResult.limit);
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(err.error ?? `AI request failed (${res.status})`);
   }
+
+  return res.json() as Promise<T>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -73,8 +77,6 @@ function cacheSet<T>(key: string, value: T): void {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // analyzeExpenses
-// Sends transaction data to /api/ai/analyze.
-// Result is cached 24 h per (userId, month).
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface ExpenseAnalysis {
@@ -82,12 +84,13 @@ export interface ExpenseAnalysis {
   insights: string[];
   topCategory: string;
   savingSuggestion: string;
+  remaining?: number;
 }
 
 export async function analyzeExpenses(
   transactions: unknown[],
   userId: string,
-  plan: PlanType,
+  _plan: PlanType,
 ): Promise<ExpenseAnalysis> {
   const month    = new Date().toISOString().slice(0, 7);
   const cacheKey = `enma.ai.analysis.${userId}.${month}`;
@@ -95,95 +98,48 @@ export async function analyzeExpenses(
   const cached = cacheGet<ExpenseAnalysis>(cacheKey);
   if (cached) return cached;
 
-  await preflight(userId, plan, 'text', 'ai_text');
-
-  const res = await fetch('/api/ai/analyze', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ userId, transactions, month }),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error ?? 'Analysis failed');
-  }
-
-  const result = (await res.json()) as ExpenseAnalysis;
+  const result = await aiPost<ExpenseAnalysis>('/api/ai/analyze', { userId, transactions, month });
   cacheSet(cacheKey, result);
-
-  await markRateLimitUsed(userId, 'ai_text').catch(() => {});
   return result;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // generateImage
-// DALL-E 3, 512×512. Premium only.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface GeneratedImage {
   url: string;
   revisedPrompt?: string;
+  remaining?: number;
 }
 
 export async function generateImage(
   prompt: string,
   userId: string,
-  plan: PlanType,
+  _plan: PlanType,
 ): Promise<GeneratedImage> {
-  await preflight(userId, plan, 'image', 'ai_image');
-
-  const res = await fetch('/api/ai/image', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ userId, prompt }),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error ?? 'Image generation failed');
-  }
-
-  const result = (await res.json()) as GeneratedImage;
-  await markRateLimitUsed(userId, 'ai_image').catch(() => {});
-  return result;
+  return aiPost<GeneratedImage>('/api/ai/image', { userId, prompt });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // generateReportPDF
-// AI-generated summary + PDF. Premium only.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface ReportPDF {
-  pdfUrl: string;
-  summary: string;
+  html: string;
+  remaining?: number;
 }
 
 export async function generateReportPDF(
   data: unknown,
   userId: string,
-  plan: PlanType,
+  _plan: PlanType,
 ): Promise<ReportPDF> {
-  await preflight(userId, plan, 'pdf', 'ai_text');
-
-  const res = await fetch('/api/ai/report', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ userId, data }),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error ?? 'Report generation failed');
-  }
-
-  const result = (await res.json()) as ReportPDF;
-  await markRateLimitUsed(userId, 'ai_text').catch(() => {});
-  return result;
+  return aiPost<ReportPDF>('/api/ai/report', { userId, data });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // chatAssistant
-// AI chat with conversation context. Premium only.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface ChatMessage {
@@ -193,29 +149,14 @@ export interface ChatMessage {
 
 export interface ChatResponse {
   message: string;
-  tokensUsed?: number;
+  remaining?: number;
 }
 
 export async function chatAssistant(
   message: string,
   history: ChatMessage[],
   userId: string,
-  plan: PlanType,
+  _plan: PlanType,
 ): Promise<ChatResponse> {
-  await preflight(userId, plan, 'text', 'ai_chat');
-
-  const res = await fetch('/api/ai/chat', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ userId, message, history }),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error ?? 'Chat failed');
-  }
-
-  const result = (await res.json()) as ChatResponse;
-  await markRateLimitUsed(userId, 'ai_chat').catch(() => {});
-  return result;
+  return aiPost<ChatResponse>('/api/ai/chat', { userId, message, history });
 }

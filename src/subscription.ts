@@ -132,6 +132,81 @@ export const trialDaysRemaining = (sub: Subscription): number => {
   return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Feature gating
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type Feature =
+  | 'ai_text'
+  | 'ai_image'
+  | 'ai_chat'
+  | 'pdf_reports'
+  | 'unlimited_tasks'
+  | 'unlimited_habits'
+  | 'unlimited_notes'
+  | 'unlimited_transactions'
+  | 'multiple_banks'
+  | 'family_access';
+
+export const canUseFeature = (plan: PlanType, feature: Feature): boolean => {
+  switch (feature) {
+    case 'ai_text':
+    case 'unlimited_tasks':
+    case 'unlimited_habits':
+    case 'unlimited_notes':
+    case 'unlimited_transactions':
+    case 'multiple_banks':
+      return plan === 'pro' || plan === 'premium';
+    case 'ai_image':
+    case 'ai_chat':
+    case 'pdf_reports':
+    case 'family_access':
+      return plan === 'premium';
+    default:
+      return false;
+  }
+};
+
+// Descriptive alias — use at call sites where "effective" clarifies intent over "active"
+export const getEffectivePlan = getActivePlan;
+
+// Days remaining in the current billing window (trial takes precedence over endDate)
+export const getDaysRemaining = (sub: Subscription): number => {
+  const refDate = isInTrial(sub) ? (sub.trialEndDate ?? sub.endDate) : sub.endDate;
+  const ms = new Date(refDate).getTime() - Date.now();
+  return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
+};
+
+// Prorated end date for mid-cycle plan changes.
+// Credits unused days from currentSub at daily cost and converts them to days
+// on newPlan/newPeriod before adding the base period length.
+export const calculateProratedEndDate = (
+  currentSub: Subscription,
+  newPlan: PaidPlan,
+  newPeriod: SubscriptionPeriod,
+): string => {
+  const now = new Date();
+  const remainingMs   = Math.max(0, new Date(currentSub.endDate).getTime() - now.getTime());
+  const remainingDays = remainingMs / (1000 * 60 * 60 * 24);
+
+  let creditUsd = 0;
+  if (currentSub.plan !== 'free' && PLANS[currentSub.plan as PaidPlan]) {
+    const cfg         = PLANS[currentSub.plan as PaidPlan];
+    const annualPrice = currentSub.period === 'year' ? cfg.yearlyPrice : cfg.monthlyPrice * 12;
+    creditUsd         = remainingDays * (annualPrice / 365);
+  }
+
+  const newCfg        = PLANS[newPlan];
+  const newAnnualPrice = newPeriod === 'year' ? newCfg.yearlyPrice : newCfg.monthlyPrice * 12;
+  const extraDays     = newAnnualPrice > 0 ? Math.round((creditUsd / newAnnualPrice) * 365) : 0;
+  const baseDays      = newPeriod === 'year' ? 365 : 30;
+
+  const end = new Date(now);
+  end.setDate(end.getDate() + baseDays + extraDays);
+  end.setHours(23, 59, 59, 999);
+  return end.toISOString();
+};
+
 export const SBP_PRICES: Record<PaidPlan, Record<SubscriptionPeriod, number>> = {
   pro:     { month: 750,  year: 7200  },
   premium: { month: 1000, year: 9600  },
