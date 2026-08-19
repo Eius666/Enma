@@ -163,7 +163,6 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
   user,
   subscription,
   onSubscriptionChange,
-  onClose,
 }) => {
   const t = T[language];
 
@@ -518,66 +517,25 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
         </div>
       )}
 
-      {/* Plan cards — 3 columns */}
-      <div className="subscription-panel__plans subscription-panel__plans--three">
-
-        {/* Free */}
-        <button
-          type="button"
-          className={[
-            'subscription-panel__plan-card',
-            plan === 'free'       ? 'subscription-panel__plan-card--selected' : '',
-            !activePlan           ? 'subscription-panel__plan-card--active'   : '',
-          ].filter(Boolean).join(' ')}
-          onClick={() => { setPlan('free'); onClose?.(); }}
-        >
-          {!activePlan && <span className="subscription-panel__plan-badge">{t.currentPlan}</span>}
-          <span className="subscription-panel__plan-name">{t.free}</span>
-          <ul className="subscription-panel__plan-features">
-            {t.freeList.map(f => <li key={f}>{f}</li>)}
-          </ul>
-        </button>
-
-        {/* Pro */}
-        <button
-          type="button"
-          className={[
-            'subscription-panel__plan-card',
-            plan === 'pro'          ? 'subscription-panel__plan-card--selected' : '',
-            activePlan === 'pro'    ? 'subscription-panel__plan-card--active'   : '',
-          ].filter(Boolean).join(' ')}
-          onClick={() => setPlan('pro')}
-        >
-          {activePlan === 'pro' && <span className="subscription-panel__plan-badge">{t.currentPlan}</span>}
-          <span className="subscription-panel__plan-name">{t.pro}</span>
-          <span className="subscription-panel__plan-price">
-            {SBP_PRICES.pro.month} ₽
-          </span>
-          <ul className="subscription-panel__plan-features">
-            {t.proList.map(f => <li key={f}>{f}</li>)}
-          </ul>
-        </button>
-
-        {/* Premium */}
-        <button
-          type="button"
-          className={[
-            'subscription-panel__plan-card',
-            'subscription-panel__plan-card--premium',
-            plan === 'premium'         ? 'subscription-panel__plan-card--selected'    : '',
-            activePlan === 'premium'   ? 'subscription-panel__plan-card--active-premium' : '',
-          ].filter(Boolean).join(' ')}
-          onClick={() => setPlan('premium')}
-        >
-          {activePlan === 'premium' && <span className="subscription-panel__plan-badge subscription-panel__plan-badge--premium">{t.currentPlan}</span>}
-          <span className="subscription-panel__plan-name">{t.premium}</span>
-          <span className="subscription-panel__plan-price">
-            {SBP_PRICES.premium.month} ₽
-          </span>
-          <ul className="subscription-panel__plan-features">
-            {t.premiumList.map(f => <li key={f}>{f}</li>)}
-          </ul>
-        </button>
+      {/* Plan toggle */}
+      <div className="subscription-panel__plan-toggle">
+        {(['free', 'pro', 'premium'] as SelectedPlan[]).map(p => {
+          const label: Record<SelectedPlan, string> = { free: t.free, pro: t.pro, premium: t.premium };
+          return (
+            <button
+              key={p}
+              type="button"
+              className={[
+                'subscription-panel__plan-toggle-btn',
+                plan === p ? `subscription-panel__plan-toggle-btn--active-${p}` : '',
+              ].filter(Boolean).join(' ')}
+              onClick={() => setPlan(p)}
+            >
+              {label[p]}
+              {activePlan === p && <span className="subscription-panel__plan-toggle-dot" />}
+            </button>
+          );
+        })}
       </div>
 
       {/* Feature highlights slider — always visible */}
@@ -700,30 +658,6 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
         </>
       )}
 
-      {/* Comparison table */}
-      <div className="subscription-panel__comparison">
-        <h3 className="subscription-panel__comparison-title">{t.tableTitle}</h3>
-        <table className="subscription-panel__table">
-          <thead>
-            <tr>
-              <th className="subscription-panel__th subscription-panel__th--feature">{t.featCol}</th>
-              <th className="subscription-panel__th">{t.freeCol}</th>
-              <th className="subscription-panel__th">{t.proCol}</th>
-              <th className="subscription-panel__th subscription-panel__th--premium">{t.premiumCol}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {t.tableRows.map(row => (
-              <tr key={row.feature} className="subscription-panel__tr">
-                <td className="subscription-panel__td subscription-panel__td--feature">{row.feature}</td>
-                <td className="subscription-panel__td">{row.free}</td>
-                <td className="subscription-panel__td">{row.pro}</td>
-                <td className="subscription-panel__td subscription-panel__td--premium">{row.premium}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
 
     </div>
   );
