@@ -1,7 +1,8 @@
 'use strict';
 
-const { createSbpPayment, getSbpPaymentStatus } = require('../_lib/platega');
-const { validatePromoCode }                      = require('../_lib/promoCodes');
+const { createSbpPayment, getSbpPaymentStatus }   = require('../_lib/platega');
+const { validatePromoCode }                        = require('../_lib/promoCodes');
+const { validateInfluencerCode }                   = require('../_lib/referral/influencer');
 
 // Mirror of src/subscription.ts SBP_PRICES
 const SBP_PRICES = {
@@ -34,6 +35,13 @@ module.exports = async function handler(req, res) {
         return res.status(200).json({ ok: true, ...result, finalAmount });
       }
 
+      // Referral code validation (?validateReferral=CODE&userId=UID)
+      const validateReferral = req.query.validateReferral;
+      if (validateReferral && !transactionId) {
+        const result = await validateInfluencerCode(validateReferral, req.query.userId || null);
+        return res.status(200).json({ ok: true, ...result });
+      }
+
       // Payment status (?transactionId=...&uid=...)
       if (!transactionId || !uid) {
         return res.status(400).json({ ok: false, error: 'Missing transactionId or uid' });
@@ -44,25 +52,41 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      const { userId, userName, promoCode, plan = 'pro', period = 'month' } = req.body || {};
+      const {
+        userId, userName,
+        promoCode, referralCode,
+        plan = 'pro', period = 'month',
+      } = req.body || {};
       if (!userId) return res.status(400).json({ ok: false, error: 'Missing userId' });
 
-      const planKey   = ['pro', 'premium'].includes(plan)    ? plan   : 'pro';
-      const periodKey = ['month', 'year'].includes(period)    ? period : 'month';
+      const planKey   = ['pro', 'premium'].includes(plan)   ? plan   : 'pro';
+      const periodKey = ['month', 'year'].includes(period)  ? period : 'month';
       const BASE      = getBasePrice(planKey, periodKey);
 
-      let finalAmount      = BASE;
-      let discountPercent  = 0;
+      let promoDiscount    = 0;
+      let referralDiscount = 0;
       let validatedPromo   = null;
+      let validatedReferral = null;
 
       if (promoCode) {
-        const promoResult = await validatePromoCode(promoCode);
+        const promoResult = await validatePromoCode(promoCode, userId);
         if (promoResult.valid) {
-          discountPercent = promoResult.discountPercent;
-          finalAmount     = Math.round(BASE * (1 - discountPercent / 100));
-          validatedPromo  = promoResult.code;
+          promoDiscount  = promoResult.discountPercent;
+          validatedPromo = promoResult.code;
         }
       }
+
+      if (referralCode) {
+        const refResult = await validateInfluencerCode(referralCode, userId);
+        if (refResult.valid) {
+          referralDiscount  = refResult.discountPercent;
+          validatedReferral = refResult.code;
+        }
+      }
+
+      // Discounts don't stack — take the maximum
+      const discountPercent = Math.max(promoDiscount, referralDiscount);
+      const finalAmount     = Math.round(BASE * (1 - discountPercent / 100));
 
       const result = await createSbpPayment({
         userId,
@@ -71,11 +95,16 @@ module.exports = async function handler(req, res) {
         originalAmount:  BASE,
         discountPercent,
         promoCode:       validatedPromo,
+        referralCode:    validatedReferral,
         plan:            planKey,
         period:          periodKey,
       });
 
-      return res.status(200).json({ ok: true, ...result, finalAmount, discountPercent });
+      return res.status(200).json({
+        ok: true, ...result,
+        finalAmount, discountPercent,
+        promoDiscount, referralDiscount,
+      });
     }
 
     return res.status(405).json({ ok: false, error: 'Method not allowed' });

@@ -502,6 +502,89 @@ async function handleEntityCreate(req, res) {
 // Router
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Referral: validate influencer code
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function handleReferralValidate(req, res) {
+  const { code, userId } = req.body ?? {};
+  if (!code) return res.status(400).json({ valid: false, error: 'missing_code' });
+
+  const { validateInfluencerCode } = require('../_lib/referral/influencer');
+  const result = await validateInfluencerCode(code, userId || null);
+  return res.status(200).json(result);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Referral: admin payout management (X-Admin-Key required)
+// POST { listOnly: true, minAmount? }        → list pending referrers
+// POST { referrerId, amount }                → mark earnings paid
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function handleReferralPayout(req, res) {
+  const adminKey = process.env.ADMIN_API_KEY;
+  if (adminKey && req.headers['x-admin-key'] !== adminKey) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+
+  const body = req.body ?? {};
+
+  if (body.listOnly) {
+    const minAmount = Number(body.minAmount) || 0;
+    const snap = await db.collection('referrers')
+      .where('pendingPayout', '>=', minAmount)
+      .get();
+    const referrers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    return res.status(200).json({ ok: true, referrers });
+  }
+
+  const { referrerId, amount } = body;
+  if (!referrerId || !amount) {
+    return res.status(400).json({ error: 'referrerId and amount are required' });
+  }
+
+  const referrerRef  = db.collection('referrers').doc(String(referrerId).toUpperCase());
+  const referrerSnap = await referrerRef.get();
+  if (!referrerSnap.exists) return res.status(404).json({ error: 'referrer_not_found' });
+
+  const payAmount = Math.min(Number(amount), referrerSnap.data().pendingPayout || 0);
+  if (payAmount <= 0) return res.status(400).json({ error: 'nothing_to_pay' });
+
+  const earningsSnap = await db.collection('referralEarnings')
+    .where('referrerId', '==', String(referrerId).toUpperCase())
+    .where('status', '==', 'pending')
+    .orderBy('createdAt', 'asc')
+    .get();
+
+  let remaining   = payAmount;
+  let paidCount   = 0;
+  const now       = admin.firestore.FieldValue.serverTimestamp();
+  const batch     = db.batch();
+
+  for (const earnDoc of earningsSnap.docs) {
+    if (remaining <= 0) break;
+    const { commission } = earnDoc.data();
+    if (commission <= remaining + 0.001) {
+      batch.update(earnDoc.ref, { status: 'paid', paidAt: now });
+      remaining -= commission;
+      paidCount++;
+    }
+  }
+
+  batch.update(referrerRef, {
+    pendingPayout: admin.firestore.FieldValue.increment(-payAmount),
+    paidOut:       admin.firestore.FieldValue.increment(payAmount),
+  });
+
+  await batch.commit();
+
+  return res.status(200).json({ ok: true, paidAmount: payAmount, paidEarningsCount: paidCount });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Router
+// ─────────────────────────────────────────────────────────────────────────────
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -511,11 +594,13 @@ module.exports = async (req, res) => {
 
   try {
     switch (action) {
-      case 'analyze': return await handleAnalyze(req, res);
-      case 'chat':    return await handleChat(req, res);
-      case 'image':   return await handleImage(req, res);
-      case 'report':        return await handleReport(req, res);
-      case 'entityCreate':  return await handleEntityCreate(req, res);
+      case 'analyze':          return await handleAnalyze(req, res);
+      case 'chat':             return await handleChat(req, res);
+      case 'image':            return await handleImage(req, res);
+      case 'report':           return await handleReport(req, res);
+      case 'entityCreate':     return await handleEntityCreate(req, res);
+      case 'referralValidate': return await handleReferralValidate(req, res);
+      case 'referralPayout':   return await handleReferralPayout(req, res);
       default:
         return res.status(404).json({ error: `Unknown AI action: ${action}` });
     }

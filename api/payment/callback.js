@@ -1,7 +1,8 @@
 'use strict';
 
-const { db, admin }                           = require('../_lib/firebaseAdmin');
-const { incrementPromoUsage, markPromoUsed }  = require('../_lib/promoCodes');
+const { db, admin }                                      = require('../_lib/firebaseAdmin');
+const { incrementPromoUsage, markPromoUsed }             = require('../_lib/promoCodes');
+const { processInfluencerCommission }                    = require('../_lib/referral/influencer');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -119,6 +120,16 @@ module.exports = async function handler(req, res) {
             console.error('[callback] promo mark error:', err.message)
           ),
         ]);
+      }
+
+      // Influencer referral commission (from actual paid amount)
+      if (payment.referralCode) {
+        await processInfluencerCommission(
+          payment.userId,
+          payment.referralCode,
+          paidAmount,
+          transactionId
+        ).catch(err => console.error('[callback] referral commission error:', err.message));
       }
 
       const userSnap = await db.collection('users').doc(payment.userId).get();

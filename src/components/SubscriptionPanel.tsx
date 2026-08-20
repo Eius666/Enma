@@ -79,6 +79,13 @@ const T = {
     promoErrorExhausted:   'Activation limit reached',
     promoErrorAlreadyUsed: "You've already used this code",
     promoErrorInactive:    'Code is no longer active',
+    referralPlaceholder:      'Referral code',
+    referralApply:            'Apply',
+    referralValid:            'Code {code} applied. {percent}% discount',
+    referralValidMaxDiscount: 'Max discount {percent}% applied. Influencer gets bonus.',
+    referralInvalid:          'Referral code not found',
+    referralErrorInactive:    'Referral code is inactive',
+    referralErrorAlreadyReferred: 'You already have a referrer',
     perMonth:        '/mo',
     perYear:         '/yr',
     freePlanTitle:   'Free plan',
@@ -135,6 +142,13 @@ const T = {
     promoErrorExhausted:   'Лимит активаций исчерпан',
     promoErrorAlreadyUsed: 'Вы уже использовали этот промокод',
     promoErrorInactive:    'Промокод недействителен',
+    referralPlaceholder:      'Реферальный код',
+    referralApply:            'Применить',
+    referralValid:            'Код {code} применён. Скидка {percent}%',
+    referralValidMaxDiscount: 'Применена максимальная скидка {percent}%. Инфлюенсер получит бонус.',
+    referralInvalid:          'Реферальный код не найден',
+    referralErrorInactive:    'Реферальный код неактивен',
+    referralErrorAlreadyReferred: 'У вас уже есть реферер',
     perMonth:        '/мес',
     perYear:         '/год',
     freePlanTitle:   'Бесплатный тариф',
@@ -194,6 +208,12 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
   const [promoDiscount,   setPromoDiscount]   = useState(0);
   const [promoMsg,        setPromoMsg]        = useState<{ type: 'valid'|'invalid'; text: string }|null>(null);
   const [promoChecking,   setPromoChecking]   = useState(false);
+
+  const [referralInput,   setReferralInput]   = useState('');
+  const [referralCode,    setReferralCode]    = useState('');
+  const [referralDiscount, setReferralDiscount] = useState(0);
+  const [referralMsg,     setReferralMsg]     = useState<{ type: 'valid'|'invalid'; text: string }|null>(null);
+  const [referralChecking, setReferralChecking] = useState(false);
   const [payStatus,       setPayStatus]       = useState<PayStatus>('idle');
   const [trialLoading,    setTrialLoading]    = useState(false);
   const [trialUsed,       setTrialUsed]       = useState(true);
@@ -224,8 +244,10 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
 
   // ── Price ──────────────────────────────────────────────────────────────────
 
-  const discountMult = promoDiscount > 0 ? (1 - promoDiscount / 100) : 1;
-  const paidPlan     = plan === 'free' ? null : plan as PaidPlan;
+  // Discounts don't stack — take the maximum
+  const effectiveDiscount = Math.max(promoDiscount, referralDiscount);
+  const discountMult      = effectiveDiscount > 0 ? (1 - effectiveDiscount / 100) : 1;
+  const paidPlan          = plan === 'free' ? null : plan as PaidPlan;
 
   const baseUsd = paidPlan
     ? (period === 'month' ? PLANS[paidPlan].monthlyPrice : PLANS[paidPlan].yearlyPrice)
@@ -244,7 +266,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
   }, [method, discountMult, tonUsdRate, baseUsd, paidPlan, period]);
 
   const originalPriceDisplay = useMemo(() => {
-    if (!paidPlan || !promoDiscount) return null;
+    if (!paidPlan || !effectiveDiscount) return null;
     const sbp = SBP_PRICES[paidPlan][period];
     switch (method) {
       case 'ton':   return `${(baseUsd / tonUsdRate).toFixed(2)} TON`;
@@ -252,7 +274,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       case 'stars': return `${priceToStars(baseUsd).toLocaleString()} ⭐`;
       case 'sbp':   return `${sbp} ₽`;
     }
-  }, [method, promoDiscount, tonUsdRate, baseUsd, paidPlan, period]);
+  }, [method, effectiveDiscount, tonUsdRate, baseUsd, paidPlan, period]);
 
   const periodLabel = period === 'month' ? t.perMonth : t.perYear;
 
@@ -290,6 +312,48 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
 
   const resetPromo = () => {
     setPromoCode(''); setPromoDiscount(0); setPromoInput(''); setPromoMsg(null);
+  };
+
+  const handleApplyReferral = useCallback(async () => {
+    const code = referralInput.trim().toUpperCase();
+    if (!code) return;
+    setReferralChecking(true);
+    setReferralMsg(null);
+    try {
+      const resp = await fetch('/api/ai/referralValidate', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ code, userId: user?.uid || null }),
+      });
+      const data = await resp.json();
+      if (data.valid) {
+        setReferralCode(code);
+        setReferralDiscount(data.discountPercent);
+        // If promo gives a better discount, inform the user
+        const appliedDiscount = Math.max(data.discountPercent, promoDiscount);
+        const isMaxFromPromo  = promoDiscount >= data.discountPercent && promoDiscount > 0;
+        const msg = isMaxFromPromo
+          ? t.referralValidMaxDiscount.replace('{percent}', String(appliedDiscount))
+          : t.referralValid.replace('{code}', code).replace('{percent}', String(data.discountPercent));
+        setReferralMsg({ type: 'valid', text: msg });
+      } else {
+        setReferralCode('');
+        setReferralDiscount(0);
+        const errorMsg =
+          data.error === 'referral_inactive'    ? t.referralErrorInactive :
+          data.error === 'already_referred'     ? t.referralErrorAlreadyReferred :
+          t.referralInvalid;
+        setReferralMsg({ type: 'invalid', text: errorMsg });
+      }
+    } catch {
+      setReferralMsg({ type: 'invalid', text: t.referralInvalid });
+    } finally {
+      setReferralChecking(false);
+    }
+  }, [referralInput, user, promoDiscount, t]);
+
+  const resetReferral = () => {
+    setReferralCode(''); setReferralDiscount(0); setReferralInput(''); setReferralMsg(null);
   };
 
   // ── Trial ──────────────────────────────────────────────────────────────────
@@ -344,7 +408,8 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
           id: paymentId, userId: user.uid, plan: paidPlan, period,
           currency: 'ton', amountUsd: discountUsd, amountRaw,
           status: 'pending', senderAddress: userAddress ?? null,
-          promoCode: promoCode || null, discountPercent: promoDiscount,
+          promoCode:    promoCode    || null, discountPercent: effectiveDiscount,
+          referralCode: referralCode || null,
           createdAt: now.toISOString(), updatedAt: serverTimestamp(),
         });
 
@@ -389,7 +454,8 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
           id: paymentId, userId: user.uid, plan: paidPlan, period,
           currency: 'usdt', amountUsd: discountUsd, amountRaw,
           status: 'pending', senderAddress: userAddress ?? null,
-          promoCode: promoCode || null, discountPercent: promoDiscount,
+          promoCode:    promoCode    || null, discountPercent: effectiveDiscount,
+          referralCode: referralCode || null,
           createdAt: now.toISOString(), updatedAt: serverTimestamp(),
         });
 
@@ -425,7 +491,12 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       if (method === 'sbp') {
         const resp = await fetch('/api/payment/create', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: user.uid, userName: user.email || '', plan: paidPlan, period, promoCode: promoCode || undefined }),
+          body: JSON.stringify({
+            userId: user.uid, userName: user.email || '',
+            plan: paidPlan, period,
+            promoCode:    promoCode    || undefined,
+            referralCode: referralCode || undefined,
+          }),
         });
         const data = await resp.json();
         if (!data.ok || !data.url) throw new Error(data.error || 'No URL');
@@ -465,7 +536,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       setPayStatus('error');
       setTimeout(() => setPayStatus('idle'), 4000);
     }
-  }, [method, user, wallet, userAddress, paidPlan, period, promoCode, promoDiscount, discountMult, baseUsd, tonUsdRate, tonConnectUI, onSubscriptionChange, payStatus, stopPoll]);
+  }, [method, user, wallet, userAddress, paidPlan, period, promoCode, referralCode, effectiveDiscount, discountMult, baseUsd, tonUsdRate, tonConnectUI, onSubscriptionChange, payStatus, stopPoll]);
 
   const btnLabel = useMemo(() => {
     if (payStatus === 'sending')   return t.processing;
@@ -648,12 +719,46 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
             )}
           </div>
 
+          {/* Referral code */}
+          <div className="subscription-panel__promo">
+            {referralCode ? (
+              <div className="subscription-panel__promo-applied">
+                <span>{referralCode} — {referralDiscount}%</span>
+                <button type="button" className="subscription-panel__promo-reset" onClick={resetReferral}>&#x2715;</button>
+              </div>
+            ) : (
+              <div className="subscription-panel__promo-row">
+                <input
+                  className="subscription-panel__promo-input"
+                  type="text"
+                  placeholder={t.referralPlaceholder}
+                  value={referralInput}
+                  onChange={e => setReferralInput(e.target.value.toUpperCase())}
+                  onKeyDown={e => { if (e.key === 'Enter') handleApplyReferral(); }}
+                />
+                <button
+                  type="button"
+                  className="subscription-panel__promo-apply-btn"
+                  onClick={handleApplyReferral}
+                  disabled={referralChecking || !referralInput.trim()}
+                >
+                  {referralChecking ? '…' : t.referralApply}
+                </button>
+              </div>
+            )}
+            {referralMsg && !referralCode && (
+              <span className={`subscription-panel__promo-msg subscription-panel__promo-msg--${referralMsg.type}`}>
+                {referralMsg.text}
+              </span>
+            )}
+          </div>
+
           {/* Price */}
           <div className="subscription-panel__price-block">
             {originalPriceDisplay && (
               <span className="subscription-panel__price-old">{originalPriceDisplay}</span>
             )}
-            <span className={`subscription-panel__price-main${promoDiscount ? ' subscription-panel__price-main--discounted' : ''}`}>
+            <span className={`subscription-panel__price-main${effectiveDiscount ? ' subscription-panel__price-main--discounted' : ''}`}>
               {displayPrice}
             </span>
             <span className="subscription-panel__price-period">{periodLabel}</span>

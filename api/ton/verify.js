@@ -152,5 +152,17 @@ module.exports = async (req, res) => {
     ]);
   }
 
+  // Influencer referral commission (from actual paid amount)
+  if (payment.referralCode) {
+    const { processInfluencerCommission } = require('../_lib/referral/influencer');
+    const amountRub = payment.amountRub || Math.round((payment.amountUsd || 0) * 90);
+    await processInfluencerCommission(
+      userId,
+      payment.referralCode,
+      amountRub,
+      paymentId
+    ).catch(err => console.error('[ton/verify] referral commission error:', err.message));
+  }
+
   return res.status(200).json({ status: 'confirmed' });
 };
