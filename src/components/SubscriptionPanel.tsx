@@ -71,10 +71,14 @@ const T = {
     verifying:       'Waiting for confirmation…',
     verified:        'Confirmed! Plan is active',
     paymentError:    'Payment failed. Try again.',
-    promoPlaceholder:'Promo code',
-    promoApply:      'Apply',
-    promoValid:      '{percent}% off',
-    promoInvalid:    'Code not found or expired',
+    promoPlaceholder:      'Promo code',
+    promoApply:            'Apply',
+    promoValid:            '{percent}% off',
+    promoInvalid:          'Code not found or expired',
+    promoErrorNotFound:    'Code not found or expired',
+    promoErrorExhausted:   'Activation limit reached',
+    promoErrorAlreadyUsed: "You've already used this code",
+    promoErrorInactive:    'Code is no longer active',
     perMonth:        '/mo',
     perYear:         '/yr',
     freePlanTitle:   'Free plan',
@@ -123,10 +127,14 @@ const T = {
     verifying:       'Ожидаем подтверждение…',
     verified:        'Оплата прошла! Тариф активирован',
     paymentError:    'Не удалось. Попробуйте ещё раз.',
-    promoPlaceholder:'Промокод',
-    promoApply:      'Применить',
-    promoValid:      'Скидка {percent}%',
-    promoInvalid:    'Промокод не найден или недействителен',
+    promoPlaceholder:      'Промокод',
+    promoApply:            'Применить',
+    promoValid:            'Скидка {percent}%',
+    promoInvalid:          'Промокод не найден или недействителен',
+    promoErrorNotFound:    'Промокод не найден или недействителен',
+    promoErrorExhausted:   'Лимит активаций исчерпан',
+    promoErrorAlreadyUsed: 'Вы уже использовали этот промокод',
+    promoErrorInactive:    'Промокод недействителен',
     perMonth:        '/мес',
     perYear:         '/год',
     freePlanTitle:   'Бесплатный тариф',
@@ -256,7 +264,8 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
     setPromoChecking(true);
     setPromoMsg(null);
     try {
-      const resp = await fetch(`/api/payment/create?validatePromo=${encodeURIComponent(code)}`);
+      const uidParam = user?.uid ? `&userId=${encodeURIComponent(user.uid)}` : '';
+      const resp = await fetch(`/api/payment/create?validatePromo=${encodeURIComponent(code)}${uidParam}`);
       const data = await resp.json();
       if (data.valid) {
         setPromoCode(code);
@@ -265,14 +274,19 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       } else {
         setPromoCode('');
         setPromoDiscount(0);
-        setPromoMsg({ type: 'invalid', text: t.promoInvalid });
+        const errorMsg =
+          data.error === 'exhausted'    ? t.promoErrorExhausted :
+          data.error === 'already_used' ? t.promoErrorAlreadyUsed :
+          data.error === 'inactive'     ? t.promoErrorInactive :
+          t.promoErrorNotFound;
+        setPromoMsg({ type: 'invalid', text: errorMsg });
       }
     } catch {
-      setPromoMsg({ type: 'invalid', text: t.promoInvalid });
+      setPromoMsg({ type: 'invalid', text: t.promoErrorNotFound });
     } finally {
       setPromoChecking(false);
     }
-  }, [promoInput, t.promoValid, t.promoInvalid]);
+  }, [promoInput, user, t]);
 
   const resetPromo = () => {
     setPromoCode(''); setPromoDiscount(0); setPromoInput(''); setPromoMsg(null);

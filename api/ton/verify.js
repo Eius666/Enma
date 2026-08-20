@@ -139,5 +139,18 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: 'Failed to confirm payment' });
   }
 
+  // Atomically increment promo counter + mark as used by this user
+  if (payment.promoCode) {
+    const { incrementPromoUsage, markPromoUsed } = require('../_lib/promoCodes');
+    await Promise.all([
+      incrementPromoUsage(payment.promoCode).catch(err =>
+        console.error('[ton/verify] promo increment error:', err.message)
+      ),
+      markPromoUsed(userId, payment.promoCode).catch(err =>
+        console.error('[ton/verify] promo mark error:', err.message)
+      ),
+    ]);
+  }
+
   return res.status(200).json({ status: 'confirmed' });
 };

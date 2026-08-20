@@ -24,10 +24,10 @@ module.exports = async function handler(req, res) {
     if (req.method === 'GET') {
       const { transactionId, uid } = req.query;
 
-      // Promo validation (?validatePromo=CODE)
+      // Promo validation (?validatePromo=CODE&userId=UID)
       const validateCode = req.query.validatePromo || req.query.promoCode;
       if (validateCode && !transactionId) {
-        const result = await validatePromoCode(validateCode);
+        const result = await validatePromoCode(validateCode, req.query.userId || null);
         const finalAmount = result.valid
           ? Math.round(1000 * (1 - result.discountPercent / 100))
           : 1000;

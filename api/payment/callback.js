@@ -1,7 +1,7 @@
 'use strict';
 
-const { db, admin }           = require('../_lib/firebaseAdmin');
-const { incrementPromoUsage } = require('../_lib/promoCodes');
+const { db, admin }                           = require('../_lib/firebaseAdmin');
+const { incrementPromoUsage, markPromoUsed }  = require('../_lib/promoCodes');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -109,11 +109,16 @@ module.exports = async function handler(req, res) {
       );
       console.log(`[callback] users/${payment.userId} isPro=true written`);
 
-      // Increment promo usedCount atomically
+      // Atomically increment promo counter + mark as used by this user
       if (payment.promoCode) {
-        await incrementPromoUsage(payment.promoCode).catch(err =>
-          console.error('[callback] promo increment error:', err.message)
-        );
+        await Promise.all([
+          incrementPromoUsage(payment.promoCode).catch(err =>
+            console.error('[callback] promo increment error:', err.message)
+          ),
+          markPromoUsed(payment.userId, payment.promoCode).catch(err =>
+            console.error('[callback] promo mark error:', err.message)
+          ),
+        ]);
       }
 
       const userSnap = await db.collection('users').doc(payment.userId).get();
