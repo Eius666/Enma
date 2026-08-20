@@ -45,15 +45,36 @@
   user-select: none;
 }
 
-/* Greeting "Hi, name" */
-.header-greeting {
-  font-size: 15px;
+/* Two-line greeting block */
+.header-greeting-block {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  max-width: 180px;
+}
+
+.header-greeting-sub {
+  font-size: 12px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.header-greeting-name {
+  font-size: 16px;
   font-weight: 600;
   color: var(--notes-text, #fff);
+  line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 120px;
+  max-width: 180px;
+}
+
+.header-greeting-name--long {
+  font-size: 13px;
 }
 
 /* Avatar wrapper — column so PRO label sits below the circle */

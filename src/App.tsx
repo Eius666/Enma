@@ -1431,6 +1431,14 @@ const App: React.FC = () => {
 
   const userDisplayName =
     profile?.displayName || telegramName || user?.email?.split('@')[0] || t('greetingFallback');
+
+  const telegramUsername = telegram?.initDataUnsafe?.user?.username;
+  const telegramFirstName = telegram?.initDataUnsafe?.user?.first_name;
+  const headerNick = telegramUsername
+    ? `@${telegramUsername}`
+    : telegramFirstName
+    ? telegramFirstName
+    : (profile?.displayName || user?.email?.split('@')[0] || '');
   const userEmail =
     user?.email || telegram?.initDataUnsafe?.user?.username || '—';
 
@@ -1501,9 +1509,14 @@ const App: React.FC = () => {
               </span>
             )}
           </div>
-          <span className="header-greeting">
-            {language === 'ru' ? `Привет, ${userDisplayName}` : `Hi, ${userDisplayName}`}
-          </span>
+          <div className="header-greeting-block">
+            <span className="header-greeting-sub">
+              {language === 'ru' ? 'Привет,' : 'Hi,'}
+            </span>
+            <span className={`header-greeting-name${headerNick.length > 15 ? ' header-greeting-name--long' : ''}`}>
+              {headerNick}
+            </span>
+          </div>
         </div>
         <div className="header-right">
           {/* Email — small text, no box */}
