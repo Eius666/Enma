@@ -5,7 +5,7 @@ const { db, admin } = require('./firebaseAdmin');
 const SEED_CODES = {
   ENMATECH20: { discountPercent: 20, maxUses: 30 },
   ENMATECH50: { discountPercent: 50, maxUses: 30 },
-  ENMATECH90: { discountPercent: 90, maxUses: 100 },
+  ENMATECH90: { discountPercent: 90, maxUses: 10 },
 };
 
 async function _ensureSeedCode(codeUpper) {
@@ -23,6 +23,15 @@ async function _ensureSeedCode(codeUpper) {
         active:          true,
         createdAt:       admin.firestore.FieldValue.serverTimestamp(),
       });
+    } else {
+      // Keep Firestore in sync if seed config changed
+      const data = snap.data();
+      if (data.maxUses !== seed.maxUses || data.discountPercent !== seed.discountPercent) {
+        tx.update(ref, {
+          maxUses:         seed.maxUses,
+          discountPercent: seed.discountPercent,
+        });
+      }
     }
   });
 }
