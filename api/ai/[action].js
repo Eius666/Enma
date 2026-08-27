@@ -777,16 +777,44 @@ async function handleAdminUsers(req, res) {
   }
 
   const now = Date.now();
+  const tgToken = process.env.TELEGRAM_BOT_TOKEN;
+
+  // Collect chatIds that have no username stored — fetch from Telegram in bulk
+  const needTgLookup = [];
+  snap.docs.forEach(d => {
+    const data = d.data();
+    const chatId = data.chatId || data.telegramId;
+    if (chatId && !data.username && !data.firstName && !data.first_name) {
+      needTgLookup.push({ docId: d.id, chatId });
+    }
+  });
+
+  // Fetch Telegram user info for up to 30 users (avoid rate limits)
+  const tgInfoMap = new Map();
+  if (tgToken && needTgLookup.length > 0) {
+    const batch = needTgLookup.slice(0, 30);
+    await Promise.allSettled(batch.map(async ({ docId, chatId }) => {
+      try {
+        const r = await fetch(`https://api.telegram.org/bot${tgToken}/getChat?chat_id=${chatId}`);
+        const j = await r.json();
+        if (j.ok && j.result) {
+          tgInfoMap.set(docId, j.result);
+          // Persist so we don't re-fetch next time
+          await db.collection('users').doc(docId).set({
+            firstName: j.result.first_name || '',
+            lastName:  j.result.last_name  || '',
+            username:  j.result.username   || '',
+          }, { merge: true });
+        }
+      } catch { /* non-fatal */ }
+    }));
+  }
 
   let users = snap.docs.map(d => {
-    const data = d.data();
+    const data    = d.data();
+    const tgLive  = tgInfoMap.get(d.id) || {};
 
-    // telegramUser / telegramUsers field may hold the full Telegram user object
-    const tgUser = data.telegramUser || data.telegramUsers
-      || (Array.isArray(data.telegramUsers) ? data.telegramUsers[0] : null)
-      || {};
-
-    // subscription may be embedded in the user doc OR in the subscriptions collection
+    // subscription may be embedded in user doc OR in separate subscriptions collection
     const embeddedSub = data.subscription && typeof data.subscription === 'object' ? data.subscription : null;
     const sub  = subsMap.get(d.id) || embeddedSub;
     const endMs = sub?.endDateMs
@@ -799,10 +827,10 @@ async function handleAdminUsers(req, res) {
     return {
       uid:          d.id,
       displayName:  data.displayName || data.firstName || data.first_name || data.name
-                    || tgUser.first_name || tgUser.firstName || '',
+                    || tgLive.first_name || '',
       email:        data.email || '',
-      telegramId:   String(data.telegramId || data.chatId || tgUser.id || ''),
-      username:     data.username || tgUser.username || data.tgUsername || data.telegram_username || '',
+      telegramId:   String(data.telegramId || data.chatId || ''),
+      username:     data.username || tgLive.username || '',
       status:       data.status || 'active',
       isPro:        data.isPro || false,
       plan,
