@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { clearAdminKey } from './hooks/useAdminApi';
 
 const NAV_ITEMS = [
@@ -21,14 +21,26 @@ interface LayoutProps {
 }
 
 export default function Layout({ children, currentPath, navigate, pageTitle }: LayoutProps) {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
   function handleLogout() {
     clearAdminKey();
     window.location.reload();
   }
 
+  function handleNav(path: string) {
+    navigate(path);
+    setDrawerOpen(false);
+  }
+
   return (
     <div className="adm-shell">
-      <aside className="adm-sidebar">
+      {/* Overlay — closes drawer on tap */}
+      {drawerOpen && (
+        <div className="adm-drawer-overlay" onClick={() => setDrawerOpen(false)} />
+      )}
+
+      <aside className={`adm-sidebar ${drawerOpen ? 'adm-sidebar--open' : ''}`}>
         <div className="adm-logo">
           <h1>Enma</h1>
           <span>Admin Dashboard</span>
@@ -38,7 +50,7 @@ export default function Layout({ children, currentPath, navigate, pageTitle }: L
             <button
               key={item.path}
               className={`adm-nav-item ${currentPath === item.path ? 'active' : ''}`}
-              onClick={() => navigate(item.path)}
+              onClick={() => handleNav(item.path)}
             >
               <span className="adm-nav-icon">{item.icon}</span>
               {item.label}
@@ -55,8 +67,17 @@ export default function Layout({ children, currentPath, navigate, pageTitle }: L
 
       <main className="adm-main">
         <div className="adm-topbar">
-          <span className="adm-topbar-title">{pageTitle}</span>
-          <span className="adm-topbar-meta">Enma Admin v1</span>
+          <div className="adm-topbar-left">
+            <button
+              className="adm-hamburger"
+              onClick={() => setDrawerOpen(o => !o)}
+              aria-label="Меню"
+            >
+              <span /><span /><span />
+            </button>
+            <span className="adm-topbar-title">{pageTitle}</span>
+          </div>
+          <span className="adm-topbar-meta">Enma Admin</span>
         </div>
         <div className="adm-page">
           {children}
