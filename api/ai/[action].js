@@ -689,7 +689,21 @@ async function handleAdminUsers(req, res) {
   // Diagnostic — call with { action: 'debug' } to see raw Firestore state
   if (body.action === 'debug') {
     const countSnap = await db.collection('users').limit(5).get();
-    const sample = countSnap.docs.map(d => ({ id: d.id, fields: Object.keys(d.data()) }));
+    const sample = countSnap.docs.map(d => {
+      const data = d.data();
+      // Expose full raw doc so we can see nested field values
+      const raw = {};
+      for (const [k, v] of Object.entries(data)) {
+        if (v && typeof v === 'object' && v.constructor?.name === 'Timestamp') {
+          raw[k] = v.toDate().toISOString();
+        } else if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+          raw[k] = v; // show nested objects (telegramUser, subscription, etc.)
+        } else {
+          raw[k] = v;
+        }
+      }
+      return { id: d.id, data: raw };
+    });
     return res.status(200).json({ ok: true, collectionSize: countSnap.size, sample });
   }
 
@@ -766,17 +780,29 @@ async function handleAdminUsers(req, res) {
 
   let users = snap.docs.map(d => {
     const data = d.data();
-    const sub  = subsMap.get(d.id);
-    const endMs = sub?.endDateMs ?? sub?.expiresAt?.toMillis?.() ?? 0;
+
+    // telegramUser / telegramUsers field may hold the full Telegram user object
+    const tgUser = data.telegramUser || data.telegramUsers
+      || (Array.isArray(data.telegramUsers) ? data.telegramUsers[0] : null)
+      || {};
+
+    // subscription may be embedded in the user doc OR in the subscriptions collection
+    const embeddedSub = data.subscription && typeof data.subscription === 'object' ? data.subscription : null;
+    const sub  = subsMap.get(d.id) || embeddedSub;
+    const endMs = sub?.endDateMs
+      ?? (sub?.endDate ? new Date(sub.endDate).getTime() : 0)
+      ?? sub?.expiresAt?.toMillis?.()
+      ?? 0;
     const subActive = sub?.status === 'active' && (!endMs || endMs > now);
-    const plan = subActive ? (sub?.plan || 'pro') : (data.isPro ? 'pro' : 'free');
+    const plan = subActive ? (sub?.plan || sub?.trialPlan || 'pro') : (data.isPro ? 'pro' : 'free');
     const createdMs = data.createdAt?.toMillis?.() ?? data.createdAt?.toDate?.()?.getTime?.() ?? 0;
     return {
       uid:          d.id,
-      displayName:  data.displayName || data.first_name || data.name || data.firstName || '',
+      displayName:  data.displayName || data.firstName || data.first_name || data.name
+                    || tgUser.first_name || tgUser.firstName || '',
       email:        data.email || '',
-      telegramId:   String(data.telegramId || data.chatId || data.id || ''),
-      username:     data.username || data.tgUsername || data.telegram_username || '',
+      telegramId:   String(data.telegramId || data.chatId || tgUser.id || ''),
+      username:     data.username || tgUser.username || data.tgUsername || data.telegram_username || '',
       status:       data.status || 'active',
       isPro:        data.isPro || false,
       plan,

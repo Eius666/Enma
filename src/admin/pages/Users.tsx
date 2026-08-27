@@ -39,7 +39,7 @@ interface MsgModalState {
 interface DebugResult {
   ok: boolean;
   collectionSize: number;
-  sample: { id: string; fields: string[] }[];
+  sample: { id: string; data: Record<string, unknown> }[];
 }
 
 export default function Users() {
@@ -168,16 +168,13 @@ export default function Users() {
       </div>
 
       {debugInfo && (
-        <div className="adm-table-card" style={{ marginTop: 16, padding: 16, fontSize: 13 }}>
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>
-            Диагностика Firestore — найдено документов: <b>{debugInfo.collectionSize}</b>
-            {debugInfo.collectionSize === 0 && <span style={{ color: 'var(--red)', marginLeft: 8 }}>⚠ Коллекция пуста!</span>}
+        <div className="adm-table-card" style={{ marginTop: 16, padding: 16, fontSize: 12 }}>
+          <div style={{ fontWeight: 600, marginBottom: 10 }}>
+            Диагностика — документов в коллекции users: <b>{debugInfo.collectionSize}</b>
           </div>
-          {debugInfo.sample.map(doc => (
-            <div key={doc.id} style={{ marginBottom: 4, fontFamily: 'monospace', color: 'var(--muted)' }}>
-              <b style={{ color: 'var(--text)' }}>{doc.id}</b> — поля: {doc.fields.join(', ')}
-            </div>
-          ))}
+          <pre style={{ overflowX: 'auto', background: 'rgba(0,0,0,0.3)', padding: 12, borderRadius: 6, fontSize: 11, lineHeight: 1.5, maxHeight: 400 }}>
+            {JSON.stringify(debugInfo.sample, null, 2)}
+          </pre>
           <button className="adm-btn ghost sm" style={{ marginTop: 8 }} onClick={() => setDebugInfo(null)}>Закрыть</button>
         </div>
       )}
