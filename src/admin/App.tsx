@@ -13,6 +13,7 @@ import Referrals     from './pages/Referrals';
 import PromoCodes    from './pages/PromoCodes';
 import Messages      from './pages/Messages';
 import AiUsage       from './pages/AiUsage';
+import Setup2FA      from './pages/Setup2FA';
 
 const ROUTES: Record<string, { title: string; component: React.ComponentType }> = {
   '/admin':               { title: 'Обзор',          component: Overview      },
@@ -23,6 +24,7 @@ const ROUTES: Record<string, { title: string; component: React.ComponentType }> 
   '/admin/promocodes':    { title: 'Промокоды',      component: PromoCodes    },
   '/admin/messages':      { title: 'Рассылка',       component: Messages      },
   '/admin/ai-usage':      { title: 'AI-расходы',     component: AiUsage       },
+  '/admin/2fa-setup':     { title: 'Настройка 2FA',  component: Setup2FA      },
 };
 
 function getCurrentPath() {

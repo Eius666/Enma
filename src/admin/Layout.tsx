@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { path: '/admin/promocodes',    icon: '◆', label: 'Промокоды'     },
   { path: '/admin/messages',      icon: '◉', label: 'Рассылка'      },
   { path: '/admin/ai-usage',      icon: '◌', label: 'AI-расходы'    },
+  { path: '/admin/2fa-setup',     icon: '⊛', label: 'Настройка 2FA' },
 ];
 
 interface LayoutProps {

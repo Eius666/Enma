@@ -2,6 +2,59 @@
 
 const { db, admin, getBucket } = require('../_lib/firebaseAdmin');
 const { rateLimit }  = require('../_lib/rateLimit');
+const crypto         = require('crypto');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TOTP (RFC 6238) — no external dependencies, uses Node.js built-in crypto
+// ─────────────────────────────────────────────────────────────────────────────
+
+function _totpBase32Decode(base32) {
+  const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  const s = base32.replace(/\s/g, '').toUpperCase().replace(/=+$/, '');
+  let bits = 0, val = 0;
+  const bytes = [];
+  for (const c of s) {
+    const i = A.indexOf(c);
+    if (i < 0) continue;
+    val = (val << 5) | i;
+    bits += 5;
+    if (bits >= 8) { bytes.push((val >>> (bits - 8)) & 0xff); bits -= 8; }
+  }
+  return Buffer.from(bytes);
+}
+
+function _hotpCode(keyBuf, T) {
+  const buf = Buffer.alloc(8);
+  buf.writeUInt32BE(Math.floor(T / 0x100000000), 0);
+  buf.writeUInt32BE(T >>> 0, 4);
+  const h = crypto.createHmac('sha1', keyBuf).update(buf).digest();
+  const o = h[19] & 0xf;
+  const n = ((h[o] & 0x7f) << 24) | ((h[o+1] & 0xff) << 16) | ((h[o+2] & 0xff) << 8) | (h[o+3] & 0xff);
+  return (n % 1_000_000).toString().padStart(6, '0');
+}
+
+// Accepts ±1 time-step window to handle clock skew
+function verifyTotp(secret, token) {
+  if (!secret || !token) return false;
+  const key = _totpBase32Decode(secret);
+  const T   = Math.floor(Date.now() / 30_000);
+  const t   = String(token).replace(/\s/g, '');
+  return [-1, 0, 1].some(d => _hotpCode(key, T + d) === t);
+}
+
+// Generates a cryptographically random base32 secret (160 bits)
+function generateTotpSecret() {
+  const C = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  const bytes = crypto.randomBytes(20);
+  let r = '', bits = 0, val = 0;
+  for (const b of bytes) {
+    val = (val << 8) | b;
+    bits += 8;
+    while (bits >= 5) { r += C[(val >>> (bits - 5)) & 31]; bits -= 5; }
+  }
+  if (bits > 0) r += C[(val << (5 - bits)) & 31];
+  return r;
+}
 
 // Mirror of src/subscription.ts AI_LIMITS
 const AI_LIMITS = {
@@ -1046,6 +1099,54 @@ async function handleAdminAiUsage(req, res) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Admin: TOTP 2FA — verify and setup
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function handleAdminVerifyOtp(req, res) {
+  // API key must be valid to even attempt OTP verification
+  if (!requireAdmin(req, res)) return;
+
+  const secret = process.env.ADMIN_TOTP_SECRET;
+
+  if (!secret) {
+    // 2FA not configured — return ok so login can proceed without TOTP
+    return res.status(200).json({ ok: true, required: false });
+  }
+
+  const { token } = req.body ?? {};
+  if (!token) {
+    return res.status(200).json({ ok: false, required: true, error: 'token_required' });
+  }
+
+  const valid = verifyTotp(secret, String(token));
+  return res.status(200).json({ ok: valid, required: true, error: valid ? null : 'invalid_token' });
+}
+
+async function handleAdminSetupOtp(req, res) {
+  if (!requireAdmin(req, res)) return;
+
+  const existingSecret = process.env.ADMIN_TOTP_SECRET;
+  // Use existing secret (to show on another device) or generate a new candidate
+  const secret = existingSecret || generateTotpSecret();
+  const uri    = `otpauth://totp/Enma%20Admin?secret=${secret}&issuer=Enma&algorithm=SHA1&digits=6&period=30`;
+
+  // If admin sends a test token, verify it against the secret in the request body
+  const { testToken, candidateSecret } = req.body ?? {};
+  if (testToken) {
+    const s     = candidateSecret || existingSecret || '';
+    const valid = s ? verifyTotp(s, String(testToken)) : false;
+    return res.status(200).json({ ok: valid, error: valid ? null : 'invalid_token' });
+  }
+
+  return res.status(200).json({
+    ok:                 true,
+    secret,
+    uri,
+    alreadyConfigured:  !!existingSecret,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Referral: validate influencer code
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1144,6 +1245,8 @@ module.exports = async (req, res) => {
       case 'entityCreate':     return await handleEntityCreate(req, res);
       case 'referralValidate':      return await handleReferralValidate(req, res);
       case 'referralPayout':        return await handleReferralPayout(req, res);
+      case 'adminVerifyOtp':        return await handleAdminVerifyOtp(req, res);
+      case 'adminSetupOtp':         return await handleAdminSetupOtp(req, res);
       case 'adminStats':            return await handleAdminStats(req, res);
       case 'adminUsers':            return await handleAdminUsers(req, res);
       case 'adminSubscriptions':    return await handleAdminSubscriptions(req, res);
