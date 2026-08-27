@@ -586,12 +586,45 @@ async function handleAdminStats(req, res) {
     aiRequestsMonth += (data.textRequests || 0) + (data.imageRequests || 0) + (data.pdfReports || 0);
   });
 
+  // Recent confirmed payments (last 10) — may need composite index; non-fatal
+  let recentPayments = [];
+  try {
+    const recentPaymentsSnap = await db.collection('payments')
+      .orderBy('createdAt', 'desc')
+      .limit(20)
+      .get();
+    recentPayments = recentPaymentsSnap.docs
+      .filter(d => ['CONFIRMED', 'confirmed'].includes(d.data().status))
+      .slice(0, 10)
+      .map(d => ({
+        id:       d.id,
+        userId:   d.data().userId,
+        amount:   d.data().amount || d.data().finalAmount || 0,
+        plan:     d.data().plan || '',
+        method:   d.data().method || (d.data().transactionId ? 'sbp' : d.data().txHash ? 'ton' : ''),
+        promoCode:d.data().promoCode || '',
+        createdAt:d.data().createdAt?.toDate?.()?.toISOString?.() || '',
+      }));
+  } catch (e) {
+    console.warn('[adminStats] recentPayments query failed:', e.message);
+  }
+
+  // Recent registrations (last 10)
+  const recentUsersSnap = await db.collection('users').orderBy('createdAt', 'desc').limit(10).get();
+  const recentUsers = recentUsersSnap.docs.map(d => ({
+    uid:         d.id,
+    displayName: d.data().displayName || d.data().first_name || '',
+    username:    d.data().username || '',
+    createdAt:   d.data().createdAt?.toDate?.()?.toISOString?.() || '',
+  }));
+
   return res.status(200).json({
     totalUsers: usersSnap.size, payingUsers,
     newToday, newWeek, newMonth,
     revenueMonth, pendingPayouts, aiRequestsMonth,
     topReferrers: topReferrers.slice(0, 5),
     regsByDay, revByDay, planDist,
+    recentPayments, recentUsers,
   });
 }
 
@@ -656,19 +689,33 @@ async function handleAdminUsers(req, res) {
 
   const { limit: lim = 50, search } = body;
   const limit = Math.min(Number(lim) || 50, 200);
-  const snap  = await db.collection('users').orderBy('createdAt', 'desc').limit(limit).get();
+
+  const [snap, subsSnap] = await Promise.all([
+    db.collection('users').orderBy('createdAt', 'desc').limit(limit).get(),
+    db.collection('subscriptions').get(),
+  ]);
+
+  const subsMap = new Map(subsSnap.docs.map(d => [d.id, d.data()]));
+  const now     = Date.now();
 
   let users = snap.docs.map(d => {
     const data = d.data();
+    const sub  = subsMap.get(d.id);
+    const endMs = sub?.endDateMs ?? sub?.expiresAt?.toMillis?.() ?? 0;
+    const subActive = sub?.status === 'active' && (!endMs || endMs > now);
+    const plan = subActive ? (sub?.plan || 'free') : 'free';
     return {
-      uid:         d.id,
-      displayName: data.displayName || data.first_name || data.name || '',
-      email:       data.email || '',
-      telegramId:  String(data.telegramId || data.chatId || ''),
-      username:    data.username || '',
-      status:      data.status || 'active',
-      isPro:       data.isPro || false,
-      createdAt:   data.createdAt?.toDate?.()?.toISOString?.() || '',
+      uid:          d.id,
+      displayName:  data.displayName || data.first_name || data.name || '',
+      email:        data.email || '',
+      telegramId:   String(data.telegramId || data.chatId || ''),
+      username:     data.username || '',
+      status:       data.status || 'active',
+      isPro:        data.isPro || false,
+      plan,
+      subExpiresAt: endMs ? new Date(endMs).toISOString() : '',
+      referralCode: data.referredByInfluencer || '',
+      createdAt:    data.createdAt?.toDate?.()?.toISOString?.() || '',
     };
   });
 
@@ -884,6 +931,10 @@ async function handleAdminPromoCodes(req, res) {
     await db.collection('promoCodes').doc(code.toUpperCase()).update({ active: Boolean(active) });
     return res.status(200).json({ ok: true });
   }
+
+  // Seed all known codes to Firestore before listing (idempotent)
+  const { seedAllPromoCodes } = require('../_lib/promoCodes');
+  await seedAllPromoCodes();
 
   const snap  = await db.collection('promoCodes').get();
   const codes = snap.docs.map(d => ({ id: d.id, ...d.data() }));

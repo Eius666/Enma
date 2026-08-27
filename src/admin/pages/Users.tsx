@@ -12,6 +12,9 @@ interface User {
   username: string;
   status: string;
   isPro: boolean;
+  plan: string;
+  subExpiresAt: string;
+  referralCode: string;
   createdAt: string;
 }
 
@@ -77,13 +80,22 @@ export default function Users() {
 
   const columns: Column<User>[] = [
     { key: 'displayName', label: 'Имя' },
-    { key: 'telegramId',  label: 'Telegram ID', render: r => <span className="adm-mono">{r.telegramId || '—'}</span> },
-    { key: 'username',    label: 'Username',  render: r => r.username ? `@${r.username}` : '—' },
-    { key: 'email',       label: 'Email', render: r => <span style={{ fontSize: 12, color: 'var(--muted)' }}>{r.email || '—'}</span> },
-    { key: 'isPro', label: 'Тариф', render: r => r.isPro
-        ? <span className="adm-badge purple">Pro+</span>
-        : <span className="adm-badge gray">Free</span>
-    },
+    { key: 'telegramId',  label: 'Telegram',   render: r => r.telegramId  ? <span className="adm-mono">{r.telegramId}</span>   : <span style={{ color: 'var(--muted)' }}>—</span> },
+    { key: 'username',    label: 'Username',   render: r => r.username    ? <span className="adm-mono">@{r.username}</span>    : <span style={{ color: 'var(--muted)' }}>—</span> },
+    { key: 'email',       label: 'Email',      render: r => r.email       ? <span style={{ fontSize: 12 }}>{r.email}</span>    : <span style={{ color: 'var(--muted)' }}>—</span> },
+    { key: 'plan', label: 'Тариф', render: r => {
+        const p = r.plan || 'free';
+        if (p === 'premium') return <span className="adm-badge yellow">Premium</span>;
+        if (p === 'pro')     return <span className="adm-badge purple">Pro</span>;
+        return <span className="adm-badge gray">Free</span>;
+    }},
+    { key: 'subExpiresAt', label: 'Истекает', render: r => {
+        if (!r.subExpiresAt) return <span style={{ color: 'var(--muted)' }}>—</span>;
+        const d = new Date(r.subExpiresAt);
+        const expired = d < new Date();
+        return <span style={{ color: expired ? 'var(--red)' : 'var(--green)', fontSize: 12 }}>{d.toISOString().slice(0, 10)}</span>;
+    }},
+    { key: 'referralCode', label: 'Реферал', render: r => r.referralCode ? <span className="adm-mono" style={{ color: '#c4b5fd' }}>{r.referralCode}</span> : <span style={{ color: 'var(--muted)' }}>—</span> },
     { key: 'status', label: 'Статус', render: r => r.status === 'blocked'
         ? <span className="adm-badge red">Заблокирован</span>
         : <span className="adm-badge green">Активен</span>

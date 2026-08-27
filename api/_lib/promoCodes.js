@@ -103,4 +103,9 @@ async function incrementPromoUsage(code) {
   });
 }
 
-module.exports = { validatePromoCode, applyPromoToUser, getUserPromo, markPromoUsed, incrementPromoUsage };
+// Ensures all seed codes exist in Firestore — called by admin on listing
+async function seedAllPromoCodes() {
+  await Promise.all(Object.keys(SEED_CODES).map(code => _ensureSeedCode(code)));
+}
+
+module.exports = { validatePromoCode, applyPromoToUser, getUserPromo, markPromoUsed, incrementPromoUsage, seedAllPromoCodes };

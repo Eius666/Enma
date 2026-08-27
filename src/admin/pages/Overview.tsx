@@ -1,6 +1,12 @@
 import { useAdminApi } from '../hooks/useAdminApi';
 import StatCard from '../components/StatCard';
 
+interface RecentPayment {
+  id: string; userId: string; amount: number; plan: string; method: string; promoCode: string; createdAt: string;
+}
+interface RecentUser {
+  uid: string; displayName: string; username: string; createdAt: string;
+}
 interface StatsData {
   totalUsers: number;
   payingUsers: number;
@@ -14,6 +20,8 @@ interface StatsData {
   regsByDay: Record<string, number>;
   revByDay: Record<string, number>;
   planDist: { free: number; pro: number; premium: number };
+  recentPayments: RecentPayment[];
+  recentUsers: RecentUser[];
 }
 
 function BarChart({ data, color = '#7c3aed', label }: { data: Record<string, number>; color?: string; label: string }) {
@@ -126,12 +134,7 @@ export default function Overview() {
           <div className="adm-table-wrap">
             <table className="adm-table adm-ref-table">
               <thead>
-                <tr>
-                  <th>Код</th>
-                  <th>Имя</th>
-                  <th>Всего заработано</th>
-                  <th>К выплате</th>
-                </tr>
+                <tr><th>Код</th><th>Имя</th><th>Всего заработано</th><th>К выплате</th></tr>
               </thead>
               <tbody>
                 {stats.topReferrers.map(r => (
@@ -142,8 +145,7 @@ export default function Overview() {
                     <td>
                       {(r.pendingPayout || 0) > 0
                         ? <span className="adm-badge yellow">{(r.pendingPayout || 0).toLocaleString()} ₽</span>
-                        : <span className="adm-badge gray">0 ₽</span>
-                      }
+                        : <span className="adm-badge gray">0 ₽</span>}
                     </td>
                   </tr>
                 ))}
@@ -152,6 +154,62 @@ export default function Overview() {
           </div>
         </div>
       )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className="adm-table-card">
+          <div className="adm-table-header">
+            <span className="adm-table-title">Последние платежи</span>
+          </div>
+          {!stats.recentPayments?.length ? (
+            <div className="adm-empty">Нет платежей</div>
+          ) : (
+            <div className="adm-table-wrap">
+              <table className="adm-table">
+                <thead>
+                  <tr><th>Сумма</th><th>Метод</th><th>Тариф</th><th>Промо</th><th>Дата</th></tr>
+                </thead>
+                <tbody>
+                  {stats.recentPayments.map(p => (
+                    <tr key={p.id}>
+                      <td><b style={{ color: 'var(--green)' }}>{(p.amount || 0).toLocaleString()} ₽</b></td>
+                      <td><span className="adm-badge gray">{p.method || '—'}</span></td>
+                      <td>{p.plan || '—'}</td>
+                      <td>{p.promoCode ? <span className="adm-mono" style={{ fontSize: 11 }}>{p.promoCode}</span> : <span style={{ color: 'var(--muted)' }}>—</span>}</td>
+                      <td style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{p.createdAt ? p.createdAt.slice(0, 16).replace('T', ' ') : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="adm-table-card">
+          <div className="adm-table-header">
+            <span className="adm-table-title">Новые пользователи</span>
+          </div>
+          {!stats.recentUsers?.length ? (
+            <div className="adm-empty">Нет пользователей</div>
+          ) : (
+            <div className="adm-table-wrap">
+              <table className="adm-table">
+                <thead>
+                  <tr><th>Имя</th><th>Username</th><th>Дата</th></tr>
+                </thead>
+                <tbody>
+                  {stats.recentUsers.map(u => (
+                    <tr key={u.uid}>
+                      <td>{u.displayName || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
+                      <td>{u.username ? <span className="adm-mono">@{u.username}</span> : <span style={{ color: 'var(--muted)' }}>—</span>}</td>
+                      <td style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{u.createdAt ? u.createdAt.slice(0, 10) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
     </>
   );
 }
