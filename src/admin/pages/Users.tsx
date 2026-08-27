@@ -20,6 +20,7 @@ interface User {
 
 interface UsersData {
   users: User[];
+  total: number;
   hasMore: boolean;
 }
 
@@ -35,12 +36,28 @@ interface MsgModalState {
   text: string;
 }
 
+interface DebugResult {
+  ok: boolean;
+  collectionSize: number;
+  sample: { id: string; fields: string[] }[];
+}
+
 export default function Users() {
   const [search, setSearch] = useState('');
   const [searchApplied, setSearchApplied] = useState('');
 
   const { data, loading, error, refetch } = useAdminApi<UsersData>('adminUsers', { search: searchApplied, limit: 200 });
   const { toast } = useToast();
+  const [debugInfo, setDebugInfo] = useState<DebugResult | null>(null);
+
+  async function runDebug() {
+    try {
+      const res = await adminCall<DebugResult>('adminUsers', { action: 'debug' });
+      setDebugInfo(res);
+    } catch (e: unknown) {
+      toast(`Ошибка диагностики: ${e instanceof Error ? e.message : String(e)}`, 'error');
+    }
+  }
 
   const [grantModal, setGrantModal] = useState<GrantModalState | null>(null);
   const [msgModal,   setMsgModal]   = useState<MsgModalState | null>(null);
@@ -123,7 +140,11 @@ export default function Users() {
     <>
       <div className="adm-table-card">
         <div className="adm-table-header">
-          <span className="adm-table-title">Пользователи {data ? `(${data.users.length})` : ''}</span>
+          <span className="adm-table-title">Пользователи {data ? `(${data.total ?? data.users.length})` : ''}</span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button className="adm-btn ghost sm" onClick={runDebug} title="Диагностика Firestore">Диагностика</button>
+            <button className="adm-btn ghost sm" onClick={refetch}>Обновить</button>
+          </div>
           <div className="adm-search">
             <input
               className="adm-input adm-search-input"
@@ -145,6 +166,21 @@ export default function Users() {
           pageSize={50}
         />
       </div>
+
+      {debugInfo && (
+        <div className="adm-table-card" style={{ marginTop: 16, padding: 16, fontSize: 13 }}>
+          <div style={{ fontWeight: 600, marginBottom: 8 }}>
+            Диагностика Firestore — найдено документов: <b>{debugInfo.collectionSize}</b>
+            {debugInfo.collectionSize === 0 && <span style={{ color: 'var(--red)', marginLeft: 8 }}>⚠ Коллекция пуста!</span>}
+          </div>
+          {debugInfo.sample.map(doc => (
+            <div key={doc.id} style={{ marginBottom: 4, fontFamily: 'monospace', color: 'var(--muted)' }}>
+              <b style={{ color: 'var(--text)' }}>{doc.id}</b> — поля: {doc.fields.join(', ')}
+            </div>
+          ))}
+          <button className="adm-btn ghost sm" style={{ marginTop: 8 }} onClick={() => setDebugInfo(null)}>Закрыть</button>
+        </div>
+      )}
 
       {grantModal && (
         <Modal

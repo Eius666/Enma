@@ -27,6 +27,7 @@ export async function adminCall<T = unknown>(action: string, body: object = {}):
     throw new Error('forbidden');
   }
   const data = await res.json();
+  if (!res.ok) throw new Error((data as { error?: string }).error || `HTTP ${res.status}`);
   return data as T;
 }
 

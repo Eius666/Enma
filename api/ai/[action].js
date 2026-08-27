@@ -686,6 +686,13 @@ async function handleAdminUsers(req, res) {
 
   const body = req.body ?? {};
 
+  // Diagnostic — call with { action: 'debug' } to see raw Firestore state
+  if (body.action === 'debug') {
+    const countSnap = await db.collection('users').limit(5).get();
+    const sample = countSnap.docs.map(d => ({ id: d.id, fields: Object.keys(d.data()) }));
+    return res.status(200).json({ ok: true, collectionSize: countSnap.size, sample });
+  }
+
   if (body.action) {
     const { action, userId, ...params } = body;
     if (!userId) return res.status(400).json({ error: 'userId required' });
@@ -740,37 +747,49 @@ async function handleAdminUsers(req, res) {
     return res.status(400).json({ error: `Unknown action: ${action}` });
   }
 
-  const { limit: lim = 50, search } = body;
-  const limit = Math.min(Number(lim) || 50, 200);
+  const { limit: lim = 200, search } = body;
+  const limit = Math.min(Number(lim) || 200, 500);
 
-  const [snap, subsSnap] = await Promise.all([
-    db.collection('users').orderBy('createdAt', 'desc').limit(limit).get(),
-    db.collection('subscriptions').get(),
-  ]);
+  // Firestore orderBy('createdAt') excludes docs without that field entirely.
+  // Fetch without ordering and sort in JS so all users are always returned.
+  const snap = await db.collection('users').limit(limit).get();
 
-  const subsMap = new Map(subsSnap.docs.map(d => [d.id, d.data()]));
-  const now     = Date.now();
+  let subsMap = new Map();
+  try {
+    const subsSnap = await db.collection('subscriptions').get();
+    subsMap = new Map(subsSnap.docs.map(d => [d.id, d.data()]));
+  } catch {
+    // subscriptions join is non-fatal — show users without plan info
+  }
+
+  const now = Date.now();
 
   let users = snap.docs.map(d => {
     const data = d.data();
     const sub  = subsMap.get(d.id);
     const endMs = sub?.endDateMs ?? sub?.expiresAt?.toMillis?.() ?? 0;
     const subActive = sub?.status === 'active' && (!endMs || endMs > now);
-    const plan = subActive ? (sub?.plan || 'free') : 'free';
+    const plan = subActive ? (sub?.plan || 'pro') : (data.isPro ? 'pro' : 'free');
+    const createdMs = data.createdAt?.toMillis?.() ?? data.createdAt?.toDate?.()?.getTime?.() ?? 0;
     return {
       uid:          d.id,
-      displayName:  data.displayName || data.first_name || data.name || '',
+      displayName:  data.displayName || data.first_name || data.name || data.firstName || '',
       email:        data.email || '',
-      telegramId:   String(data.telegramId || data.chatId || ''),
-      username:     data.username || '',
+      telegramId:   String(data.telegramId || data.chatId || data.id || ''),
+      username:     data.username || data.tgUsername || data.telegram_username || '',
       status:       data.status || 'active',
       isPro:        data.isPro || false,
       plan,
       subExpiresAt: endMs ? new Date(endMs).toISOString() : '',
-      referralCode: data.referredByInfluencer || '',
-      createdAt:    data.createdAt?.toDate?.()?.toISOString?.() || '',
+      referralCode: data.referredByInfluencer || data.referralCode || '',
+      createdAt:    createdMs ? new Date(createdMs).toISOString() : '',
+      createdMs,
     };
   });
+
+  // Sort newest-first in JS (handles mixed createdAt presence)
+  users.sort((a, b) => (b.createdMs || 0) - (a.createdMs || 0));
+  users = users.map(({ createdMs: _ms, ...u }) => u); // strip internal sort key
 
   if (search) {
     const s = search.toLowerCase();
@@ -779,11 +798,11 @@ async function handleAdminUsers(req, res) {
       u.email.toLowerCase().includes(s) ||
       u.telegramId.includes(s) ||
       u.username.toLowerCase().includes(s) ||
-      u.uid.includes(s)
+      u.uid.toLowerCase().includes(s)
     );
   }
 
-  return res.status(200).json({ ok: true, users, hasMore: snap.size === limit });
+  return res.status(200).json({ ok: true, users, total: users.length, hasMore: snap.size === limit });
 }
 
 async function handleAdminSubscriptions(req, res) {
@@ -1259,7 +1278,8 @@ module.exports = async (req, res) => {
         return res.status(404).json({ error: `Unknown AI action: ${action}` });
     }
   } catch (err) {
-    console.error(`[ai/${action}] unhandled error:`, err.message);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error(`[ai/${action}] unhandled error:`, err.message, err.stack);
+    const isAdmin = String(action).startsWith('admin');
+    return res.status(500).json({ error: isAdmin ? err.message : 'Internal server error' });
   }
 };
