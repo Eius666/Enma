@@ -1,23 +1,29 @@
 import ReactDOM from 'react-dom/client';
 import './index.css';
-import App from './App';
 import reportWebVitals from './reportWebVitals';
-import { TonConnectUIProvider } from '@tonconnect/ui-react';
-
-const TONCONNECT_MANIFEST_URL =
-  process.env.REACT_APP_TONCONNECT_MANIFEST ||
-  'https://enma-silk.vercel.app/tonconnect-manifest.json';
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
-root.render(
-  <TonConnectUIProvider manifestUrl={TONCONNECT_MANIFEST_URL}>
-    <App />
-  </TonConnectUIProvider>
-);
 
-// If you want to start measuring performance in your app, pass a function
-// to log results (for example: reportWebVitals(console.log))
-// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
+if (window.location.pathname.startsWith('/admin')) {
+  import('./admin/App').then(({ default: AdminApp }) => {
+    root.render(<AdminApp />);
+  });
+} else {
+  Promise.all([
+    import('./App'),
+    import('@tonconnect/ui-react'),
+  ]).then(([{ default: App }, { TonConnectUIProvider }]) => {
+    const TONCONNECT_MANIFEST_URL =
+      process.env.REACT_APP_TONCONNECT_MANIFEST ||
+      'https://enma-silk.vercel.app/tonconnect-manifest.json';
+    root.render(
+      <TonConnectUIProvider manifestUrl={TONCONNECT_MANIFEST_URL}>
+        <App />
+      </TonConnectUIProvider>
+    );
+  });
+}
+
 reportWebVitals();

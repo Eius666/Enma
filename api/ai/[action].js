@@ -503,6 +503,498 @@ async function handleEntityCreate(req, res) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Admin helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function requireAdmin(req, res) {
+  const key = process.env.ADMIN_API_KEY;
+  if (!key || req.headers['x-admin-key'] !== key) {
+    res.status(403).json({ error: 'forbidden' });
+    return false;
+  }
+  return true;
+}
+
+async function handleAdminStats(req, res) {
+  if (!requireAdmin(req, res)) return;
+
+  const now          = new Date();
+  const todayStart   = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const weekStart    = new Date(now.getTime() - 7 * 86400000);
+  const monthStart   = new Date(now.getFullYear(), now.getMonth(), 1);
+  const thirtyAgo    = new Date(now.getTime() - 30 * 86400000);
+  const monthKey     = now.toISOString().slice(0, 7);
+
+  const [usersSnap, subsSnap, paymentsSnap, referrersSnap, aiSnap] = await Promise.all([
+    db.collection('users').get(),
+    db.collection('subscriptions').get(),
+    db.collection('payments').where('status', 'in', ['CONFIRMED', 'confirmed']).get(),
+    db.collection('referrers').get(),
+    db.collection('aiUsage').where('month', '==', monthKey).get(),
+  ]);
+
+  let newToday = 0, newWeek = 0, newMonth = 0;
+  const regsByDay = {};
+  usersSnap.docs.forEach(d => {
+    const created = d.data().createdAt?.toDate?.();
+    if (!created) return;
+    if (created >= todayStart) newToday++;
+    if (created >= weekStart)  newWeek++;
+    if (created >= monthStart) newMonth++;
+    if (created >= thirtyAgo) {
+      const day = created.toISOString().slice(0, 10);
+      regsByDay[day] = (regsByDay[day] || 0) + 1;
+    }
+  });
+
+  const planDist   = { free: usersSnap.size, pro: 0, premium: 0 };
+  let payingUsers  = 0;
+  subsSnap.docs.forEach(d => {
+    const sub  = d.data();
+    if (sub.status !== 'active') return;
+    const endMs = sub.endDateMs ?? sub.expiresAt?.toMillis?.() ?? 0;
+    if (endMs && endMs < Date.now()) return;
+    const plan = sub.plan || 'free';
+    if (plan === 'pro')     { planDist.pro++;     planDist.free--; payingUsers++; }
+    if (plan === 'premium') { planDist.premium++; planDist.free--; payingUsers++; }
+  });
+  if (planDist.free < 0) planDist.free = 0;
+
+  let revenueMonth = 0;
+  const revByDay   = {};
+  paymentsSnap.docs.forEach(d => {
+    const data    = d.data();
+    const created = data.createdAt?.toDate?.();
+    const day     = created?.toISOString?.()?.slice(0, 10);
+    const amount  = data.amount || data.finalAmount || 0;
+    if (created >= monthStart) revenueMonth += amount;
+    if (created >= thirtyAgo && day) revByDay[day] = (revByDay[day] || 0) + amount;
+  });
+
+  let pendingPayouts = 0;
+  const topReferrers = [];
+  referrersSnap.docs.forEach(d => {
+    const data = { id: d.id, ...d.data() };
+    pendingPayouts += data.pendingPayout || 0;
+    topReferrers.push(data);
+  });
+  topReferrers.sort((a, b) => (b.totalEarned || 0) - (a.totalEarned || 0));
+
+  let aiRequestsMonth = 0;
+  aiSnap.docs.forEach(d => {
+    const data = d.data();
+    aiRequestsMonth += (data.textRequests || 0) + (data.imageRequests || 0) + (data.pdfReports || 0);
+  });
+
+  return res.status(200).json({
+    totalUsers: usersSnap.size, payingUsers,
+    newToday, newWeek, newMonth,
+    revenueMonth, pendingPayouts, aiRequestsMonth,
+    topReferrers: topReferrers.slice(0, 5),
+    regsByDay, revByDay, planDist,
+  });
+}
+
+async function handleAdminUsers(req, res) {
+  if (!requireAdmin(req, res)) return;
+
+  const body = req.body ?? {};
+
+  if (body.action) {
+    const { action, userId, ...params } = body;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    if (action === 'grant_subscription') {
+      const { plan = 'pro', periodMonths = 1 } = params;
+      let expiresAt = new Date();
+      const subSnap = await db.collection('subscriptions').doc(userId).get();
+      if (subSnap.exists) {
+        const ex = subSnap.data().expiresAt?.toDate?.() || (subSnap.data().endDateMs && new Date(subSnap.data().endDateMs));
+        if (ex && ex > expiresAt) expiresAt = ex;
+      }
+      expiresAt.setMonth(expiresAt.getMonth() + Number(periodMonths));
+      await db.collection('subscriptions').doc(userId).set({
+        userId, plan, status: 'active',
+        expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+        endDateMs: expiresAt.getTime(),
+        updatedAt: now, grantedByAdmin: true,
+      }, { merge: true });
+      await db.collection('users').doc(userId).set({ isPro: true, updatedAt: now }, { merge: true });
+      return res.status(200).json({ ok: true });
+    }
+
+    if (action === 'send_message') {
+      const { text } = params;
+      if (!text) return res.status(400).json({ error: 'text required' });
+      const userSnap = await db.collection('users').doc(userId).get();
+      if (!userSnap.exists) return res.status(404).json({ error: 'user_not_found' });
+      const chatId = userSnap.data().chatId || userSnap.data().telegramId;
+      if (!chatId) return res.status(400).json({ error: 'no_telegram_id' });
+      const token  = process.env.TELEGRAM_BOT_TOKEN;
+      const tgRes  = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
+      });
+      const tgData = await tgRes.json();
+      return res.status(200).json({ ok: tgData.ok, error: tgData.description });
+    }
+
+    if (action === 'block') {
+      await db.collection('users').doc(userId).set({ status: 'blocked', updatedAt: now }, { merge: true });
+      return res.status(200).json({ ok: true });
+    }
+
+    if (action === 'unblock') {
+      await db.collection('users').doc(userId).set({ status: 'active', updatedAt: now }, { merge: true });
+      return res.status(200).json({ ok: true });
+    }
+
+    return res.status(400).json({ error: `Unknown action: ${action}` });
+  }
+
+  const { limit: lim = 50, search } = body;
+  const limit = Math.min(Number(lim) || 50, 200);
+  const snap  = await db.collection('users').orderBy('createdAt', 'desc').limit(limit).get();
+
+  let users = snap.docs.map(d => {
+    const data = d.data();
+    return {
+      uid:         d.id,
+      displayName: data.displayName || data.first_name || data.name || '',
+      email:       data.email || '',
+      telegramId:  String(data.telegramId || data.chatId || ''),
+      username:    data.username || '',
+      status:      data.status || 'active',
+      isPro:       data.isPro || false,
+      createdAt:   data.createdAt?.toDate?.()?.toISOString?.() || '',
+    };
+  });
+
+  if (search) {
+    const s = search.toLowerCase();
+    users = users.filter(u =>
+      u.displayName.toLowerCase().includes(s) ||
+      u.email.toLowerCase().includes(s) ||
+      u.telegramId.includes(s) ||
+      u.username.toLowerCase().includes(s) ||
+      u.uid.includes(s)
+    );
+  }
+
+  return res.status(200).json({ ok: true, users, hasMore: snap.size === limit });
+}
+
+async function handleAdminSubscriptions(req, res) {
+  if (!requireAdmin(req, res)) return;
+
+  const body = req.body ?? {};
+
+  if (body.action === 'update') {
+    const { userId, plan, periodMonths, status } = body;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    const now    = admin.firestore.FieldValue.serverTimestamp();
+    const update = { updatedAt: now };
+    if (plan)   update.plan   = plan;
+    if (status) update.status = status;
+    if (periodMonths) {
+      let expiresAt = new Date();
+      const subSnap = await db.collection('subscriptions').doc(userId).get();
+      if (subSnap.exists) {
+        const ex = subSnap.data().expiresAt?.toDate?.();
+        if (ex && ex > expiresAt) expiresAt = ex;
+      }
+      expiresAt.setMonth(expiresAt.getMonth() + Number(periodMonths));
+      update.expiresAt = admin.firestore.Timestamp.fromDate(expiresAt);
+      update.endDateMs = expiresAt.getTime();
+    }
+    await db.collection('subscriptions').doc(userId).set(update, { merge: true });
+    if (status === 'cancelled') {
+      await db.collection('users').doc(userId).set({ isPro: false, updatedAt: now }, { merge: true });
+    }
+    return res.status(200).json({ ok: true });
+  }
+
+  const { limit: lim = 100 } = body;
+  const limit = Math.min(Number(lim) || 100, 200);
+  const snap  = await db.collection('subscriptions').orderBy('updatedAt', 'desc').limit(limit).get();
+
+  const subs = snap.docs.map(d => {
+    const data = d.data();
+    return {
+      userId:        d.id,
+      plan:          data.plan,
+      period:        data.period,
+      status:        data.status,
+      endDate:       data.endDate || data.expiresAt?.toDate?.()?.toISOString?.() || '',
+      endDateMs:     data.endDateMs,
+      paymentMethod: data.paymentMethod,
+      promoCode:     data.promoCode || '',
+      referralCode:  data.referralCode || '',
+      grantedByAdmin:data.grantedByAdmin || false,
+      updatedAt:     data.updatedAt?.toDate?.()?.toISOString?.() || '',
+    };
+  });
+
+  return res.status(200).json({ ok: true, subscriptions: subs });
+}
+
+async function handleAdminPayments(req, res) {
+  if (!requireAdmin(req, res)) return;
+
+  const body = req.body ?? {};
+  const { limit: lim = 100, statusFilter, methodFilter } = body;
+  const limit = Math.min(Number(lim) || 100, 200);
+
+  const snap = await db.collection('payments').orderBy('createdAt', 'desc').limit(limit).get();
+
+  let payments = snap.docs.map(d => {
+    const data   = d.data();
+    const method = data.method
+      || (data.transactionId ? 'sbp' : data.txHash ? 'ton' : data.network ? data.network : 'unknown');
+    return {
+      id:          d.id,
+      userId:      data.userId,
+      amount:      data.amount || data.finalAmount || 0,
+      method,
+      status:      data.status,
+      createdAt:   data.createdAt?.toDate?.()?.toISOString?.() || '',
+      promoCode:   data.promoCode || '',
+      referralCode:data.referralCode || '',
+      plan:        data.plan || '',
+      period:      data.period || '',
+      transactionId: data.transactionId || '',
+    };
+  });
+
+  if (statusFilter) payments = payments.filter(p => p.status === statusFilter);
+  if (methodFilter) payments = payments.filter(p => p.method === methodFilter);
+
+  const totalRevenue = payments
+    .filter(p => ['CONFIRMED', 'confirmed'].includes(p.status))
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+  return res.status(200).json({ ok: true, payments, totalRevenue });
+}
+
+async function handleAdminReferrals(req, res) {
+  if (!requireAdmin(req, res)) return;
+
+  const body = req.body ?? {};
+
+  if (body.action === 'create') {
+    const { code, name, commissionPercent = 30, discountPercent = 10 } = body;
+    if (!code || !name) return res.status(400).json({ error: 'code and name required' });
+    const codeUpper = code.toUpperCase().trim();
+    await db.collection('referrers').doc(codeUpper).set({
+      code: codeUpper, name,
+      commissionPercent: Number(commissionPercent),
+      discountPercent:   Number(discountPercent),
+      status: 'active', totalEarned: 0, pendingPayout: 0, paidOut: 0,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return res.status(200).json({ ok: true, code: codeUpper });
+  }
+
+  if (body.action === 'update') {
+    const { referrerId, commissionPercent, discountPercent, status, paymentDetails } = body;
+    if (!referrerId) return res.status(400).json({ error: 'referrerId required' });
+    const update = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+    if (commissionPercent !== undefined) update.commissionPercent = Number(commissionPercent);
+    if (discountPercent   !== undefined) update.discountPercent   = Number(discountPercent);
+    if (status)           update.status         = status;
+    if (paymentDetails)   update.paymentDetails = paymentDetails;
+    await db.collection('referrers').doc(String(referrerId).toUpperCase()).update(update);
+    return res.status(200).json({ ok: true });
+  }
+
+  if (body.action === 'payout') {
+    const { referrerId, amount } = body;
+    if (!referrerId || !amount) return res.status(400).json({ error: 'referrerId and amount required' });
+    const referrerRef  = db.collection('referrers').doc(String(referrerId).toUpperCase());
+    const referrerSnap = await referrerRef.get();
+    if (!referrerSnap.exists) return res.status(404).json({ error: 'referrer_not_found' });
+    const payAmount = Math.min(Number(amount), referrerSnap.data().pendingPayout || 0);
+    if (payAmount <= 0) return res.status(400).json({ error: 'nothing_to_pay' });
+
+    const earningsSnap = await db.collection('referralEarnings')
+      .where('referrerId', '==', String(referrerId).toUpperCase())
+      .where('status', '==', 'pending')
+      .get();
+
+    let remaining = payAmount;
+    const now     = admin.firestore.FieldValue.serverTimestamp();
+    const batch   = db.batch();
+    for (const earnDoc of earningsSnap.docs) {
+      if (remaining <= 0) break;
+      const { commission } = earnDoc.data();
+      if (commission <= remaining + 0.001) {
+        batch.update(earnDoc.ref, { status: 'paid', paidAt: now });
+        remaining -= commission;
+      }
+    }
+    batch.update(referrerRef, {
+      pendingPayout: admin.firestore.FieldValue.increment(-payAmount),
+      paidOut:       admin.firestore.FieldValue.increment(payAmount),
+    });
+    await batch.commit();
+    return res.status(200).json({ ok: true, paidAmount: payAmount });
+  }
+
+  const [referrersSnap, earningsSnap] = await Promise.all([
+    db.collection('referrers').get(),
+    db.collection('referralEarnings').orderBy('createdAt', 'desc').limit(200).get(),
+  ]);
+
+  const referrers = referrersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const earnings  = earningsSnap.docs.map(d => ({
+    id: d.id, ...d.data(),
+    createdAt: d.data().createdAt?.toDate?.()?.toISOString?.() || '',
+  }));
+
+  return res.status(200).json({ ok: true, referrers, earnings });
+}
+
+async function handleAdminPromoCodes(req, res) {
+  if (!requireAdmin(req, res)) return;
+
+  const body = req.body ?? {};
+
+  if (body.action === 'create') {
+    const { code, discountPercent, maxUses } = body;
+    if (!code || discountPercent === undefined || !maxUses) {
+      return res.status(400).json({ error: 'code, discountPercent, maxUses required' });
+    }
+    const codeUpper = code.toUpperCase().trim();
+    await db.collection('promoCodes').doc(codeUpper).set({
+      code: codeUpper,
+      discountPercent: Number(discountPercent),
+      maxUses:         Number(maxUses),
+      usedCount:       0,
+      active:          true,
+      createdAt:       admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return res.status(200).json({ ok: true, code: codeUpper });
+  }
+
+  if (body.action === 'toggle') {
+    const { code, active } = body;
+    if (!code) return res.status(400).json({ error: 'code required' });
+    await db.collection('promoCodes').doc(code.toUpperCase()).update({ active: Boolean(active) });
+    return res.status(200).json({ ok: true });
+  }
+
+  const snap  = await db.collection('promoCodes').get();
+  const codes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return res.status(200).json({ ok: true, codes });
+}
+
+async function handleAdminMessages(req, res) {
+  if (!requireAdmin(req, res)) return;
+
+  const body = req.body ?? {};
+
+  if (body.action === 'history') {
+    const snap = await db.collection('adminMessages').orderBy('sentAt', 'desc').limit(50).get();
+    const msgs = snap.docs.map(d => ({
+      id: d.id, ...d.data(),
+      sentAt: d.data().sentAt?.toDate?.()?.toISOString?.() || '',
+    }));
+    return res.status(200).json({ ok: true, messages: msgs });
+  }
+
+  const { text, target = 'all' } = body;
+  if (!text) return res.status(400).json({ error: 'text required' });
+
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return res.status(500).json({ error: 'TELEGRAM_BOT_TOKEN not set' });
+
+  let chatIds = [];
+
+  if (Array.isArray(target)) {
+    const snaps = await Promise.all(target.map(uid => db.collection('users').doc(uid).get()));
+    chatIds = snaps
+      .filter(s => s.exists)
+      .map(s => s.data().chatId || s.data().telegramId)
+      .filter(Boolean);
+  } else {
+    const usersSnap = await db.collection('users').get();
+    if (target === 'all') {
+      chatIds = usersSnap.docs
+        .map(d => d.data().chatId || d.data().telegramId)
+        .filter(Boolean);
+    } else {
+      const subsSnap = await db.collection('subscriptions').where('status', '==', 'active').get();
+      const activeSubs = new Map(subsSnap.docs.map(d => [d.id, d.data()]));
+      chatIds = usersSnap.docs.filter(d => {
+        const sub  = activeSubs.get(d.id);
+        const endMs = sub?.endDateMs ?? sub?.expiresAt?.toMillis?.() ?? 0;
+        if (endMs && endMs < Date.now()) return target === 'free';
+        const plan = sub?.plan || 'free';
+        return plan === target;
+      }).map(d => d.data().chatId || d.data().telegramId).filter(Boolean);
+    }
+  }
+
+  let sent = 0, failed = 0;
+  const BATCH_SIZE = 30;
+  for (let i = 0; i < chatIds.length; i += BATCH_SIZE) {
+    const chunk = chatIds.slice(i, i + BATCH_SIZE);
+    await Promise.all(chunk.map(async chatId => {
+      try {
+        const r    = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
+        });
+        const data = await r.json();
+        if (data.ok) sent++; else failed++;
+      } catch { failed++; }
+    }));
+    if (i + BATCH_SIZE < chatIds.length) await new Promise(r => setTimeout(r, 1000));
+  }
+
+  await db.collection('adminMessages').add({
+    text, target: typeof target === 'string' ? target : 'custom',
+    total: chatIds.length, sent, failed,
+    sentAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  return res.status(200).json({ ok: true, total: chatIds.length, sent, failed });
+}
+
+async function handleAdminAiUsage(req, res) {
+  if (!requireAdmin(req, res)) return;
+
+  const body     = req.body ?? {};
+  const monthKey = body.month || new Date().toISOString().slice(0, 7);
+  const limit    = Math.min(Number(body.limit) || 100, 200);
+
+  const snap = await db.collection('aiUsage').where('month', '==', monthKey).limit(limit).get();
+
+  let totalText = 0, totalImage = 0, totalPdf = 0;
+  const usage = snap.docs.map(d => {
+    const data = d.data();
+    totalText  += data.textRequests  || 0;
+    totalImage += data.imageRequests || 0;
+    totalPdf   += data.pdfReports    || 0;
+    return {
+      userId:       d.id,
+      textRequests: data.textRequests  || 0,
+      imageRequests:data.imageRequests || 0,
+      pdfReports:   data.pdfReports    || 0,
+      updatedAt:    data.updatedAt?.toDate?.()?.toISOString?.() || '',
+    };
+  });
+
+  return res.status(200).json({
+    ok: true, month: monthKey, usage,
+    totals: { textRequests: totalText, imageRequests: totalImage, pdfReports: totalPdf },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Referral: validate influencer code
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -599,8 +1091,16 @@ module.exports = async (req, res) => {
       case 'image':            return await handleImage(req, res);
       case 'report':           return await handleReport(req, res);
       case 'entityCreate':     return await handleEntityCreate(req, res);
-      case 'referralValidate': return await handleReferralValidate(req, res);
-      case 'referralPayout':   return await handleReferralPayout(req, res);
+      case 'referralValidate':      return await handleReferralValidate(req, res);
+      case 'referralPayout':        return await handleReferralPayout(req, res);
+      case 'adminStats':            return await handleAdminStats(req, res);
+      case 'adminUsers':            return await handleAdminUsers(req, res);
+      case 'adminSubscriptions':    return await handleAdminSubscriptions(req, res);
+      case 'adminPayments':         return await handleAdminPayments(req, res);
+      case 'adminReferrals':        return await handleAdminReferrals(req, res);
+      case 'adminPromoCodes':       return await handleAdminPromoCodes(req, res);
+      case 'adminMessages':         return await handleAdminMessages(req, res);
+      case 'adminAiUsage':          return await handleAdminAiUsage(req, res);
       default:
         return res.status(404).json({ error: `Unknown AI action: ${action}` });
     }

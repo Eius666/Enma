@@ -1,0 +1,201 @@
+import { useState } from 'react';
+import { adminCall, useAdminApi } from '../hooks/useAdminApi';
+import DataTable, { Column } from '../components/DataTable';
+import Modal from '../components/Modal';
+import { useToast } from '../components/Toast';
+
+interface User {
+  uid: string;
+  displayName: string;
+  email: string;
+  telegramId: string;
+  username: string;
+  status: string;
+  isPro: boolean;
+  createdAt: string;
+}
+
+interface UsersData {
+  users: User[];
+  hasMore: boolean;
+}
+
+interface GrantModalState {
+  userId: string;
+  plan: string;
+  periodMonths: number;
+}
+
+interface MsgModalState {
+  userId: string;
+  name: string;
+  text: string;
+}
+
+export default function Users() {
+  const [search, setSearch] = useState('');
+  const [searchApplied, setSearchApplied] = useState('');
+
+  const { data, loading, error, refetch } = useAdminApi<UsersData>('adminUsers', { search: searchApplied, limit: 200 });
+  const { toast } = useToast();
+
+  const [grantModal, setGrantModal] = useState<GrantModalState | null>(null);
+  const [msgModal,   setMsgModal]   = useState<MsgModalState | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  async function blockUser(userId: string, block: boolean) {
+    try {
+      await adminCall('adminUsers', { action: block ? 'block' : 'unblock', userId });
+      toast(block ? 'Пользователь заблокирован' : 'Разблокирован', block ? 'warn' : 'success');
+      refetch();
+    } catch { toast('Ошибка', 'error'); }
+  }
+
+  async function grantSub() {
+    if (!grantModal) return;
+    setActionLoading(true);
+    try {
+      await adminCall('adminUsers', { action: 'grant_subscription', userId: grantModal.userId, plan: grantModal.plan, periodMonths: grantModal.periodMonths });
+      toast('Подписка выдана', 'success');
+      setGrantModal(null);
+      refetch();
+    } catch { toast('Ошибка', 'error'); }
+    finally { setActionLoading(false); }
+  }
+
+  async function sendMessage() {
+    if (!msgModal?.text) return;
+    setActionLoading(true);
+    try {
+      const res = await adminCall<{ ok: boolean; error?: string }>('adminUsers', { action: 'send_message', userId: msgModal.userId, text: msgModal.text });
+      if (res.ok) toast('Сообщение отправлено', 'success');
+      else toast(`Ошибка: ${res.error}`, 'error');
+      setMsgModal(null);
+    } catch { toast('Ошибка', 'error'); }
+    finally { setActionLoading(false); }
+  }
+
+  const columns: Column<User>[] = [
+    { key: 'displayName', label: 'Имя' },
+    { key: 'telegramId',  label: 'Telegram ID', render: r => <span className="adm-mono">{r.telegramId || '—'}</span> },
+    { key: 'username',    label: 'Username',  render: r => r.username ? `@${r.username}` : '—' },
+    { key: 'email',       label: 'Email', render: r => <span style={{ fontSize: 12, color: 'var(--muted)' }}>{r.email || '—'}</span> },
+    { key: 'isPro', label: 'Тариф', render: r => r.isPro
+        ? <span className="adm-badge purple">Pro+</span>
+        : <span className="adm-badge gray">Free</span>
+    },
+    { key: 'status', label: 'Статус', render: r => r.status === 'blocked'
+        ? <span className="adm-badge red">Заблокирован</span>
+        : <span className="adm-badge green">Активен</span>
+    },
+    { key: 'createdAt', label: 'Регистрация', render: r => r.createdAt ? r.createdAt.slice(0, 10) : '—' },
+    { key: 'actions', label: '', sortable: false, render: r => (
+      <div className="adm-row-actions">
+        <button className="adm-btn ghost sm" onClick={() => setGrantModal({ userId: r.uid, plan: 'pro', periodMonths: 1 })}>
+          + Подписка
+        </button>
+        <button className="adm-btn ghost sm" onClick={() => setMsgModal({ userId: r.uid, name: r.displayName, text: '' })}>
+          Сообщение
+        </button>
+        <button
+          className={`adm-btn sm ${r.status === 'blocked' ? 'success' : 'danger'}`}
+          onClick={() => blockUser(r.uid, r.status !== 'blocked')}
+        >
+          {r.status === 'blocked' ? 'Разблокировать' : 'Блок'}
+        </button>
+      </div>
+    )},
+  ];
+
+  return (
+    <>
+      <div className="adm-table-card">
+        <div className="adm-table-header">
+          <span className="adm-table-title">Пользователи {data ? `(${data.users.length})` : ''}</span>
+          <div className="adm-search">
+            <input
+              className="adm-input adm-search-input"
+              placeholder="Поиск по имени, email, ID..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') setSearchApplied(search); }}
+            />
+            <button className="adm-btn primary" onClick={() => setSearchApplied(search)}>Найти</button>
+            {searchApplied && <button className="adm-btn ghost" onClick={() => { setSearch(''); setSearchApplied(''); }}>✕</button>}
+          </div>
+        </div>
+        <DataTable<User>
+          columns={columns}
+          rows={data?.users || []}
+          loading={loading}
+          rowKey={r => r.uid}
+          emptyText={error || 'Нет пользователей'}
+          pageSize={50}
+        />
+      </div>
+
+      {grantModal && (
+        <Modal
+          title="Выдать подписку"
+          onClose={() => setGrantModal(null)}
+          footer={
+            <>
+              <button className="adm-btn ghost" onClick={() => setGrantModal(null)}>Отмена</button>
+              <button className="adm-btn primary" onClick={grantSub} disabled={actionLoading}>
+                {actionLoading ? 'Выдаётся...' : 'Выдать'}
+              </button>
+            </>
+          }
+        >
+          <div className="adm-form-row">
+            <label className="adm-label">Тариф</label>
+            <select className="adm-select" value={grantModal.plan} onChange={e => setGrantModal(p => p ? { ...p, plan: e.target.value } : p)}>
+              <option value="pro">Pro</option>
+              <option value="premium">Premium</option>
+            </select>
+          </div>
+          <div className="adm-form-row">
+            <label className="adm-label">Период (месяцев)</label>
+            <input
+              className="adm-input"
+              type="number"
+              min={1}
+              max={24}
+              value={grantModal.periodMonths}
+              onChange={e => setGrantModal(p => p ? { ...p, periodMonths: Number(e.target.value) } : p)}
+            />
+          </div>
+          <div style={{ color: 'var(--muted)', fontSize: 13 }}>
+            User ID: <span className="adm-mono">{grantModal.userId}</span>
+          </div>
+        </Modal>
+      )}
+
+      {msgModal && (
+        <Modal
+          title={`Сообщение — ${msgModal.name || msgModal.userId}`}
+          onClose={() => setMsgModal(null)}
+          footer={
+            <>
+              <button className="adm-btn ghost" onClick={() => setMsgModal(null)}>Отмена</button>
+              <button className="adm-btn primary" onClick={sendMessage} disabled={actionLoading || !msgModal.text}>
+                {actionLoading ? 'Отправка...' : 'Отправить'}
+              </button>
+            </>
+          }
+        >
+          <div className="adm-form-row">
+            <label className="adm-label">Текст (поддерживается HTML)</label>
+            <textarea
+              className="adm-textarea"
+              rows={5}
+              value={msgModal.text}
+              onChange={e => setMsgModal(p => p ? { ...p, text: e.target.value } : p)}
+              placeholder="Введите текст сообщения..."
+            />
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
