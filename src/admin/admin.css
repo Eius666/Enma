@@ -425,6 +425,50 @@ table.adm-table tr:hover td { background: rgba(255,255,255,0.02); }
 .adm-mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 .adm-row-actions { display: flex; gap: 6px; flex-wrap: nowrap; }
 
+/* ── Mobile card list (DataTable on mobile) ── */
+.adm-card-list { display: flex; flex-direction: column; }
+
+.adm-card-row {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.adm-card-row:last-child { border-bottom: none; }
+
+.adm-card-field {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 20px;
+}
+.adm-card-field-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 80px;
+}
+.adm-card-field-value {
+  font-size: 13px;
+  color: var(--text);
+  word-break: break-word;
+  flex: 1;
+}
+
+.adm-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255,255,255,0.04);
+  margin-top: 2px;
+}
+.adm-card-actions > span { display: contents; }
+
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
