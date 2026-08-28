@@ -847,14 +847,26 @@ module.exports = async (req, res) => {
       await sendChatAction(token, chatId, 'upload_photo');
       const caption = message.caption ? String(message.caption).slice(0, 1024) : null;
 
-      const description = await handlePhotoMessage(token, chatId, photos, caption).catch(err => {
+      const visionTypingInterval = setInterval(() => {
+        sendChatAction(token, chatId, 'upload_photo').catch(() => {});
+      }, 4000);
+
+      let description;
+      try {
+        description = await handlePhotoMessage(token, chatId, photos, caption);
+      } catch (err) {
         console.error('[WH][vision] error:', err.message);
-        return null;
-      });
+        description = null;
+      } finally {
+        clearInterval(visionTypingInterval);
+      }
 
       const replyText = description
         ? `🖼 ${description}`
         : '⚠️ Не удалось проанализировать изображение. Попробуй ещё раз.';
+
+      const visionDelay = Math.min(Math.max(replyText.length * 50, 1000), 4000);
+      await new Promise(r => setTimeout(r, visionDelay));
 
       await sendMessage(token, chatId, replyText);
 
@@ -881,10 +893,15 @@ module.exports = async (req, res) => {
     if (voice) {
       await sendChatAction(token, chatId);
 
+      const voiceTypingInterval = setInterval(() => {
+        sendChatAction(token, chatId).catch(() => {});
+      }, 4000);
+
       let transcription;
       try {
         transcription = await handleVoiceMessage(token, voice);
       } catch (err) {
+        clearInterval(voiceTypingInterval);
         console.error('[WH][voice] STT error:', err.message);
         const errMsg = err.message.includes('OPENAI_API_KEY not set')
           ? '🎤 Голосовые сообщения временно недоступны.'
@@ -895,6 +912,7 @@ module.exports = async (req, res) => {
       }
 
       if (!transcription) {
+        clearInterval(voiceTypingInterval);
         await sendMessage(token, chatId, '🎤 Не удалось распознать речь. Попробуй ещё раз или напиши текстом.');
         res.status(200).json({ ok: true });
         return;
@@ -909,7 +927,12 @@ module.exports = async (req, res) => {
       } catch (aiErr) {
         console.error('[WH][8b] voice chatWithTools error:', aiErr.message);
         voiceReply = 'Извините, временно не могу обработать запрос. Попробуйте позже.';
+      } finally {
+        clearInterval(voiceTypingInterval);
       }
+
+      const voiceDelay = Math.min(Math.max(voiceReply.length * 50, 1000), 4000);
+      await new Promise(r => setTimeout(r, voiceDelay));
 
       await sendMessage(token, chatId, voiceReply, { disable_web_page_preview: true });
 
@@ -936,6 +959,10 @@ module.exports = async (req, res) => {
 
     const history = await loadHistory(userId, sub.active).catch(() => []);
 
+    const textTypingInterval = setInterval(() => {
+      sendChatAction(token, chatId).catch(() => {});
+    }, 4000);
+
     let replyText;
     try {
       const { text: response } = await chatWithTools(text, userId, chatId, history);
@@ -943,7 +970,12 @@ module.exports = async (req, res) => {
     } catch (aiErr) {
       console.error('[WH][8c] chatWithTools error:', aiErr.message);
       replyText = 'Извините, временно не могу обработать запрос. Попробуйте позже.';
+    } finally {
+      clearInterval(textTypingInterval);
     }
+
+    const textDelay = Math.min(Math.max(replyText.length * 50, 1000), 4000);
+    await new Promise(r => setTimeout(r, textDelay));
 
     await sendMessage(token, chatId, replyText, { disable_web_page_preview: true });
 
