@@ -391,7 +391,10 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
 
     try {
       if (method === 'stars') {
-        window.open('https://t.me/YourArc_bot', '_blank');
+        const tgStars = (window as Window & { Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void } } }).Telegram?.WebApp;
+        const botUrl  = 'https://t.me/EnmaAI_bot';
+        if (tgStars?.openTelegramLink) tgStars.openTelegramLink(botUrl);
+        else window.open(botUrl, '_blank', 'noopener,noreferrer');
         setPayStatus('idle');
         return;
       }

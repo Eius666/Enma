@@ -1114,11 +1114,14 @@ async function handleAdminMessages(req, res) {
     }
   }
 
+  // Deduplicate: same Telegram user may have multiple Firestore docs (anon + custom token)
+  chatIds = [...new Set(chatIds.map(id => String(id)))];
+
   let sent = 0, failed = 0;
   const BATCH_SIZE = 30;
   for (let i = 0; i < chatIds.length; i += BATCH_SIZE) {
     const chunk = chatIds.slice(i, i + BATCH_SIZE);
-    await Promise.all(chunk.map(async chatId => {
+    await Promise.allSettled(chunk.map(async chatId => {
       try {
         const r    = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
           method: 'POST',

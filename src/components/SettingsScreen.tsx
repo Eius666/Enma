@@ -166,8 +166,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const subLabel = inTrial
     ? t.subTrial.replace('{days}', String(trialDaysRemaining(subscription!)))
-    : isSubscriptionActive(subscription!)
-      ? (subscription!.plan === 'premium' ? t.subPremium : t.subPro)
+    : subscription && isSubscriptionActive(subscription)
+      ? (subscription.plan === 'premium' ? t.subPremium : t.subPro)
       : t.subFree;
 
   const aiLimits    = AI_LIMITS[activePlan];
