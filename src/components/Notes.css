@@ -107,37 +107,38 @@ body.theme-light .notes-list__search {
 
 .notes-list__chip {
   flex-shrink: 0;
-  padding: 6px 14px;
-  border-radius: 999px;
+  padding: 7px 14px;
+  border-radius: 20px;
   font-size: 13px;
-  font-weight: 600;
-  border: none;
+  font-weight: 500;
+  border: 1px solid var(--notes-card-border);
   cursor: pointer;
-  transition: background var(--transition-base), color var(--transition-base),
-    box-shadow var(--transition-base);
-  background: rgba(255, 255, 255, 0.07);
+  transition: background 0.18s, border-color 0.18s, color 0.18s;
+  background: var(--notes-card-bg);
   color: var(--notes-text-secondary);
   white-space: nowrap;
 }
 
 .notes-list__chip:hover {
-  background: rgba(123, 104, 238, 0.2);
+  background: rgba(123, 104, 238, 0.12);
   color: var(--notes-text);
 }
 
 .notes-list__chip--active {
   background: var(--notes-accent);
+  border-color: var(--notes-accent);
   color: #fff;
-  box-shadow: 0 4px 14px rgba(123, 104, 238, 0.4);
 }
 
 body.theme-light .notes-list__chip {
-  background: rgba(123, 104, 238, 0.08);
+  background: var(--notes-card-bg);
+  border-color: var(--notes-card-border);
   color: var(--notes-text-secondary);
 }
 
 body.theme-light .notes-list__chip--active {
   background: var(--notes-accent);
+  border-color: var(--notes-accent);
   color: #fff;
 }
 
