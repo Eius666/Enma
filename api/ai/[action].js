@@ -90,22 +90,115 @@ function aiConfig() {
   throw new Error('No AI API key configured (set OPENAI_API_KEY or OPENROUTER_API_KEY)');
 }
 
-async function callText(messages, systemPrompt, maxTokens = 1000) {
-  const cfg = aiConfig();
-  const resp = await fetch(`${cfg.baseURL}/chat/completions`, {
+// ── Model routing ────────────────────────────────────────────────────────────
+
+const AI_TASKS = {
+  categorize: { model: 'meta-llama/llama-3.1-8b-instruct', temp: 0.1, json: true,  fallback: 'openai/gpt-4o-mini'                },
+  chat:       { model: 'openai/gpt-4o-mini',               temp: 0.7, json: false, fallback: 'meta-llama/llama-3.1-8b-instruct' },
+  analyze:    { model: 'openai/gpt-4o-mini',               temp: 0.5, json: false, fallback: 'meta-llama/llama-3.1-8b-instruct' },
+  report:     { model: 'anthropic/claude-3.5-sonnet',       temp: 0.4, json: false, fallback: 'openai/gpt-4o-mini'               },
+  reason:     { model: 'anthropic/claude-3.5-sonnet',       temp: 0.3, json: false, fallback: 'openai/gpt-4o-mini'               },
+};
+
+// Approximate RUB cost per 1M tokens
+const MODEL_PRICING = {
+  'meta-llama/llama-3.1-8b-instruct': { input: 0.15,  output: 0.30   },
+  'openai/gpt-4o-mini':               { input: 13.5,  output: 54.0   },
+  'anthropic/claude-3.5-sonnet':      { input: 270.0, output: 1350.0 },
+};
+
+const RETRYABLE_STATUS = new Set([429, 503, 504]);
+
+async function orRequest(apiKey, baseURL, model, messages, opts) {
+  const body = {
+    model,
+    messages,
+    max_tokens:  opts.maxTokens ?? 1000,
+    temperature: opts.temp ?? 0.7,
+  };
+  if (opts.json) body.response_format = { type: 'json_object' };
+  return fetch(`${baseURL}/chat/completions`, {
     method:  'POST',
-    headers: { Authorization: `Bearer ${cfg.apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model:      cfg.textModel,
-      messages:   [{ role: 'system', content: systemPrompt }, ...messages],
-      max_tokens: maxTokens,
-    }),
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      'HTTP-Referer':  'https://enma.app',
+      'X-Title':       'Enma',
+    },
+    body: JSON.stringify(body),
   });
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`LLM error ${resp.status}: ${text.slice(0, 300)}`);
+}
+
+// callOpenRouter — routes by taskType, retries on transient errors, falls back to secondary model
+async function callOpenRouter(messages, taskType = 'chat', maxTokens = 1000) {
+  const cfg  = aiConfig();
+  const task = AI_TASKS[taskType] ?? AI_TASKS.chat;
+  const opts = { maxTokens, temp: task.temp, json: task.json };
+
+  // Plain OpenAI path (no routing support) — single attempt with default model
+  if (!process.env.OPENROUTER_API_KEY) {
+    const resp = await fetch(`${cfg.baseURL}/chat/completions`, {
+      method:  'POST',
+      headers: { 'Authorization': `Bearer ${cfg.apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: cfg.textModel, messages, max_tokens: maxTokens }),
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`LLM error ${resp.status}: ${text.slice(0, 300)}`);
+    }
+    const data = await resp.json();
+    return data.choices?.[0]?.message?.content ?? '';
   }
-  const data = await resp.json();
+
+  // Attempt 1 — primary model
+  let resp = null;
+  try {
+    resp = await orRequest(cfg.apiKey, cfg.baseURL, task.model, messages, opts);
+  } catch { /* network error — treat as retryable */ }
+
+  // Retry primary after 1s on transient errors
+  if (!resp || RETRYABLE_STATUS.has(resp.status)) {
+    await new Promise(r => setTimeout(r, 1000));
+    try {
+      resp = await orRequest(cfg.apiKey, cfg.baseURL, task.model, messages, opts);
+    } catch { resp = null; }
+  }
+
+  // Attempt 2 — fallback model
+  if (!resp || !resp.ok) {
+    if (!task.fallback) {
+      const errText = resp ? await resp.text().catch(() => '') : 'network error';
+      throw new Error(`LLM error: ${errText.slice(0, 300)}`);
+    }
+    try {
+      resp = await orRequest(cfg.apiKey, cfg.baseURL, task.fallback, messages, opts);
+    } catch { resp = null; }
+
+    if (!resp || !resp.ok) {
+      const overloadErr = new Error('AI overloaded, please retry in a minute');
+      overloadErr.statusCode = 503;
+      throw overloadErr;
+    }
+  }
+
+  const data = await resp.json().catch(() => null);
+  if (!data) throw new Error('Invalid JSON response from AI');
+
+  // Cost logging
+  const usage = data.usage;
+  if (usage) {
+    const modelUsed = data.model ?? task.model;
+    const pricing   = MODEL_PRICING[modelUsed] ?? MODEL_PRICING[task.model];
+    if (pricing) {
+      const cost = (usage.prompt_tokens / 1e6) * pricing.input
+                 + (usage.completion_tokens / 1e6) * pricing.output;
+      console.log(
+        `[AI] task:${taskType} model:${modelUsed} cost:${cost.toFixed(5)}RUB` +
+        ` in:${usage.prompt_tokens} out:${usage.completion_tokens}`
+      );
+    }
+  }
+
   return data.choices?.[0]?.message?.content ?? '';
 }
 
@@ -270,9 +363,12 @@ async function handleAnalyze(req, res) {
       `${t.date ?? ''} | ${t.category ?? 'other'} | ${t.amount ?? 0} ${t.currency ?? ''} | ${t.note ?? ''}`
     ).join('\n');
 
-    const content = await callText(
-      [{ role: 'user', content: `Month: ${month ?? currentMonth()}\nTransactions:\n${txSummary}` }],
-      ANALYZE_SYSTEM,
+    const content = await callOpenRouter(
+      [
+        { role: 'system', content: ANALYZE_SYSTEM },
+        { role: 'user', content: `Month: ${month ?? currentMonth()}\nTransactions:\n${txSummary}` },
+      ],
+      'analyze',
       800,
     );
 
@@ -285,6 +381,9 @@ async function handleAnalyze(req, res) {
 
     return res.status(200).json({ ...result, remaining: usage.remaining });
   } catch (err) {
+    if (err.statusCode === 503) {
+      return res.status(503).json({ error: 'AI перегружен, повторите через минуту' });
+    }
     console.error('[ai/analyze] error:', err.message);
     return res.status(500).json({ error: 'Analysis failed' });
   }
@@ -323,9 +422,13 @@ async function handleChat(req, res) {
     const historyMsgs = (Array.isArray(history) ? history.slice(-10) : [])
       .map(m => ({ role: m.role, content: m.content }));
 
-    const content = await callText(
-      [...historyMsgs, { role: 'user', content: message }],
-      CHAT_SYSTEM,
+    const content = await callOpenRouter(
+      [
+        { role: 'system', content: CHAT_SYSTEM },
+        ...historyMsgs,
+        { role: 'user', content: message },
+      ],
+      'chat',
       600,
     );
 
@@ -343,6 +446,9 @@ async function handleChat(req, res) {
 
     return res.status(200).json({ message: content, remaining: usage.remaining });
   } catch (err) {
+    if (err.statusCode === 503) {
+      return res.status(503).json({ error: 'AI перегружен, повторите через минуту' });
+    }
     console.error('[ai/chat] error:', err.message);
     return res.status(500).json({ error: 'Chat failed' });
   }
@@ -443,14 +549,20 @@ async function handleReport(req, res) {
 
   try {
     const dataStr = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-    const html = await callText(
-      [{ role: 'user', content: `Financial data:\n${dataStr.slice(0, 3000)}` }],
-      REPORT_SYSTEM,
+    const html = await callOpenRouter(
+      [
+        { role: 'system', content: REPORT_SYSTEM },
+        { role: 'user', content: `Financial data:\n${dataStr.slice(0, 3000)}` },
+      ],
+      'report',
       2000,
     );
 
     return res.status(200).json({ html, remaining: usage.remaining });
   } catch (err) {
+    if (err.statusCode === 503) {
+      return res.status(503).json({ error: 'AI перегружен, повторите через минуту' });
+    }
     console.error('[ai/report] error:', err.message);
     return res.status(500).json({ error: 'Report generation failed' });
   }
@@ -548,6 +660,64 @@ async function handleEntityCreate(req, res) {
   } catch (err) {
     console.error('[ai/entityCreate] error:', err.message);
     return res.status(500).json({ error: 'Failed to create entity' });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Categorize — auto-classify a transaction using preset category IDs
+// No AI usage counter charged (background utility, not user-initiated AI call)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const VALID_CATEGORY_IDS = new Set([
+  'p-salary', 'p-freelance', 'p-gift', 'p-other-i',
+  'p-groceries', 'p-transport', 'p-entertainment', 'p-health',
+  'p-subscriptions', 'p-food', 'p-clothes', 'p-housing', 'p-other-e',
+]);
+
+const CATEGORIZE_SYSTEM =
+  'You are a transaction classifier. Reply ONLY with valid JSON — no markdown, no extra text.\n' +
+  'Format: { "categoryId": "...", "confidence": 0.0-1.0 }\n\n' +
+  'Category IDs for EXPENSE: p-groceries (Продукты), p-transport (Транспорт), ' +
+  'p-entertainment (Развлечения), p-health (Здоровье), p-subscriptions (Подписки), ' +
+  'p-food (Еда/кафе/рестораны), p-clothes (Одежда), p-housing (Жильё/ЖКХ), p-other-e (Другое)\n' +
+  'Category IDs for INCOME: p-salary (Зарплата), p-freelance (Фриланс), ' +
+  'p-gift (Подарок), p-other-i (Другое)\n\n' +
+  'When unsure whether income or expense, default to expense.';
+
+async function handleCategorize(req, res) {
+  const { userId, description, amount } = req.body ?? {};
+  if (!userId || !description) {
+    return res.status(400).json({ error: 'Missing userId or description' });
+  }
+
+  const userPrompt = `Description: ${String(description).slice(0, 200)}${amount != null ? `, Amount: ${amount}` : ''}`;
+
+  try {
+    const raw = await callOpenRouter(
+      [
+        { role: 'system', content: CATEGORIZE_SYSTEM },
+        { role: 'user',   content: userPrompt },
+      ],
+      'categorize',
+      80,
+    );
+
+    let parsed;
+    try { parsed = JSON.parse(raw); } catch { parsed = null; }
+
+    const categoryId = (parsed?.categoryId && VALID_CATEGORY_IDS.has(parsed.categoryId))
+      ? parsed.categoryId
+      : 'p-other-e';
+    const confidence = Math.min(1, Math.max(0, Number(parsed?.confidence) || 0.5));
+
+    return res.status(200).json({ categoryId, confidence });
+  } catch (err) {
+    if (err.statusCode === 503) {
+      return res.status(503).json({ error: 'AI перегружен, повторите через минуту' });
+    }
+    console.error('[ai/categorize] error:', err.message);
+    // Graceful fallback — never block the user from saving a transaction
+    return res.status(200).json({ categoryId: 'p-other-e', confidence: 0.5 });
   }
 }
 
@@ -1318,6 +1488,7 @@ module.exports = async (req, res) => {
       case 'chat':             return await handleChat(req, res);
       case 'image':            return await handleImage(req, res);
       case 'report':           return await handleReport(req, res);
+      case 'categorize':       return await handleCategorize(req, res);
       case 'entityCreate':     return await handleEntityCreate(req, res);
       case 'referralValidate':      return await handleReferralValidate(req, res);
       case 'referralPayout':        return await handleReferralPayout(req, res);
@@ -1336,6 +1507,9 @@ module.exports = async (req, res) => {
     }
   } catch (err) {
     console.error(`[ai/${action}] unhandled error:`, err.message, err.stack);
+    if (err.statusCode === 503) {
+      return res.status(503).json({ error: 'AI перегружен, повторите через минуту' });
+    }
     const isAdmin = String(action).startsWith('admin');
     return res.status(500).json({ error: isAdmin ? err.message : 'Internal server error' });
   }

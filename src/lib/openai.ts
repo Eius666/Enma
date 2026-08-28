@@ -160,3 +160,25 @@ export async function chatAssistant(
 ): Promise<ChatResponse> {
   return aiPost<ChatResponse>('/api/ai/chat', { userId, message, history });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// categorizeTransaction — suggests a preset category for a transaction
+// Never throws: returns fallback on any error so the UI is never blocked.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface CategoryResult {
+  categoryId: string;
+  confidence: number;
+}
+
+export async function categorizeTransaction(
+  description: string,
+  amount: number,
+  userId: string,
+): Promise<CategoryResult> {
+  try {
+    return await aiPost<CategoryResult>('/api/ai/categorize', { userId, description, amount });
+  } catch {
+    return { categoryId: 'p-other-e', confidence: 0.5 };
+  }
+}
