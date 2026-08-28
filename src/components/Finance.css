@@ -128,7 +128,7 @@
 
 .fin-list__chip {
   padding: 7px 14px;
-  border-radius: 20px;
+  border-radius: 9999px;
   font-size: 13px;
   font-weight: 500;
   background: var(--notes-card-bg);

@@ -357,7 +357,7 @@ body.theme-light .subscription-panel__plan-features li {
   height: 36px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
+  border-radius: 9999px;
   font-size: 13px;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.5);
@@ -457,7 +457,7 @@ body.theme-light .subscription-panel__price-amount {
   height: 36px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
+  border-radius: 9999px;
   font-size: 13px;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.5);
