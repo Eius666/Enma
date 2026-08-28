@@ -38,7 +38,8 @@ interface SubscriptionPanelProps {
 
 const METHODS: { id: PayMethod; icon: string; label: string; sub: Record<string, string> }[] = [
   { id: 'sbp',   icon: '💳', label: 'СБП',   sub: { en: 'Bank card',    ru: 'Банк. карта'  } },
-  { id: 'stars', icon: '⭐', label: 'Stars', sub: { en: 'Via Telegram', ru: 'Через Telegram'} },
+  // TODO: вернуть после фикса Stars webhook
+  // { id: 'stars', icon: '⭐', label: 'Stars', sub: { en: 'Via Telegram', ru: 'Через Telegram'} },
   { id: 'ton',   icon: '💎', label: 'TON',   sub: { en: 'Crypto',       ru: 'Криптовалюта' } },
   { id: 'usdt',  icon: '💲', label: 'USDT',  sub: { en: 'Stablecoin',   ru: 'Стейблкоин'  } },
 ];
