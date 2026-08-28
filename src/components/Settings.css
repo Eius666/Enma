@@ -164,6 +164,7 @@ body.theme-light .sett-row:not(.sett-row--danger):active {
 /* Row body — flex column for stacked label+value */
 .sett-row__body {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
 }
@@ -506,9 +507,9 @@ body.theme-light .sett-subscription-wrap .subscription-panel {
 /* ━━━ Manage subscription button ━━━ */
 .sett-row__manage-btn {
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  padding: 6px 12px;
+  padding: 5px 9px;
   border-radius: 8px;
   border: 1px solid rgba(162, 155, 254, 0.35);
   background: rgba(162, 155, 254, 0.08);
