@@ -172,6 +172,7 @@
 
 .day-list__item-action-btn--edit {
   background: var(--notes-accent);
+  border-radius: 12px 0 0 12px;
 }
 
 .day-list__item-action-btn--delete {
