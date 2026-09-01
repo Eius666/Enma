@@ -44,10 +44,6 @@ const METHODS: { id: PayMethod; icon: string; label: string; sub: Record<string,
   { id: 'usdt',  icon: '💲', label: 'USDT',  sub: { en: 'Stablecoin',   ru: 'Стейблкоин'  } },
 ];
 
-const FREE_FEATURE_ICONS    = ['📋', '💸', '🔄', '📝', '🏦'];
-const PRO_FEATURE_ICONS     = ['🤖', '💳', '♾️', '📝', '🏦'];
-const PREMIUM_FEATURE_ICONS = ['🤖', '🖼️', '📄', '💬', '👨‍👩‍👧', '⭐'];
-
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 // ── i18n ──────────────────────────────────────────────────────────────────────
@@ -57,6 +53,8 @@ const T = {
     title:           'Enma Plans',
     subtitle:        'Choose the right plan for you',
     trial:           '7 days Premium free for new users',
+    trialTitle:      '7 days Premium free',
+    trialSub:        'For new users',
     trialBtn:        'Start trial',
     activeSub:       'Active until {date}',
     free:            'Free',
@@ -120,6 +118,8 @@ const T = {
     title:           'Тарифы Enma',
     subtitle:        'Выберите подходящий план',
     trial:           '7 дней Premium бесплатно для новых пользователей',
+    trialTitle:      '7 дней Premium бесплатно',
+    trialSub:        'Для новых пользователей',
     trialBtn:        'Начать пробный период',
     activeSub:       'Активна до {date}',
     free:            'Free',
@@ -571,7 +571,10 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       {/* Trial banner */}
       {showTrialBanner && (
         <div className="subscription-panel__trial">
-          <span className="subscription-panel__trial-text">{t.trial}</span>
+          <div className="subscription-panel__trial-body">
+            <span className="subscription-panel__trial-title">{t.trialTitle}</span>
+            <span className="subscription-panel__trial-sub">{t.trialSub}</span>
+          </div>
           <button
             className="subscription-panel__trial-btn"
             onClick={handleTrial}
@@ -632,15 +635,11 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       {/* Feature list — what's included in the selected plan */}
       <div className="subscription-panel__feature-list">
         <span className="subscription-panel__feature-list-label">{t.whatIncluded}</span>
-        {(plan === 'free' ? t.freeList : plan === 'pro' ? t.proList : t.premiumList).map((feature, i) => {
-          const icons = plan === 'free' ? FREE_FEATURE_ICONS : plan === 'pro' ? PRO_FEATURE_ICONS : PREMIUM_FEATURE_ICONS;
-          return (
-            <div key={feature} className={`subscription-panel__feature-list-item subscription-panel__feature-list-item--${plan}`}>
-              <span className="subscription-panel__feature-list-icon">{icons[i] ?? '✦'}</span>
-              <span className="subscription-panel__feature-list-text">{feature}</span>
-            </div>
-          );
-        })}
+        {(plan === 'free' ? t.freeList : plan === 'pro' ? t.proList : t.premiumList).map((feature) => (
+          <div key={feature} className={`subscription-panel__feature-list-item subscription-panel__feature-list-item--${plan}`}>
+            <span className="subscription-panel__feature-list-text">{feature}</span>
+          </div>
+        ))}
       </div>
 
       {/* Upgrade context hints */}
