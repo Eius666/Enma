@@ -603,7 +603,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       setPayStatus('error');
       setTimeout(() => setPayStatus('idle'), 4000);
     }
-  }, [method, user, wallet, userAddress, paidPlan, period, promoCode, referralCode, effectiveDiscount, discountMult, baseUsd, tonUsdRate, tonConnectUI, onSubscriptionChange, payStatus, stopPoll, useBalance, referralBalance, usdAfterBalance, balanceApplyRub, isFreeActivation]);
+  }, [method, user, wallet, userAddress, paidPlan, period, promoCode, referralCode, effectiveDiscount, tonUsdRate, tonConnectUI, onSubscriptionChange, payStatus, stopPoll, useBalance, referralBalance, usdAfterBalance, balanceApplyRub, isFreeActivation]);
 
   const btnLabel = useMemo(() => {
     if (payStatus === 'sending')   return t.processing;
