@@ -161,4 +161,47 @@ async function cancelSubscriptionPayment(referredUserId, paymentId, telegramToke
   return { cancelled: true };
 }
 
-module.exports = { processSubscriptionPayment, cancelSubscriptionPayment };
+// Called when a payment is confirmed.
+// Credits 30% RUB cashback to the user who referred the payer.
+const CASHBACK_RATE = 0.30;
+
+async function creditReferralBalance(referredUserId, amountRub) {
+  if (!amountRub || amountRub <= 0) return null;
+
+  const userSnap = await db.collection('users').doc(referredUserId).get();
+  if (!userSnap.exists) return null;
+  const referralCode = userSnap.data().referredBy;
+  if (!referralCode) return null;
+
+  const referrerSnap = await db.collection('users')
+    .where('referralCode', '==', referralCode)
+    .limit(1)
+    .get();
+  if (referrerSnap.empty) return null;
+
+  const referrerRef = referrerSnap.docs[0].ref;
+  const cashback    = Math.round(amountRub * CASHBACK_RATE);
+  if (cashback <= 0) return null;
+
+  const now         = admin.firestore.FieldValue.serverTimestamp();
+  const cashbackRef = db.collection('referralCashback').doc();
+
+  const batch = db.batch();
+  batch.set(cashbackRef, {
+    referrerId: referrerRef.id,
+    referredId: referredUserId,
+    amountRub,
+    cashback,
+    status:    'credited',
+    createdAt: now,
+  });
+  batch.set(referrerRef, {
+    referralBalance:        admin.firestore.FieldValue.increment(cashback),
+    totalReferralEarnedRub: admin.firestore.FieldValue.increment(cashback),
+  }, { merge: true });
+  await batch.commit();
+
+  return { cashback, referrerId: referrerRef.id };
+}
+
+module.exports = { processSubscriptionPayment, cancelSubscriptionPayment, creditReferralBalance };

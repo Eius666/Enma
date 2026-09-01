@@ -107,6 +107,16 @@ module.exports = async (req, res) => {
   } catch (referralErr) {
     console.error('[ton/verify] referral processing error:', referralErr.message);
   }
+
+  // 4b. User referral cashback — 30% RUB to referrer
+  try {
+    const { creditReferralBalance } = require('../_lib/referral/earnings');
+    const amountRub = payment.amountRub || Math.round((payment.amountUsd || 0) * 90);
+    await creditReferralBalance(userId, amountRub);
+  } catch (cashbackErr) {
+    console.error('[ton/verify] cashback error:', cashbackErr.message);
+  }
+
   const plan = payment.plan || 'pro';
   const periodMonths = payment.periodMonths || 1;
 
@@ -137,6 +147,20 @@ module.exports = async (req, res) => {
   } catch (e) {
     console.error('Firestore batch write error:', e);
     return res.status(500).json({ error: 'Failed to confirm payment' });
+  }
+
+  // Deduct referral balance after confirmation.
+  // Use a transaction so we never go below zero (handles race conditions).
+  if (payment.balanceUsed > 0) {
+    await db.runTransaction(async tx => {
+      const userRef = db.collection('users').doc(userId);
+      const snap    = await tx.get(userRef);
+      const current = snap.exists ? (snap.data().referralBalance || 0) : 0;
+      const deduct  = Math.min(current, payment.balanceUsed);
+      if (deduct > 0) {
+        tx.set(userRef, { referralBalance: admin.firestore.FieldValue.increment(-deduct) }, { merge: true });
+      }
+    }).catch(e => console.error('[ton/verify] balance deduct error:', e.message));
   }
 
   // Atomically increment promo counter + mark as used by this user

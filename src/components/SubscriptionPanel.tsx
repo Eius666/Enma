@@ -32,6 +32,7 @@ interface SubscriptionPanelProps {
   subscription: Subscription | null;
   onSubscriptionChange: (sub: Subscription | null) => void;
   onClose?: () => void;
+  referralBalance?: number;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -188,6 +189,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
   user,
   subscription,
   onSubscriptionChange,
+  referralBalance = 0,
 }) => {
   const t = T[language];
 
@@ -218,6 +220,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
   const [payStatus,       setPayStatus]       = useState<PayStatus>('idle');
   const [trialLoading,    setTrialLoading]    = useState(false);
   const [trialUsed,       setTrialUsed]       = useState(true);
+  const [useBalance,      setUseBalance]      = useState(false);
 
   const pollRef   = useRef<ReturnType<typeof setInterval>|null>(null);
   const payBtnRef = useRef<HTMLButtonElement>(null);
@@ -254,20 +257,33 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
     ? (period === 'month' ? PLANS[paidPlan].monthlyPrice : PLANS[paidPlan].yearlyPrice)
     : 0;
 
+  // Balance-adjusted prices (balance is in RUB; convert to USD at 90 RUB/USD for TON/USDT)
+  const sbpBaseAmount   = paidPlan ? SBP_PRICES[paidPlan][period] : 0;
+  const sbpDiscounted   = Math.round(sbpBaseAmount * discountMult);
+  const balanceApplyRub = useBalance ? Math.min(referralBalance, sbpDiscounted) : 0;
+  const sbpFinal        = Math.max(0, sbpDiscounted - balanceApplyRub);
+  const balanceApplyUsd = useBalance ? Math.min(referralBalance / 90, baseUsd * discountMult) : 0;
+  const usdAfterBalance = Math.max(0, baseUsd * discountMult - balanceApplyUsd);
+  const isFreeActivation = useBalance && paidPlan !== null && (
+    (method === 'sbp' && sbpFinal === 0) ||
+    ((method === 'ton' || method === 'usdt') && usdAfterBalance === 0)
+  );
+
   const displayPrice = useMemo(() => {
     if (!paidPlan) return '0 ₽';
-    const sbp = SBP_PRICES[paidPlan][period];
     const usd = baseUsd * discountMult;
     switch (method) {
-      case 'ton':   return `${(usd / tonUsdRate).toFixed(2)} TON`;
-      case 'usdt':  return `${usd.toFixed(2)} USDT`;
+      case 'ton':   return `${(usdAfterBalance / tonUsdRate).toFixed(2)} TON`;
+      case 'usdt':  return `${usdAfterBalance.toFixed(2)} USDT`;
       case 'stars': return `${priceToStars(usd).toLocaleString()} ⭐`;
-      case 'sbp':   return `${Math.round(sbp * discountMult)} ₽`;
+      case 'sbp':   return `${sbpFinal} ₽`;
     }
-  }, [method, discountMult, tonUsdRate, baseUsd, paidPlan, period]);
+  }, [method, discountMult, tonUsdRate, baseUsd, paidPlan, sbpFinal, usdAfterBalance]);
 
   const originalPriceDisplay = useMemo(() => {
-    if (!paidPlan || !effectiveDiscount) return null;
+    if (!paidPlan) return null;
+    const showOld = effectiveDiscount > 0 || balanceApplyRub > 0 || balanceApplyUsd > 0;
+    if (!showOld) return null;
     const sbp = SBP_PRICES[paidPlan][period];
     switch (method) {
       case 'ton':   return `${(baseUsd / tonUsdRate).toFixed(2)} TON`;
@@ -275,7 +291,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       case 'stars': return `${priceToStars(baseUsd).toLocaleString()} ⭐`;
       case 'sbp':   return `${sbp} ₽`;
     }
-  }, [method, effectiveDiscount, tonUsdRate, baseUsd, paidPlan, period]);
+  }, [method, effectiveDiscount, tonUsdRate, baseUsd, paidPlan, period, balanceApplyRub, balanceApplyUsd]);
 
   const periodLabel = period === 'month' ? t.perMonth : t.perYear;
 
@@ -391,6 +407,35 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
     setPayStatus('sending');
 
     try {
+      // Free activation via balance — works for all payment methods
+      if (isFreeActivation) {
+        const resp = await fetch('/api/payment/create', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user.uid, userName: user.email || '',
+            plan: paidPlan, period,
+            promoCode:    promoCode    || undefined,
+            referralCode: referralCode || undefined,
+            useBalance:   true,
+          }),
+        });
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error || 'Payment failed');
+        if (data.activated) {
+          stopPoll();
+          try {
+            const subSnap = await getDoc(doc(db, 'subscriptions', user.uid));
+            if (subSnap.exists()) {
+              const sub = subSnap.data() as Subscription;
+              if (isSubscriptionActive(sub)) onSubscriptionChange(sub);
+            }
+          } catch { /* onSnapshot will pick it up */ }
+          setPayStatus('verified');
+          setTimeout(() => setPayStatus('idle'), 5000);
+          return;
+        }
+      }
+
       if (method === 'stars') {
         const tgStars = (window as Window & { Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void } } }).Telegram?.WebApp;
         const botUrl  = 'https://t.me/EnmaAI_bot';
@@ -402,18 +447,18 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
 
       if (method === 'ton') {
         if (!wallet) { setPayStatus('idle'); return; }
-        const paymentId   = createId();
-        const now         = new Date();
-        const endDate     = calcEndDate(now, period);
-        const discountUsd = baseUsd * discountMult;
-        const amountRaw   = priceToNanotons(discountUsd, tonUsdRate);
+        const paymentId = createId();
+        const now       = new Date();
+        const endDate   = calcEndDate(now, period);
+        const amountRaw = priceToNanotons(usdAfterBalance, tonUsdRate);
 
         await setDoc(doc(db, 'payments', paymentId), {
           id: paymentId, userId: user.uid, plan: paidPlan, period,
-          currency: 'ton', amountUsd: discountUsd, amountRaw,
+          currency: 'ton', amountUsd: usdAfterBalance, amountRaw,
           status: 'pending', senderAddress: userAddress ?? null,
           promoCode:    promoCode    || null, discountPercent: effectiveDiscount,
           referralCode: referralCode || null,
+          balanceUsed:  balanceApplyRub > 0 ? balanceApplyRub : 0,
           createdAt: now.toISOString(), updatedAt: serverTimestamp(),
         });
 
@@ -448,18 +493,18 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
 
       if (method === 'usdt') {
         if (!wallet) { setPayStatus('idle'); return; }
-        const paymentId   = createId();
-        const now         = new Date();
-        const endDate     = calcEndDate(now, period);
-        const discountUsd = baseUsd * discountMult;
-        const amountRaw   = priceToUsdtUnits(discountUsd);
+        const paymentId = createId();
+        const now       = new Date();
+        const endDate   = calcEndDate(now, period);
+        const amountRaw = priceToUsdtUnits(usdAfterBalance);
 
         await setDoc(doc(db, 'payments', paymentId), {
           id: paymentId, userId: user.uid, plan: paidPlan, period,
-          currency: 'usdt', amountUsd: discountUsd, amountRaw,
+          currency: 'usdt', amountUsd: usdAfterBalance, amountRaw,
           status: 'pending', senderAddress: userAddress ?? null,
           promoCode:    promoCode    || null, discountPercent: effectiveDiscount,
           referralCode: referralCode || null,
+          balanceUsed:  balanceApplyRub > 0 ? balanceApplyRub : 0,
           createdAt: now.toISOString(), updatedAt: serverTimestamp(),
         });
 
@@ -500,10 +545,28 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
             plan: paidPlan, period,
             promoCode:    promoCode    || undefined,
             referralCode: referralCode || undefined,
+            useBalance:   (useBalance && referralBalance > 0) || undefined,
           }),
         });
         const data = await resp.json();
-        if (!data.ok || !data.url) throw new Error(data.error || 'No URL');
+        if (!data.ok) throw new Error(data.error || 'Payment failed');
+
+        // Free activation via referral balance
+        if (data.activated) {
+          stopPoll();
+          try {
+            const subSnap = await getDoc(doc(db, 'subscriptions', user.uid));
+            if (subSnap.exists()) {
+              const sub = subSnap.data() as Subscription;
+              if (isSubscriptionActive(sub)) onSubscriptionChange(sub);
+            }
+          } catch { /* onSnapshot will pick it up */ }
+          setPayStatus('verified');
+          setTimeout(() => setPayStatus('idle'), 5000);
+          return;
+        }
+
+        if (!data.url) throw new Error(data.error || 'No URL');
 
         const tgWebApp = (window as Window & { Telegram?: { WebApp?: { openLink?: (u: string) => void } } }).Telegram?.WebApp;
         if (tgWebApp?.openLink) tgWebApp.openLink(data.url);
@@ -540,7 +603,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       setPayStatus('error');
       setTimeout(() => setPayStatus('idle'), 4000);
     }
-  }, [method, user, wallet, userAddress, paidPlan, period, promoCode, referralCode, effectiveDiscount, discountMult, baseUsd, tonUsdRate, tonConnectUI, onSubscriptionChange, payStatus, stopPoll]);
+  }, [method, user, wallet, userAddress, paidPlan, period, promoCode, referralCode, effectiveDiscount, discountMult, baseUsd, tonUsdRate, tonConnectUI, onSubscriptionChange, payStatus, stopPoll, useBalance, referralBalance, usdAfterBalance, balanceApplyRub, isFreeActivation]);
 
   const btnLabel = useMemo(() => {
     if (payStatus === 'sending')   return t.processing;
@@ -548,11 +611,12 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
     if (payStatus === 'verified')  return t.verified;
     if (payStatus === 'error')     return t.paymentError;
     if ((method === 'ton' || method === 'usdt') && !wallet) return t.connectFirst;
+    if (isFreeActivation) return language === 'ru' ? 'Активировать бесплатно' : 'Activate for free';
     return `${t.pay} ${displayPrice}${periodLabel}`;
-  }, [payStatus, method, wallet, displayPrice, periodLabel, t]);
+  }, [payStatus, method, wallet, displayPrice, periodLabel, t, isFreeActivation, language]);
 
   const btnDisabled = payStatus === 'sending' || payStatus === 'verifying'
-    || ((method === 'ton' || method === 'usdt') && !wallet && payStatus === 'idle');
+    || ((method === 'ton' || method === 'usdt') && !wallet && payStatus === 'idle' && !isFreeActivation);
 
   const showTrialBanner = !isActive && !trialUsed;
   const showPaymentSection = plan !== 'free';
@@ -655,6 +719,25 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       {/* Payment section — hidden when Free selected */}
       {showPaymentSection && (
         <>
+          {/* Referral balance banner */}
+          {referralBalance > 0 && (
+            <div className="subscription-panel__balance-banner">
+              <span className="subscription-panel__balance-banner-label">
+                {language === 'ru' ? `Кешбэк: ${referralBalance}₽` : `Cashback: ${referralBalance}₽`}
+              </span>
+              <button
+                type="button"
+                className={`subscription-panel__balance-apply${useBalance ? ' subscription-panel__balance-apply--active' : ''}`}
+                onClick={() => setUseBalance(v => !v)}
+              >
+                {useBalance
+                  ? (language === 'ru' ? 'Применён' : 'Applied')
+                  : (language === 'ru' ? 'Применить' : 'Apply')
+                }
+              </button>
+            </div>
+          )}
+
           {/* Period selector */}
           <div className="subscription-panel__periods">
             {(['month', 'year'] as SubscriptionPeriod[]).map(p => (

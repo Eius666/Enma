@@ -104,9 +104,10 @@ module.exports = async (req, res) => {
   if (!telegramId) return res.status(400).json({ error: 'Missing user.id' });
 
   try {
-    const uid      = await resolveCanonicalUid(telegramId, telegramId);
-    const isNewUser = await setupNewUserIfNeeded(uid, tgUser);
-    const token    = await admin.auth().createCustomToken(uid);
+    const uid        = await resolveCanonicalUid(telegramId, telegramId);
+    const startParam = params.get('start_param') || null;
+    const isNewUser  = await setupNewUserIfNeeded(uid, tgUser, startParam);
+    const token      = await admin.auth().createCustomToken(uid);
     return res.status(200).json({ token, uid, isNewUser });
   } catch (err) {
     console.error('[auth/telegram] error', err);
@@ -116,11 +117,20 @@ module.exports = async (req, res) => {
 
 const TRIAL_DAYS = 7;
 
-async function setupNewUserIfNeeded(uid, tgUser) {
+async function setupNewUserIfNeeded(uid, tgUser, startParam) {
   const userRef = db.collection('users').doc(uid);
   const subRef  = db.collection('subscriptions').doc(uid);
 
   const [userSnap, subSnap] = await Promise.all([userRef.get(), subRef.get()]);
+
+  // Process referral link regardless of new/existing user (handleReferralStart is idempotent)
+  if (startParam && startParam.startsWith('ref_')) {
+    const refCode = startParam.slice(4);
+    const { handleReferralStart } = require('../_lib/referral/codes');
+    await handleReferralStart(uid, refCode).catch(err =>
+      console.error('[auth/telegram] referral start error:', err.message)
+    );
+  }
 
   if (subSnap.exists) return false;
 

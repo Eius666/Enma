@@ -1393,16 +1393,72 @@ async function handleAdminSetupOtp(req, res) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Referral: validate influencer code
+// Referral: validate influencer or user referral code
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function handleReferralValidate(req, res) {
   const { code, userId } = req.body ?? {};
   if (!code) return res.status(400).json({ valid: false, error: 'missing_code' });
 
+  // Try influencer code first
   const { validateInfluencerCode } = require('../_lib/referral/influencer');
-  const result = await validateInfluencerCode(code, userId || null);
-  return res.status(200).json(result);
+  const influencerResult = await validateInfluencerCode(code, userId || null);
+  if (influencerResult.valid) {
+    return res.status(200).json(influencerResult);
+  }
+
+  // Try user referral code (8-char code from users.referralCode)
+  const { findUserByReferralCode } = require('../_lib/referral/codes');
+  const referrer = await findUserByReferralCode(code);
+  if (!referrer) {
+    return res.status(200).json({ valid: false, error: 'code_not_found' });
+  }
+
+  // Self-referral check
+  if (userId && referrer.id === userId) {
+    return res.status(200).json({ valid: false, error: 'self_referral' });
+  }
+
+  // Check if user already has a referrer
+  if (userId) {
+    const userSnap = await db.collection('users').doc(userId).get();
+    if (userSnap.exists && userSnap.data().referredBy) {
+      return res.status(200).json({ valid: false, error: 'already_referred' });
+    }
+  }
+
+  return res.status(200).json({ valid: true, discountPercent: 0, type: 'user' });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Referral: fetch referral info for a user (ensures referralCode exists)
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function handleReferralInfo(req, res) {
+  const { userId } = req.body ?? {};
+  if (!userId) return res.status(400).json({ error: 'missing_userId' });
+
+  const { ensureReferralCode } = require('../_lib/referral/codes');
+  const code = await ensureReferralCode(userId);
+
+  const userSnap = await db.collection('users').doc(userId).get();
+  const userData = userSnap.exists ? userSnap.data() : {};
+
+  const botUsername   = process.env.TELEGRAM_BOT_USERNAME || 'EnmaAI_bot';
+  const referralLink  = code ? `https://t.me/${botUsername}?start=ref_${code}` : (userData.referralLink || null);
+
+  // Count referrals this user has made
+  const referralsSnap = await db.collection('referrals').where('referrerId', '==', userId).get();
+
+  return res.status(200).json({
+    ok:                     true,
+    referralCode:           code || userData.referralCode || null,
+    referralLink,
+    referralBalance:        userData.referralBalance        || 0,
+    totalReferralEarnedRub: userData.totalReferralEarnedRub || 0,
+    referredBy:             userData.referredBy             || null,
+    totalReferred:          referralsSnap.size,
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1491,6 +1547,7 @@ module.exports = async (req, res) => {
       case 'categorize':       return await handleCategorize(req, res);
       case 'entityCreate':     return await handleEntityCreate(req, res);
       case 'referralValidate':      return await handleReferralValidate(req, res);
+      case 'referralInfo':          return await handleReferralInfo(req, res);
       case 'referralPayout':        return await handleReferralPayout(req, res);
       case 'adminVerifyOtp':        return await handleAdminVerifyOtp(req, res);
       case 'adminSetupOtp':         return await handleAdminSetupOtp(req, res);

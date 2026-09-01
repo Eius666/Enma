@@ -10,6 +10,7 @@ import {
   FaStar,
   FaShieldAlt,
   FaFileContract,
+  FaGift,
 } from 'react-icons/fa';
 import { User } from 'firebase/auth';
 import type { Subscription } from '../subscription';
@@ -61,6 +62,13 @@ const T = {
     bankPlaceholder: 'Bank name…',
     addBank: 'Add',
     groupPayment: 'Payment',
+    groupReferral:    'Referral',
+    referralBalance:  'Cashback balance',
+    referralInvited:  'Invited: {n}',
+    referralEarned:   'Earned: {amount}₽',
+    referralCopy:     'Copy link',
+    referralCopied:   'Copied!',
+    referralNoCode:   'Loading…',
     groupLegal: 'Legal',
     rowPrivacy: 'Privacy Policy',
     rowTerms: 'Terms of Service',
@@ -103,6 +111,13 @@ const T = {
     bankPlaceholder: 'Название банка…',
     addBank: 'Добавить',
     groupPayment: 'Оплата',
+    groupReferral:    'Реферальная программа',
+    referralBalance:  'Кешбэк баланс',
+    referralInvited:  'Приглашено: {n}',
+    referralEarned:   'Заработано: {amount}₽',
+    referralCopy:     'Скопировать ссылку',
+    referralCopied:   'Скопировано!',
+    referralNoCode:   'Загрузка…',
     groupLegal: 'Документы',
     rowPrivacy: 'Политика конфиденциальности',
     rowTerms: 'Пользовательское соглашение',
@@ -158,6 +173,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [aiImgUsed,    setAiImgUsed]    = useState<number | null>(null);
   const [freeUsage,    setFreeUsage]    = useState<FreeUsageSnapshot | null>(null);
 
+  const [referralBalance,        setReferralBalance]        = useState(0);
+  const [referralLink,           setReferralLink]           = useState<string | null>(null);
+  const [totalReferred,          setTotalReferred]          = useState(0);
+  const [totalReferralEarnedRub, setTotalReferralEarnedRub] = useState(0);
+  const [referralCopied,         setReferralCopied]         = useState(false);
+
   const subPanelRef = useRef<HTMLDivElement>(null);
 
   const userEmail  = user?.email ?? '—';
@@ -186,6 +207,39 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
     if (!user || activePlan !== 'free') return;
     return subscribeFreeUsage(user.uid, setFreeUsage);
   }, [user, activePlan]);
+
+  useEffect(() => {
+    if (!user) return;
+    fetch('/api/ai/referralInfo', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ userId: user.uid }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (!d.ok) return;
+        setReferralBalance(d.referralBalance        || 0);
+        setReferralLink(d.referralLink              || null);
+        setTotalReferred(d.totalReferred            || 0);
+        setTotalReferralEarnedRub(d.totalReferralEarnedRub || 0);
+      })
+      .catch(() => {});
+  }, [user]);
+
+  const handleCopyReferralLink = () => {
+    const link = referralLink || '';
+    if (!link) return;
+    navigator.clipboard.writeText(link).catch(() => {
+      const el = document.createElement('textarea');
+      el.value = link;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    });
+    setReferralCopied(true);
+    setTimeout(() => setReferralCopied(false), 2000);
+  };
 
   const handleManageSub = () => {
     subPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -497,6 +551,58 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         <WalletConnect language={language} />
       </div>
 
+      {/* ━━━ Group: Referral ━━━ */}
+      <div className="sett-group__label">{t.groupReferral}</div>
+      <div className="sett-group">
+        {/* Balance row */}
+        <div className="sett-row sett-row--tall">
+          <div className="sett-row__icon-wrap">
+            <FaGift className={`sett-row__icon${referralBalance > 0 ? ' sett-row__icon--accent' : ''}`} />
+          </div>
+          <div className="sett-row__body">
+            <span className="sett-row__label">{t.referralBalance}</span>
+            <span className={`sett-referral-balance${referralBalance > 0 ? ' sett-referral-balance--positive' : ''}`}>
+              {referralBalance}₽
+            </span>
+          </div>
+        </div>
+
+        <div className="sett-row__divider" />
+
+        {/* Referral link row */}
+        <div className="sett-referral-link-row">
+          <span className="sett-referral-link-row__text">
+            {referralLink || t.referralNoCode}
+          </span>
+          <button
+            type="button"
+            className="sett-referral-link-row__copy"
+            onClick={handleCopyReferralLink}
+            disabled={!referralLink}
+          >
+            {referralCopied ? t.referralCopied : t.referralCopy}
+          </button>
+        </div>
+
+        {(totalReferred > 0 || totalReferralEarnedRub > 0) && (
+          <>
+            <div className="sett-row__divider" />
+            <div className="sett-row sett-row--tall">
+              <div className="sett-row__body">
+                <span className="sett-row__label">
+                  {t.referralInvited.replace('{n}', String(totalReferred))}
+                </span>
+                {totalReferralEarnedRub > 0 && (
+                  <span className="sett-row__value">
+                    {t.referralEarned.replace('{amount}', String(totalReferralEarnedRub))}
+                  </span>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
       {/* Subscription panel (full plan picker) */}
       <div className="sett-subscription-wrap" ref={subPanelRef}>
         <SubscriptionPanel
@@ -504,6 +610,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           user={user}
           subscription={subscription}
           onSubscriptionChange={onSubscriptionChange}
+          referralBalance={referralBalance}
         />
       </div>
 

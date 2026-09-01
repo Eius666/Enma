@@ -132,6 +132,28 @@ module.exports = async function handler(req, res) {
         ).catch(err => console.error('[callback] referral commission error:', err.message));
       }
 
+      // User referral cashback — 30% RUB to the referrer
+      try {
+        const { creditReferralBalance } = require('../_lib/referral/earnings');
+        await creditReferralBalance(payment.userId, paidAmount);
+      } catch (cashbackErr) {
+        console.error('[callback] cashback error:', cashbackErr.message);
+      }
+
+      // Deduct referral balance if it was used toward this payment.
+      // Use a transaction so we never go below zero (handles race conditions).
+      if (payment.balanceUsed > 0) {
+        await db.runTransaction(async tx => {
+          const userRef = db.collection('users').doc(payment.userId);
+          const snap    = await tx.get(userRef);
+          const current = snap.exists ? (snap.data().referralBalance || 0) : 0;
+          const deduct  = Math.min(current, payment.balanceUsed);
+          if (deduct > 0) {
+            tx.set(userRef, { referralBalance: admin.firestore.FieldValue.increment(-deduct) }, { merge: true });
+          }
+        }).catch(e => console.error('[callback] balance deduct error:', e.message));
+      }
+
       const userSnap = await db.collection('users').doc(payment.userId).get();
       const chatId   = userSnap.exists ? userSnap.data().chatId : null;
 

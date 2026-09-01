@@ -569,3 +569,60 @@ body.theme-light .sett-ai-usage__bar {
 .sett-ai-usage__fill--image {
   background: linear-gradient(90deg, #6c5ce7, #fd79a8);
 }
+
+/* ── Referral section ─────────────────────────────── */
+
+.sett-referral-balance {
+  font-size: 20px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.sett-referral-balance--positive {
+  color: #7b68ee;
+}
+
+.sett-referral-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+}
+
+.sett-referral-link-row__text {
+  flex: 1;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: monospace;
+}
+
+body.theme-light .sett-referral-link-row__text {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.sett-referral-link-row__copy {
+  font-size: 13px;
+  font-weight: 600;
+  color: #7b68ee;
+  background: rgba(123, 104, 238, 0.1);
+  border: 1px solid rgba(123, 104, 238, 0.2);
+  border-radius: 8px;
+  padding: 5px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+
+.sett-referral-link-row__copy:active {
+  background: rgba(123, 104, 238, 0.2);
+}
+
+.sett-referral-link-row__copy:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

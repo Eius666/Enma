@@ -57,8 +57,19 @@ async function findUserByReferralCode(code) {
 }
 
 // Create referral relationship when a user clicks a referral link.
+// referredBy is immutable: only written when the user doc does not yet exist.
 // Returns { ok, reason?, referrerName? }
 async function handleReferralStart(referredUserId, referralCode) {
+  const userRef = db.collection('users').doc(referredUserId);
+  const userDoc = await userRef.get();
+
+  if (userDoc.exists) {
+    if (userDoc.data().referredBy) {
+      return { ok: false, reason: 'already_referred' };
+    }
+    return { ok: false, reason: 'user_exists_no_referral' };
+  }
+
   const referrer = await findUserByReferralCode(referralCode);
   if (!referrer) return { ok: false, reason: 'invalid_code' };
   if (referrer.id === referredUserId) return { ok: false, reason: 'self_referral' };

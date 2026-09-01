@@ -1525,3 +1525,46 @@ body.theme-light .subscription-panel__feature-list-item--premium {
 body.theme-light .subscription-panel__feature-list-text {
   color: rgba(0, 0, 0, 0.7);
 }
+
+/* ── Referral balance banner ──────────────────────── */
+
+.subscription-panel__balance-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(123, 104, 238, 0.08);
+  border: 1px solid rgba(123, 104, 238, 0.2);
+  margin-bottom: 4px;
+}
+
+.subscription-panel__balance-banner-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+body.theme-light .subscription-panel__balance-banner-label {
+  color: rgba(0, 0, 0, 0.75);
+}
+
+.subscription-panel__balance-apply {
+  font-size: 13px;
+  font-weight: 600;
+  color: #7b68ee;
+  background: rgba(123, 104, 238, 0.1);
+  border: 1px solid rgba(123, 104, 238, 0.25);
+  border-radius: 8px;
+  padding: 5px 12px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.subscription-panel__balance-apply--active {
+  background: #7b68ee;
+  color: #fff;
+  border-color: transparent;
+}
