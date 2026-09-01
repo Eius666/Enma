@@ -139,21 +139,23 @@
   padding: 10px 2px 6px;
 }
 
-/* — Task row wrapper (for swipe) — */
+/* — Task row wrapper (clips the sliding row) — */
 .day-list__item-wrap {
-  position: relative;
   overflow: hidden;
   border-radius: 12px;
   margin-bottom: 4px;
 }
 
+/* Inner flex row: card + actions side by side; translates together */
+.day-list__item-row {
+  display: flex;
+  transition: transform 0.22s ease;
+}
+
 /* Swipe-revealed action buttons */
 .day-list__item-actions {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
   display: flex;
+  flex: 0 0 144px;
 }
 
 .day-list__item-action-btn {
@@ -177,22 +179,20 @@
   border-radius: 0 12px 12px 0;
 }
 
-/* — Task row — */
+/* — Task card — */
 .day-list__item {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: 100%;
+  flex: 0 0 100%;
   text-align: left;
   background: var(--notes-card-bg);
   border: 1px solid var(--notes-card-border);
   border-radius: 12px;
   padding: 12px 14px;
   cursor: pointer;
-  transition: transform 0.22s ease, background 0.18s, border-color 0.18s;
+  transition: background 0.18s, border-color 0.18s;
   animation: daySlideIn 0.2s ease both;
-  position: relative;
-  z-index: 1;
   box-sizing: border-box;
 }
 

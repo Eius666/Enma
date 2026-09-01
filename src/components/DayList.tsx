@@ -232,28 +232,15 @@ const DayList: React.FC<DayListProps> = ({
         onTouchStart={e => onTouchStart(task.id, e)}
         onTouchEnd={e => onTouchEnd(task.id, e)}
       >
-        {/* Action buttons revealed by swipe-left — text labels, no emoji */}
-        <div className="day-list__item-actions">
-          <button
-            className="day-list__item-action-btn day-list__item-action-btn--edit"
-            onClick={e => { e.stopPropagation(); setSwipedId(null); onOpenEditor(task.id); }}
-            type="button"
-          >
-            {t.editLabel}
-          </button>
-          <button
-            className="day-list__item-action-btn day-list__item-action-btn--delete"
-            onClick={e => handleDelete(task.id, e)}
-            type="button"
-          >
-            {t.delLabel}
-          </button>
-        </div>
+        {/* Row: card + actions side-by-side; wrapper clips overflow */}
+        <div
+          className="day-list__item-row"
+          style={{ transform: isRevealed ? 'translateX(-144px)' : 'translateX(0)' }}
+        >
 
-        {/* Task card — slides left to reveal actions */}
+        {/* Task card */}
         <button
           className={`day-list__item${task.completed ? ' day-list__item--completed' : ''}`}
-          style={{ transform: isRevealed ? 'translateX(-144px)' : 'translateX(0)' }}
           onClick={() => {
             if (isRevealed) { setSwipedId(null); return; }
             onOpenEditor(task.id);
@@ -288,6 +275,26 @@ const DayList: React.FC<DayListProps> = ({
             <span className="day-list__item-time">{task.time}</span>
           )}
         </button>
+
+        {/* Action buttons revealed by swipe-left */}
+        <div className="day-list__item-actions">
+          <button
+            className="day-list__item-action-btn day-list__item-action-btn--edit"
+            onClick={e => { e.stopPropagation(); setSwipedId(null); onOpenEditor(task.id); }}
+            type="button"
+          >
+            {t.editLabel}
+          </button>
+          <button
+            className="day-list__item-action-btn day-list__item-action-btn--delete"
+            onClick={e => handleDelete(task.id, e)}
+            type="button"
+          >
+            {t.delLabel}
+          </button>
+        </div>
+
+        </div>
       </div>
     );
   };
