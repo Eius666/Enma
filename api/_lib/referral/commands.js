@@ -27,27 +27,21 @@ async function handleReferralCommand(token, chatId, userId) {
   ]);
 
   const total   = refSnap.size;
-  const active  = refSnap.docs.filter(d => d.data().status === 'converted').length;
   const ud      = userDoc.data() || {};
-  const earned  = (ud.totalEarningsUsd || 0).toFixed(2);
-  const wallet  = ud.tonWalletAddress;
-
-  const walletLine = wallet
-    ? `💳 TON кошелёк: <code>${wallet.slice(0, 6)}...${wallet.slice(-4)}</code>`
-    : '💳 TON кошелёк для выплат: не задан';
+  const balance = ud.referralBalance || 0;
+  const earned  = ud.totalReferralEarnedRub || 0;
 
   await tg(token, 'sendMessage', {
     chat_id:    chatId,
     parse_mode: 'HTML',
     text:
-      `📢 Твоя реферальная ссылка:\n<code>${referralLink}</code>\n\n` +
-      `💰 15% с каждой оплаты реферала (пока он платит)\n` +
-      `💵 Выплаты раз в месяц в TON\n` +
-      `📊 Приглашено: ${total} | Активных: ${active} | Заработано: $${earned}\n\n` +
-      walletLine,
-    reply_markup: wallet ? undefined : {
-      inline_keyboard: [[{ text: '💳 Указать кошелёк', callback_data: 'wallet_set' }]],
-    },
+      `Ваша реферальная ссылка:\n\n` +
+      `<a href="${referralLink}">${referralLink}</a>\n\n` +
+      `Баланс: <b>${balance} ₽</b>\n` +
+      `Приглашено: <b>${total}</b>\n` +
+      `Заработано всего: <b>${earned} ₽</b>\n\n` +
+      `Друг получает скидку 10%, вы — 30% кешбэка на баланс.\n` +
+      `Баланс тратится на подписку Pro/Premium.`,
   });
 }
 
