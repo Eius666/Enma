@@ -589,6 +589,25 @@ const FREE_ENTITY_CONFIG = {
 
 const currentDate = () => new Date().toISOString().slice(0, 10);
 
+// Converts a local date+time string in a given IANA timezone to a UTC Date.
+// Same algorithm as tools.js localToUtc — kept inline to avoid coupling.
+function localToUtcForReminder(dateStr, timeStr, timezone) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const [h, min]  = timeStr.split(':').map(Number);
+  const pseudo    = new Date(Date.UTC(y, m - 1, d, h, min));
+  const parts     = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric', month: 'numeric', day: 'numeric',
+    hour: 'numeric', minute: 'numeric', hour12: false,
+  }).formatToParts(pseudo);
+  const p = {};
+  for (const { type, value } of parts) {
+    if (type !== 'literal') p[type] = parseInt(value, 10);
+  }
+  const tzAsUtcMs = Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute);
+  return new Date(pseudo.getTime() - (tzAsUtcMs - pseudo.getTime()));
+}
+
 async function handleEntityCreate(req, res) {
   const { userId, entityType, data, docId } = req.body ?? {};
 
@@ -654,6 +673,37 @@ async function handleEntityCreate(req, res) {
       }
     } else {
       await entityRef.set(baseDoc);
+    }
+
+    // Create a reminder in Firestore when a task has a specific time set.
+    // The cron (api/telegram/cron.js or Firebase sendDueReminders) will pick it up.
+    if (entityType === 'task' && data.time && data.date) {
+      try {
+        const userSnap = await db.collection('users').doc(userId).get();
+        const ud       = userSnap.exists ? userSnap.data() : {};
+        const chatId   = ud.chatId || ud.telegramId;
+        if (chatId) {
+          const tz          = (ud.timezone && ud.timezone.includes('/')) ? ud.timezone : 'Europe/Moscow';
+          const scheduledAt = localToUtcForReminder(data.date, data.time, tz);
+          if (scheduledAt > new Date()) {
+            await db.collection('reminders').doc().set({
+              userId,
+              chatId,
+              title:        data.title || '',
+              scheduledAt:  admin.firestore.Timestamp.fromDate(scheduledAt),
+              status:       'pending',
+              telegramText: `Задача: ${data.title || ''}`,
+              taskId:       entityRef.id,
+              source:       'web-app',
+              createdAt:    admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
+            });
+            console.log('[entityCreate] reminder created for task', entityRef.id, 'at', scheduledAt.toISOString());
+          }
+        }
+      } catch (reminderErr) {
+        console.error('[entityCreate] reminder creation failed:', reminderErr.message);
+      }
     }
 
     return res.status(200).json({ ok: true, id: entityRef.id });

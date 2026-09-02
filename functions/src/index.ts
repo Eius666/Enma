@@ -100,17 +100,20 @@ export const sendDueReminders = onSchedule(
 
       const data = claimed as {
         chatId: string | number;
-        text: string;
+        text?: string;
+        telegramText?: string;
+        title?: string;
         retryCount?: number;
       };
 
       const retryCount = data.retryCount ?? 0;
+      const messageText = data.telegramText ?? data.text ?? data.title ?? '';
 
       try {
         const {response, payload} = await sendTelegramMessage(
           token,
           data.chatId,
-          data.text
+          messageText
         );
 
         if (response.ok && (payload.ok as boolean | undefined)) {
