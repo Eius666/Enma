@@ -486,7 +486,7 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
       </div>
 
       {/* ── Reminder time ── */}
-      <div className="hab-editor__field-wrap">
+      <div className="hab-editor__field-wrap hab-editor__field-wrap--row">
         <span className="hab-editor__field-label">{t.reminderLabel}</span>
         <input
           className="hab-editor__time-input"

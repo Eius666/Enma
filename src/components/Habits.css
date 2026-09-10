@@ -289,7 +289,7 @@
 .hab-editor {
   display: flex;
   flex-direction: column;
-  padding-bottom: 32px;
+  padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px));
   animation: habSlideIn 0.2s ease forwards;
 }
 
@@ -437,7 +437,7 @@
   border: 1px solid var(--notes-card-border);
   border-radius: 14px;
   padding: 4px;
-  margin-bottom: 14px;
+  margin-bottom: 22px;
   gap: 4px;
 }
 
@@ -501,7 +501,7 @@
 .hab-editor__colors {
   display: flex;
   gap: 14px;
-  padding-bottom: 4px;
+  padding: 6px 16px 6px 6px;
 }
 
 .hab-editor__color-btn {
@@ -540,9 +540,27 @@ body.theme-light .hab-editor__color-btn--selected::after {
   border: 1px solid var(--notes-card-border);
   border-radius: 14px;
   padding: 14px 16px;
-  margin-bottom: 10px;
+  margin-bottom: 22px;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+}
+
+/* Row variant: label left, control right */
+.hab-editor__field-wrap--row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hab-editor__field-wrap--row .hab-editor__field-label {
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+.hab-editor__field-wrap--row .hab-editor__time-input {
+  width: auto;
+  text-align: right;
 }
 
 .hab-editor__field-label {
@@ -575,7 +593,7 @@ body.theme-light .hab-editor__time-input {
 .hab-editor__stats {
   display: flex;
   gap: 10px;
-  margin-bottom: 20px;
+  margin-bottom: 22px;
 }
 
 .hab-editor__stat-card {
@@ -608,7 +626,7 @@ body.theme-light .hab-editor__time-input {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
-  margin-bottom: 20px;
+  margin-bottom: 22px;
 }
 
 .hab-editor__heatmap-cell {
