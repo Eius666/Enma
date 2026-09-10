@@ -76,6 +76,37 @@
   font-weight: 700;
 }
 
+/* — Period selector chips — */
+.fin-list__period-wrap {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.fin-list__period-wrap::-webkit-scrollbar { display: none; }
+
+.fin-list__period-chip {
+  padding: 7px 16px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  color: var(--notes-text-secondary);
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.fin-list__period-chip--active {
+  background: var(--notes-accent);
+  border-color: var(--notes-accent);
+  color: #fff;
+}
+
 /* — Search — */
 .fin-list__search-wrap {
   position: relative;

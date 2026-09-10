@@ -117,6 +117,7 @@ const HabitsList: React.FC<HabitsListProps> = ({
   const today = todayKey();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [view, setView] = useState<'active' | 'archived'>('active');
   // ID of the habit whose delete button is currently revealed (swipe-left)
   const [swipedId, setSwipedId] = useState<string | null>(null);
   const touchStartX = useRef<number>(0);
@@ -216,51 +217,55 @@ const HabitsList: React.FC<HabitsListProps> = ({
         onTouchStart={e => onTouchStart(habit.id, e)}
         onTouchEnd={e => onTouchEnd(habit.id, e)}
       >
-        {/* Delete button — revealed by swipe left; no emoji */}
-        <button
-          className="hab-list__item-delete"
-          onClick={e => handleDeleteFromSwipe(habit.id, e)}
-          type="button"
-          aria-label="Delete habit"
-        >
-          {/* SVG × icon — no emoji */}
-          <FaTimes />
-        </button>
-
-        {/* Main row — translates left to reveal the delete button */}
-        <button
-          className="hab-list__item"
+        {/* Flex row: card + delete action side by side */}
+        <div
+          className="hab-list__item-row"
           style={{ transform: isRevealed ? 'translateX(-80px)' : 'translateX(0)' }}
-          onClick={() => {
-            if (isRevealed) { setSwipedId(null); return; }
-            onOpenEditor(habit.id);
-          }}
-          type="button"
         >
-          {/* Colored dot — background set inline, no emoji */}
-          <span
-            className="hab-list__item-dot"
-            style={{ backgroundColor: habit.color }}
-          />
-
-          <span className="hab-list__item-body">
-            <span className="hab-list__item-title">{habit.title}</span>
-            <span className="hab-list__item-streak">
-              {streak > 0 ? t.streakLabel(streak) : t.streakZero}
-            </span>
-          </span>
-
-          {/* Round checkbox — SVG check icon, no emoji */}
-          <span
-            className={`hab-list__item-check${isDone ? ' hab-list__item-check--done' : ''}`}
-            onClick={e => handleToggle(habit, e)}
-            onTouchEnd={e => handleToggle(habit, e)}
-            role="checkbox"
-            aria-checked={isDone}
+          <button
+            className="hab-list__item"
+            onClick={() => {
+              if (isRevealed) { setSwipedId(null); return; }
+              onOpenEditor(habit.id);
+            }}
+            type="button"
           >
-            {isDone && <FaCheck className="hab-list__item-check-icon" />}
-          </span>
-        </button>
+            {/* Colored dot — background set inline, no emoji */}
+            <span
+              className="hab-list__item-dot"
+              style={{ backgroundColor: habit.color }}
+            />
+
+            <span className="hab-list__item-body">
+              <span className="hab-list__item-title">{habit.title}</span>
+              <span className="hab-list__item-streak">
+                {streak > 0 ? t.streakLabel(streak) : t.streakZero}
+              </span>
+            </span>
+
+            {/* Round checkbox — SVG check icon, no emoji */}
+            <span
+              className={`hab-list__item-check${isDone ? ' hab-list__item-check--done' : ''}`}
+              onClick={e => handleToggle(habit, e)}
+              onTouchEnd={e => handleToggle(habit, e)}
+              role="checkbox"
+              aria-checked={isDone}
+            >
+              {isDone && <FaCheck className="hab-list__item-check-icon" />}
+            </span>
+          </button>
+
+          <div className="hab-list__item-actions">
+            <button
+              className="hab-list__item-action-btn--delete"
+              onClick={e => handleDeleteFromSwipe(habit.id, e)}
+              type="button"
+              aria-label="Delete habit"
+            >
+              <FaTimes />
+            </button>
+          </div>
+        </div>
       </div>
     );
   };
@@ -299,6 +304,24 @@ const HabitsList: React.FC<HabitsListProps> = ({
         />
       </div>
 
+      {/* ── View filter chips ── */}
+      <div className="hab-list__filter-wrap">
+        <button
+          className={`hab-list__filter-chip${view === 'active' ? ' hab-list__filter-chip--active' : ''}`}
+          onClick={() => setView('active')}
+          type="button"
+        >
+          {t.sectionActive}
+        </button>
+        <button
+          className={`hab-list__filter-chip${view === 'archived' ? ' hab-list__filter-chip--active' : ''}`}
+          onClick={() => setView('archived')}
+          type="button"
+        >
+          {t.sectionArchived}
+        </button>
+      </div>
+
       {/* ── Habit list ── */}
       {isEmpty ? (
         <div className="hab-list__empty">
@@ -309,21 +332,30 @@ const HabitsList: React.FC<HabitsListProps> = ({
           <span className="hab-list__empty-title">{t.emptyTitle}</span>
           <span className="hab-list__empty-hint">{t.emptyHint}</span>
         </div>
+      ) : view === 'active' ? (
+        filteredActive.length > 0
+          ? filteredActive.map(renderHabit)
+          : (
+            <div className="hab-list__empty">
+              <span className="hab-list__empty-icon"><FaCheckCircle /></span>
+              <span className="hab-list__empty-title">{t.emptyTitle}</span>
+              <span className="hab-list__empty-hint">{t.emptyHint}</span>
+            </div>
+          )
       ) : (
-        <>
-          {filteredActive.length > 0 && (
-            <>
-              <div className="hab-list__section-label">{t.sectionActive}</div>
-              {filteredActive.map(renderHabit)}
-            </>
-          )}
-          {filteredArchived.length > 0 && (
-            <>
-              <div className="hab-list__section-label">{t.sectionArchived}</div>
-              {filteredArchived.map(renderHabit)}
-            </>
-          )}
-        </>
+        filteredArchived.length > 0
+          ? filteredArchived.map(renderHabit)
+          : (
+            <div className="hab-list__empty">
+              <span className="hab-list__empty-icon"><FaCheckCircle /></span>
+              <span className="hab-list__empty-title">
+                {language === 'ru' ? 'Архив пуст' : 'Archive is empty'}
+              </span>
+              <span className="hab-list__empty-hint">
+                {language === 'ru' ? 'Нет архивированных привычек' : 'No archived habits'}
+              </span>
+            </div>
+          )
       )}
 
     </div>

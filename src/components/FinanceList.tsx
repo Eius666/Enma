@@ -80,6 +80,8 @@ function txTimeLabel(isoStr: string): string {
   return `${hh}:${mm}`;
 }
 
+type Period = 'day' | 'week' | 'month' | 'all';
+
 const T = {
   en: {
     balance: 'Balance',
@@ -92,6 +94,10 @@ const T = {
     emptySearchTitle: 'Nothing found',
     emptySearchHint: 'Try a different search',
     newTx: 'New transaction',
+    periodDay: 'Today',
+    periodWeek: 'Week',
+    periodMonth: 'Month',
+    periodAll: 'All time',
   },
   ru: {
     balance: 'Баланс',
@@ -104,6 +110,10 @@ const T = {
     emptySearchTitle: 'Ничего не найдено',
     emptySearchHint: 'Попробуйте другой запрос',
     newTx: 'Новая операция',
+    periodDay: 'День',
+    periodWeek: 'Неделя',
+    periodMonth: 'Месяц',
+    periodAll: 'Всё время',
   },
 };
 
@@ -119,8 +129,26 @@ const FinanceList: React.FC<FinanceListProps> = ({
   const locale = language === 'ru' ? 'ru-RU' : 'en-US';
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [period, setPeriod] = useState<Period>('month');
   const [activeCategory, setActiveCategory] = useState(t.all);
   const [activeBank, setActiveBank] = useState<string | null>(null);
+
+  // Filter transactions by selected period first; everything else derives from this.
+  const periodFiltered = useMemo((): Transaction[] => {
+    if (period === 'all') return transactions;
+    const now = new Date();
+    const start = new Date();
+    if (period === 'day') {
+      start.setHours(0, 0, 0, 0);
+    } else if (period === 'week') {
+      start.setDate(now.getDate() - 6);
+      start.setHours(0, 0, 0, 0);
+    } else {
+      start.setDate(1);
+      start.setHours(0, 0, 0, 0);
+    }
+    return transactions.filter(tx => new Date(tx.date) >= start);
+  }, [transactions, period]);
 
   // For summary totals (always in USD base).
   const fmt = (amount: number) =>
@@ -135,22 +163,22 @@ const FinanceList: React.FC<FinanceListProps> = ({
     return fmt(tx.amount);
   };
 
-  // ── Summary ────────────────────────────────────────────────────────────────
+  // ── Summary (for selected period) ─────────────────────────────────────────
   const summary = useMemo(() => {
-    const income = transactions
+    const income = periodFiltered
       .filter(tx => tx.type === 'income')
       .reduce((s, tx) => s + tx.amount, 0);
-    const expense = transactions
+    const expense = periodFiltered
       .filter(tx => tx.type === 'expense')
       .reduce((s, tx) => s + tx.amount, 0);
     return { income, expense, balance: income - expense };
-  }, [transactions]);
+  }, [periodFiltered]);
 
-  // ── Category chips (derived from transactions) ─────────────────────────────
+  // ── Category chips (derived from period-filtered transactions) ─────────────
   const chips = useMemo(() => {
     const seen = new Set<string>();
     const result: string[] = [t.all];
-    for (const tx of transactions) {
+    for (const tx of periodFiltered) {
       const label = resolveCatLabel(tx, categories);
       if (label && !seen.has(label)) {
         seen.add(label);
@@ -158,23 +186,23 @@ const FinanceList: React.FC<FinanceListProps> = ({
       }
     }
     return result;
-  }, [transactions, categories, t.all]);
+  }, [periodFiltered, categories, t.all]);
 
   const safeActiveCategory = chips.includes(activeCategory) ? activeCategory : t.all;
 
-  // ── Banks that appear in actual transactions ───────────────────────────────
+  // ── Banks that appear in period-filtered transactions ──────────────────────
   const txBanks = useMemo(() => {
     const seen = new Set<string>();
-    for (const tx of transactions) {
+    for (const tx of periodFiltered) {
       if (tx.bank) seen.add(tx.bank);
     }
     return Array.from(seen);
-  }, [transactions]);
+  }, [periodFiltered]);
 
-  // ── Filtered transactions ──────────────────────────────────────────────────
+  // ── Filtered transactions (category + bank + search on top of period) ──────
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return transactions.filter(tx => {
+    return periodFiltered.filter(tx => {
       const label = resolveCatLabel(tx, categories);
       if (safeActiveCategory !== t.all && label !== safeActiveCategory) return false;
       if (activeBank !== null && tx.bank !== activeBank) return false;
@@ -186,7 +214,7 @@ const FinanceList: React.FC<FinanceListProps> = ({
       }
       return true;
     });
-  }, [transactions, categories, safeActiveCategory, activeBank, searchQuery, t.all]);
+  }, [periodFiltered, categories, safeActiveCategory, activeBank, searchQuery, t.all]);
 
   // ── Date grouping ──────────────────────────────────────────────────────────
   type Group = { label: string; items: Transaction[] };
@@ -224,6 +252,23 @@ const FinanceList: React.FC<FinanceListProps> = ({
             {t.expense}: {fmt(summary.expense)}
           </span>
         </div>
+      </div>
+
+      {/* ── Period chips ── */}
+      <div className="fin-list__period-wrap">
+        {(['day', 'week', 'month', 'all'] as Period[]).map(p => (
+          <button
+            key={p}
+            className={`fin-list__period-chip${period === p ? ' fin-list__period-chip--active' : ''}`}
+            onClick={() => setPeriod(p)}
+            type="button"
+          >
+            {p === 'day' ? t.periodDay
+              : p === 'week' ? t.periodWeek
+              : p === 'month' ? t.periodMonth
+              : t.periodAll}
+          </button>
+        ))}
       </div>
 
       {/* ── Search ── */}
