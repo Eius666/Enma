@@ -522,3 +522,84 @@ body.theme-light .day-editor__time-input {
   opacity: 0.42;
   cursor: not-allowed;
 }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   WeekSummary
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+.week-summary {
+  margin-bottom: 10px;
+  animation: daySlideIn 0.22s ease forwards;
+}
+
+.week-summary__heading {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--notes-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0 2px;
+  margin-bottom: 8px;
+}
+
+.week-summary__scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+}
+
+.week-summary__scroll::-webkit-scrollbar { display: none; }
+
+.week-day-card {
+  min-width: 72px;
+  padding: 12px 10px;
+  border-radius: 16px;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.week-day-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--notes-text-muted);
+  letter-spacing: 0.04em;
+}
+
+.week-day-num {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--notes-text);
+  line-height: 1;
+}
+
+.week-day-count {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--notes-text-secondary);
+}
+
+.week-day-dots {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.week-day-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--notes-accent);
+}
+
+.week-day-dot--more {
+  background: var(--notes-text-muted);
+}

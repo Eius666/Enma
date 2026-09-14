@@ -10,6 +10,8 @@ import {
 import { User } from 'firebase/auth';
 import { FaSearch, FaCheck, FaCalendarDay } from 'react-icons/fa';
 import { db } from '../firebase';
+import WeekSummary from './WeekSummary';
+import { useWeekTasks } from '../hooks/useWeekTasks';
 import './Day.css';
 
 // ── Shared types & constants ──────────────────────────────────────────────────
@@ -120,6 +122,8 @@ const DayList: React.FC<DayListProps> = ({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [swipedId, setSwipedId]       = useState<string | null>(null);
+
+  const { weekGroups, hasWeekTasks } = useWeekTasks(tasks);
   const touchStartX = useRef<number>(0);
   const touchStartY = useRef<number>(0);
 
@@ -334,6 +338,13 @@ const DayList: React.FC<DayListProps> = ({
           </span>
         </div>
       </div>
+
+      {/* ── Week ahead ── */}
+      <WeekSummary
+        language={language}
+        weekGroups={weekGroups}
+        hasWeekTasks={hasWeekTasks}
+      />
 
       {/* ── Search ── */}
       <div className="day-list__search-wrap">
