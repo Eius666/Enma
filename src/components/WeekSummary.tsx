@@ -11,11 +11,9 @@ interface WeekSummaryProps {
 }
 
 const T = {
-  en: { heading: 'WEEK AHEAD' },
-  ru: { heading: 'ЗАДАЧИ НА НЕДЕЛЮ' },
+  en: { heading: 'UPCOMING' },
+  ru: { heading: 'ПРЕДСТОЯЩИЕ' },
 };
-
-const MAX_DOTS = 5;
 
 const WeekSummary: React.FC<WeekSummaryProps> = ({ language, weekGroups, hasWeekTasks }) => {
   if (!hasWeekTasks) return null;
@@ -26,34 +24,31 @@ const WeekSummary: React.FC<WeekSummaryProps> = ({ language, weekGroups, hasWeek
   return (
     <div className="week-summary">
       <div className="week-summary__heading">{t.heading}</div>
-      <div className="week-summary__scroll">
-        {weekGroups.map(({ dateKey, tasks }) => {
-          const date = parseISO(dateKey);
-          const dayName = format(date, 'EEE', { locale }).toUpperCase();
-          const dayNum = format(date, 'd');
-          const count = tasks.length;
-          const dots = tasks.slice(0, MAX_DOTS);
-          const hasMore = count > MAX_DOTS;
 
-          return (
-            <div key={dateKey} className="week-day-card">
-              <span className="week-day-name">{dayName}</span>
-              <span className="week-day-num">{dayNum}</span>
-              <span className="week-day-count">{count}</span>
-              <div className="week-day-dots">
-                {dots.map(task => (
-                  <span
-                    key={task.id}
-                    className="week-day-dot"
-                    style={{ backgroundColor: PRIORITY_COLORS[task.priority] ?? PRIORITY_COLORS.medium }}
-                  />
-                ))}
-                {hasMore && <span className="week-day-dot week-day-dot--more" />}
+      {weekGroups.map(({ dateKey, tasks }) => {
+        const date = parseISO(dateKey);
+        const dayLabel = format(date, 'EEEE, d MMMM', { locale });
+        const capitalized = dayLabel.charAt(0).toUpperCase() + dayLabel.slice(1);
+
+        return (
+          <div key={dateKey} className="week-summary__group">
+            <div className="week-summary__day-label">{capitalized}</div>
+
+            {tasks.map(task => (
+              <div key={task.id} className="week-summary__item">
+                <span
+                  className="week-summary__item-priority"
+                  style={{ backgroundColor: PRIORITY_COLORS[task.priority] ?? PRIORITY_COLORS.medium }}
+                />
+                <span className="week-summary__item-title">{task.title}</span>
+                {task.time && (
+                  <span className="week-summary__item-time">{task.time}</span>
+                )}
               </div>
-            </div>
-          );
-        })}
-      </div>
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 };

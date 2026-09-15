@@ -524,7 +524,7 @@ body.theme-light .day-editor__time-input {
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   WeekSummary
+   WeekSummary — vertical upcoming-tasks list
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
 .week-summary {
@@ -538,68 +538,55 @@ body.theme-light .day-editor__time-input {
   color: var(--notes-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  padding: 0 2px;
+  padding: 10px 2px 6px;
+}
+
+/* Day group */
+.week-summary__group {
   margin-bottom: 8px;
 }
 
-.week-summary__scroll {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  padding-bottom: 4px;
+.week-summary__day-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--notes-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0 2px 6px;
 }
 
-.week-summary__scroll::-webkit-scrollbar { display: none; }
-
-.week-day-card {
-  min-width: 72px;
-  padding: 12px 10px;
-  border-radius: 16px;
+/* Task row — mirrors day-list__item but read-only (no checkbox, no swipe) */
+.week-summary__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   background: var(--notes-card-bg);
   border: 1px solid var(--notes-card-border);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
+  border-radius: 12px;
+  padding: 11px 14px;
+  margin-bottom: 4px;
+  box-sizing: border-box;
+}
+
+.week-summary__item-priority {
+  width: 4px;
+  height: 28px;
+  border-radius: 2px;
   flex-shrink: 0;
 }
 
-.week-day-name {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--notes-text-muted);
-  letter-spacing: 0.04em;
-}
-
-.week-day-num {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--notes-text);
-  line-height: 1;
-}
-
-.week-day-count {
-  font-size: 12px;
+.week-summary__item-title {
+  flex: 1;
+  font-size: 14px;
   font-weight: 500;
-  color: var(--notes-text-secondary);
+  color: var(--notes-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.week-day-dots {
-  display: flex;
-  gap: 3px;
-  flex-wrap: wrap;
-  justify-content: center;
-  margin-top: 2px;
-}
-
-.week-day-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--notes-accent);
-}
-
-.week-day-dot--more {
-  background: var(--notes-text-muted);
+.week-summary__item-time {
+  font-size: 13px;
+  color: var(--notes-text-muted);
+  flex-shrink: 0;
 }
