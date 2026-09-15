@@ -339,13 +339,6 @@ const DayList: React.FC<DayListProps> = ({
         </div>
       </div>
 
-      {/* ── Week ahead ── */}
-      <WeekSummary
-        language={language}
-        weekGroups={weekGroups}
-        hasWeekTasks={hasWeekTasks}
-      />
-
       {/* ── Search ── */}
       <div className="day-list__search-wrap">
         {/* SVG search icon — no emoji */}
@@ -358,6 +351,13 @@ const DayList: React.FC<DayListProps> = ({
           onChange={e => setSearchQuery(e.target.value)}
         />
       </div>
+
+      {/* ── Week ahead ── */}
+      <WeekSummary
+        language={language}
+        weekGroups={weekGroups}
+        hasWeekTasks={hasWeekTasks}
+      />
 
       {/* ── Task list ── */}
       {isEmpty ? (
