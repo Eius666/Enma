@@ -352,13 +352,6 @@ const DayList: React.FC<DayListProps> = ({
         />
       </div>
 
-      {/* ── Week ahead ── */}
-      <WeekSummary
-        language={language}
-        weekGroups={weekGroups}
-        hasWeekTasks={hasWeekTasks}
-      />
-
       {/* ── Task list ── */}
       {isEmpty ? (
         <div className="day-list__empty">
@@ -385,6 +378,13 @@ const DayList: React.FC<DayListProps> = ({
           )}
         </>
       )}
+
+      {/* ── Week ahead ── */}
+      <WeekSummary
+        language={language}
+        weekGroups={weekGroups}
+        hasWeekTasks={hasWeekTasks}
+      />
 
     </div>
 
