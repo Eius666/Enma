@@ -391,16 +391,243 @@ async function handleAnalyze(req, res) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CHAT_SYSTEM = `Ты — Энма, финансовый помощник пользователя в мобильном приложении.
+const CHAT_SYSTEM_BASE = `Ты — Энма, персональный ассистент пользователя в приложении ENMA.
+
+ENMA — приложение для управления жизнью: задачи, привычки, финансы, напоминания, цели.
+
+Ниже тебе передаётся актуальный контекст текущего пользователя из ENMA.
+Используй эти данные при ответе.
+Если информация присутствует в контексте ENMA, не проси пользователя вводить её повторно.
+Не придумывай значения, которых нет в переданном контексте.
+
+Отличай:
+1. Факты из данных ENMA — используй их напрямую.
+2. Расчёты на основе этих данных — выполняй сам.
+3. Предположения — явно предупреждай о них.
+Если для ответа нужной информации действительно нет, скажи, каких именно данных не хватает.
 
 Личность:
 - Говоришь живо и по-человечески, без канцеляризмов
 - Короткие ответы, максимум 3-4 предложения
 - Не пишешь "Конечно!", "Без проблем!", "Я рада помочь!"
 - Не называешь себя ИИ или ассистентом
-- Отвечаешь на русском
+- Отвечаешь на русском`;
 
-Ты помогаешь с финансами: анализируешь расходы, даёшь советы по бюджету, объясняешь финансовые понятия. Отвечай кратко и по делу.`;
+// ─────────────────────────────────────────────────────────────────────────────
+// User Context Builder — fetches fresh data from Firestore before each AI request
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function buildUserContext(userId) {
+  const now       = new Date();
+  const today     = now.toISOString().slice(0, 10);
+  const monthKey  = now.toISOString().slice(0, 7);
+
+  const logs = {
+    userId,
+    financesLoaded: false,
+    transactionsCount: 0,
+    tasksLoaded: false,
+    habitsLoaded: false,
+    remindersLoaded: false,
+    goalsLoaded: false,
+  };
+
+  const sections = [];
+
+  // 1. User profile (currency, timezone, banks)
+  try {
+    const userSnap = await db.collection('users').doc(userId).get();
+    const ud       = userSnap.exists ? userSnap.data() : {};
+    const currency = ud.currency || 'RUB';
+    const timezone = ud.timezone || 'Europe/Moscow';
+    const banks    = Array.isArray(ud.banks) ? ud.banks : [];
+
+    const profileLines = [`Валюта: ${currency}`, `Часовой пояс: ${timezone}`];
+    if (banks.length) profileLines.push(`Банки: ${banks.join(', ')}`);
+    sections.push(`Профиль:\n${profileLines.join('\n')}`);
+  } catch (err) {
+    console.warn('[AI_CONTEXT] profile:', err.message);
+  }
+
+  // 2. Finances — transactions of current month + last 5 entries
+  try {
+    const txSnap = await db.collection('transactions')
+      .where('userId', '==', userId)
+      .orderBy('date', 'desc')
+      .limit(200)
+      .get();
+
+    logs.transactionsCount = txSnap.size;
+    logs.financesLoaded    = true;
+
+    let income = 0, expenses = 0;
+    const cats      = {};
+    const recentTx  = [];
+
+    for (const d of txSnap.docs) {
+      const tx      = d.data();
+      const txMonth = (typeof tx.date === 'string' ? tx.date : new Date(tx.date).toISOString()).slice(0, 7);
+
+      if (txMonth === monthKey) {
+        if (tx.type === 'income') {
+          income += tx.amount || 0;
+        } else if (tx.type === 'expense') {
+          expenses += tx.amount || 0;
+          const cat = String(tx.categoryId || 'other').replace(/^(cat-|p-)/, '');
+          cats[cat] = (cats[cat] || 0) + (tx.amount || 0);
+        }
+      }
+
+      if (recentTx.length < 5) {
+        const sign = tx.type === 'income' ? '+' : '-';
+        const dateStr = (typeof tx.date === 'string' ? tx.date : new Date(tx.date).toISOString()).slice(0, 10);
+        recentTx.push(`${sign}${tx.amount} (${tx.description || 'транзакция'}) ${dateStr}`);
+      }
+    }
+
+    const finLines = [
+      `Текущий месяц (${monthKey}):`,
+      `  Доходы: ${income.toFixed(0)}`,
+      `  Расходы: ${expenses.toFixed(0)}`,
+      `  Разница: ${(income - expenses) >= 0 ? '+' : ''}${(income - expenses).toFixed(0)}`,
+    ];
+
+    const topCats = Object.entries(cats).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    if (topCats.length) {
+      finLines.push('  Основные категории расходов:');
+      for (const [cat, amt] of topCats) finLines.push(`    - ${cat}: ${Number(amt).toFixed(0)}`);
+    }
+
+    if (recentTx.length) {
+      finLines.push('Последние операции:');
+      for (const t of recentTx) finLines.push(`  ${t}`);
+    }
+
+    sections.push(`Финансы:\n${finLines.join('\n')}`);
+  } catch (err) {
+    console.warn('[AI_CONTEXT] transactions:', err.message);
+  }
+
+  // 3. Tasks — today + upcoming (next 7 days)
+  try {
+    const tasksSnap = await db.collection('tasks')
+      .where('userId', '==', userId)
+      .orderBy('date', 'asc')
+      .limit(50)
+      .get();
+
+    logs.tasksLoaded = true;
+
+    const todayTasks    = [];
+    const upcomingTasks = [];
+
+    for (const d of tasksSnap.docs) {
+      const task = d.data();
+      if (task.date === today) {
+        const done = task.completed || task.done;
+        todayTasks.push(`${done ? '[v]' : '[ ]'} ${task.title}${task.time ? ' в ' + task.time : ''} [${task.priority || 'medium'}]`);
+      } else if (task.date > today) {
+        upcomingTasks.push(`${task.date}: ${task.title}${task.time ? ' в ' + task.time : ''}`);
+      }
+    }
+
+    const taskLines = [];
+    if (todayTasks.length) {
+      taskLines.push(`Задачи на сегодня (${today}):`);
+      for (const t of todayTasks) taskLines.push(`  ${t}`);
+    } else {
+      taskLines.push(`Задачи на сегодня (${today}): нет`);
+    }
+    if (upcomingTasks.length) {
+      taskLines.push('Предстоящие задачи:');
+      for (const t of upcomingTasks.slice(0, 10)) taskLines.push(`  ${t}`);
+    }
+
+    sections.push(`Задачи:\n${taskLines.join('\n')}`);
+  } catch (err) {
+    console.warn('[AI_CONTEXT] tasks:', err.message);
+  }
+
+  // 4. Habits — active habits + today's completion
+  try {
+    const habitsSnap = await db.collection('habits')
+      .where('userId', '==', userId)
+      .limit(30)
+      .get();
+
+    logs.habitsLoaded = true;
+
+    const habitLines = [];
+    for (const d of habitsSnap.docs) {
+      const h = d.data();
+      if (h.archived) continue;
+      const doneToday = Array.isArray(h.completedDates) && h.completedDates.includes(today);
+      habitLines.push(`  ${doneToday ? '[v]' : '[ ]'} ${h.title}`);
+    }
+
+    if (habitLines.length) {
+      sections.push(`Привычки (сегодня ${today}):\n${habitLines.join('\n')}`);
+    }
+  } catch (err) {
+    console.warn('[AI_CONTEXT] habits:', err.message);
+  }
+
+  // 5. Reminders — upcoming pending
+  try {
+    const remindersSnap = await db.collection('reminders')
+      .where('userId', '==', userId)
+      .where('status', '==', 'pending')
+      .orderBy('scheduledAt', 'asc')
+      .limit(10)
+      .get();
+
+    logs.remindersLoaded = true;
+
+    const reminderLines = [];
+    for (const d of remindersSnap.docs) {
+      const r = d.data();
+      const ts = r.scheduledAt?.toDate?.();
+      const dateStr = ts
+        ? ts.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+        : (r.date ? `${r.date} ${r.time || ''}` : '?');
+      reminderLines.push(`  ${r.title} — ${dateStr}`);
+    }
+
+    if (reminderLines.length) {
+      sections.push(`Ближайшие напоминания:\n${reminderLines.join('\n')}`);
+    }
+  } catch (err) {
+    console.warn('[AI_CONTEXT] reminders:', err.message);
+  }
+
+  // 6. Goals — savings progress
+  try {
+    const goalsSnap = await db.collection('goals')
+      .where('userId', '==', userId)
+      .limit(10)
+      .get();
+
+    logs.goalsLoaded = true;
+
+    const goalLines = [];
+    for (const d of goalsSnap.docs) {
+      const g   = d.data();
+      const pct = Math.round((g.currentAmount || 0) / (g.targetAmount || 1) * 100);
+      goalLines.push(`  ${g.title}: ${g.currentAmount || 0} / ${g.targetAmount} (${pct}%)`);
+    }
+
+    if (goalLines.length) {
+      sections.push(`Цели накопления:\n${goalLines.join('\n')}`);
+    }
+  } catch (err) {
+    console.warn('[AI_CONTEXT] goals:', err.message);
+  }
+
+  console.log('[AI_CONTEXT]', JSON.stringify(logs));
+
+  if (!sections.length) return null;
+  return `Актуальные данные пользователя из ENMA (дата: ${today}):\n\n${sections.join('\n\n')}`;
+}
 
 async function handleChat(req, res) {
   const { userId, message, history } = req.body ?? {};
@@ -422,14 +649,26 @@ async function handleChat(req, res) {
     const historyMsgs = (Array.isArray(history) ? history.slice(-10) : [])
       .map(m => ({ role: m.role, content: m.content }));
 
+    // Fetch fresh user context from Firestore
+    let userContext = null;
+    try {
+      userContext = await buildUserContext(userId);
+    } catch (ctxErr) {
+      console.warn('[ai/chat] context build error:', ctxErr.message);
+    }
+
+    const systemContent = userContext
+      ? `${CHAT_SYSTEM_BASE}\n\n${userContext}`
+      : CHAT_SYSTEM_BASE;
+
     const content = await callOpenRouter(
       [
-        { role: 'system', content: CHAT_SYSTEM },
+        { role: 'system', content: systemContent },
         ...historyMsgs,
         { role: 'user', content: message },
       ],
       'chat',
-      600,
+      800,
     );
 
     // Persist to Firestore (best-effort, non-fatal)
