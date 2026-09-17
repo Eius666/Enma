@@ -4,6 +4,7 @@
 // fetch, response parsing, and error conversion.
 
 import type { PlanType } from '../subscription';
+import { auth } from '../firebase';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Errors
@@ -26,9 +27,16 @@ export class AiLimitError extends Error {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function aiPost<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const user = auth.currentUser;
+  if (user) {
+    try {
+      headers['Authorization'] = `Bearer ${await user.getIdToken()}`;
+    } catch { /* continue — server will return 401 */ }
+  }
   const res = await fetch(path, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body:    JSON.stringify(body),
   });
 
@@ -155,10 +163,11 @@ export interface ChatResponse {
 export async function chatAssistant(
   message: string,
   history: ChatMessage[],
-  userId: string,
+  _userId: string,
   _plan: PlanType,
 ): Promise<ChatResponse> {
-  return aiPost<ChatResponse>('/api/ai/chat', { userId, message, history });
+  // userId is not sent in the body — backend derives uid from the verified Firebase token
+  return aiPost<ChatResponse>('/api/ai/chat', { message, history });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

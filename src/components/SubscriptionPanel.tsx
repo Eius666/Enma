@@ -337,10 +337,14 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
     setReferralChecking(true);
     setReferralMsg(null);
     try {
+      const token = user ? await user.getIdToken() : null;
       const resp = await fetch('/api/ai/referralValidate', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ code, userId: user?.uid || null }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body:    JSON.stringify({ code }),
       });
       const data = await resp.json();
       if (data.valid) {

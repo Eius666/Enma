@@ -330,6 +330,30 @@ function sendRateLimit(res, type) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Auth boundary — extracts and verifies Firebase ID Token from Authorization header.
+// Returns the verified uid, or sends 401 and returns null.
+// buildUserContext() and all personal-data handlers MUST go through this.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function requireAuth(req, res) {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.warn('[AI_AUTH] Missing authorization token');
+    res.status(401).json({ error: 'Unauthorized' });
+    return null;
+  }
+  const token = authHeader.slice(7);
+  try {
+    const decoded = await admin.auth().verifyIdToken(token);
+    return decoded.uid;
+  } catch (err) {
+    console.warn('[AI_AUTH] Invalid Firebase token:', err.code || err.message);
+    res.status(401).json({ error: 'Unauthorized' });
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Handlers
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -343,17 +367,20 @@ const ANALYZE_SYSTEM = `You are a financial analysis assistant. Analyze the prov
 Return ONLY the JSON object. No markdown fences, no explanation.`;
 
 async function handleAnalyze(req, res) {
-  const { userId, transactions, month } = req.body ?? {};
-  if (!userId || !Array.isArray(transactions)) {
-    return res.status(400).json({ error: 'Missing userId or transactions' });
+  const verifiedUid = await requireAuth(req, res);
+  if (!verifiedUid) return;
+
+  const { transactions, month } = req.body ?? {};
+  if (!Array.isArray(transactions)) {
+    return res.status(400).json({ error: 'Missing transactions' });
   }
 
-  const plan = await getActivePlan(userId);
+  const plan = await getActivePlan(verifiedUid);
 
-  const isAllowed = await checkRate(userId, 'text');
+  const isAllowed = await checkRate(verifiedUid, 'text');
   if (!isAllowed) return sendRateLimit(res, 'text');
 
-  const usage = await checkAndIncrement(userId, 'textRequests', plan);
+  const usage = await checkAndIncrement(verifiedUid, 'textRequests', plan);
   if (!usage.allowed) {
     return usage.limit === 0 ? sendPlanRestricted(res) : sendLimit(res, usage.used, usage.limit);
   }
@@ -630,17 +657,21 @@ async function buildUserContext(userId) {
 }
 
 async function handleChat(req, res) {
-  const { userId, message, history } = req.body ?? {};
-  if (!userId || !message) {
-    return res.status(400).json({ error: 'Missing userId or message' });
+  // uid comes from the verified Firebase token — req.body.userId is ignored for auth
+  const verifiedUid = await requireAuth(req, res);
+  if (!verifiedUid) return;
+
+  const { message, history } = req.body ?? {};
+  if (!message) {
+    return res.status(400).json({ error: 'Missing message' });
   }
 
-  const plan = await getActivePlan(userId);
+  const plan = await getActivePlan(verifiedUid);
 
-  const isAllowed = await checkRate(userId, 'text');
+  const isAllowed = await checkRate(verifiedUid, 'text');
   if (!isAllowed) return sendRateLimit(res, 'text');
 
-  const usage = await checkAndIncrement(userId, 'textRequests', plan);
+  const usage = await checkAndIncrement(verifiedUid, 'textRequests', plan);
   if (!usage.allowed) {
     return usage.limit === 0 ? sendPlanRestricted(res) : sendLimit(res, usage.used, usage.limit);
   }
@@ -649,10 +680,10 @@ async function handleChat(req, res) {
     const historyMsgs = (Array.isArray(history) ? history.slice(-10) : [])
       .map(m => ({ role: m.role, content: m.content }));
 
-    // Fetch fresh user context from Firestore
+    // Fetch fresh user context from Firestore (verifiedUid guaranteed by requireAuth above)
     let userContext = null;
     try {
-      userContext = await buildUserContext(userId);
+      userContext = await buildUserContext(verifiedUid);
     } catch (ctxErr) {
       console.warn('[ai/chat] context build error:', ctxErr.message);
     }
@@ -673,7 +704,7 @@ async function handleChat(req, res) {
 
     // Persist to Firestore (best-effort, non-fatal)
     try {
-      const chatRef = db.collection('users').doc(userId).collection('aiChats');
+      const chatRef = db.collection('users').doc(verifiedUid).collection('aiChats');
       const now     = admin.firestore.FieldValue.serverTimestamp();
       const batch   = db.batch();
       batch.set(chatRef.doc(), { role: 'user',      content: message, createdAt: now });
@@ -701,17 +732,20 @@ const ENTITY_COLLECTIONS = { note: 'notes', habit: 'habits' };
 const ENTITY_URL_FIELDS  = { note: 'coverUrl', habit: 'iconUrl' };
 
 async function handleImage(req, res) {
-  const { userId, prompt, entityId, entityType } = req.body ?? {};
-  if (!userId || !prompt) {
-    return res.status(400).json({ error: 'Missing userId or prompt' });
+  const verifiedUid = await requireAuth(req, res);
+  if (!verifiedUid) return;
+
+  const { prompt, entityId, entityType } = req.body ?? {};
+  if (!prompt) {
+    return res.status(400).json({ error: 'Missing prompt' });
   }
 
-  const plan = await getActivePlan(userId);
+  const plan = await getActivePlan(verifiedUid);
 
-  const isAllowed = await checkRate(userId, 'image');
+  const isAllowed = await checkRate(verifiedUid, 'image');
   if (!isAllowed) return sendRateLimit(res, 'image');
 
-  const usage = await checkAndIncrement(userId, 'imageRequests', plan);
+  const usage = await checkAndIncrement(verifiedUid, 'imageRequests', plan);
   if (!usage.allowed) {
     return usage.limit === 0 ? sendPlanRestricted(res) : sendLimit(res, usage.used, usage.limit);
   }
@@ -734,7 +768,7 @@ async function handleImage(req, res) {
   if (imageResult.b64) {
     try {
       const buffer = Buffer.from(imageResult.b64, 'base64');
-      publicUrl = await uploadToStorage(userId, buffer);
+      publicUrl = await uploadToStorage(verifiedUid, buffer);
     } catch (err) {
       console.error('[ai/image] Storage upload error:', err.message);
       return res.status(500).json({ error: 'Image upload to Storage failed' });
@@ -771,17 +805,20 @@ async function handleImage(req, res) {
 const REPORT_SYSTEM = `You are a financial report generator. Create a structured HTML financial summary based on the provided data. Use Russian language. Include sections for: overall summary, top spending categories, notable trends, and 2-3 actionable recommendations. Use simple inline CSS for readability (dark-friendly: background #1a1a2e, text #e0e0e0, accent #a29bfe). Return ONLY the HTML fragment — no doctype, html, head, or body tags.`;
 
 async function handleReport(req, res) {
-  const { userId, data } = req.body ?? {};
-  if (!userId || !data) {
-    return res.status(400).json({ error: 'Missing userId or data' });
+  const verifiedUid = await requireAuth(req, res);
+  if (!verifiedUid) return;
+
+  const { data } = req.body ?? {};
+  if (!data) {
+    return res.status(400).json({ error: 'Missing data' });
   }
 
-  const plan = await getActivePlan(userId);
+  const plan = await getActivePlan(verifiedUid);
 
-  const isAllowed = await checkRate(userId, 'text');
+  const isAllowed = await checkRate(verifiedUid, 'text');
   if (!isAllowed) return sendRateLimit(res, 'text');
 
-  const usage = await checkAndIncrement(userId, 'pdfReports', plan);
+  const usage = await checkAndIncrement(verifiedUid, 'pdfReports', plan);
   if (!usage.allowed) {
     return usage.limit === 0 ? sendPlanRestricted(res) : sendLimit(res, usage.used, usage.limit);
   }
@@ -848,10 +885,15 @@ function localToUtcForReminder(dateStr, timeStr, timezone) {
 }
 
 async function handleEntityCreate(req, res) {
-  const { userId, entityType, data, docId } = req.body ?? {};
+  const verifiedUid = await requireAuth(req, res);
+  if (!verifiedUid) return;
 
-  if (!userId || !entityType || !data || typeof data !== 'object') {
-    return res.status(400).json({ error: 'Missing userId, entityType, or data' });
+  const { entityType, data, docId } = req.body ?? {};
+  // userId from body is deliberately ignored — verifiedUid from token is used
+  const userId = verifiedUid;
+
+  if (!entityType || !data || typeof data !== 'object') {
+    return res.status(400).json({ error: 'Missing entityType or data' });
   }
 
   const collection = ENTITY_COLLECTION_MAP[entityType];
@@ -974,9 +1016,12 @@ const CATEGORIZE_SYSTEM =
   'When unsure whether income or expense, default to expense.';
 
 async function handleCategorize(req, res) {
-  const { userId, description, amount } = req.body ?? {};
-  if (!userId || !description) {
-    return res.status(400).json({ error: 'Missing userId or description' });
+  const verifiedUid = await requireAuth(req, res);
+  if (!verifiedUid) return;
+
+  const { description, amount } = req.body ?? {};
+  if (!description) {
+    return res.status(400).json({ error: 'Missing description' });
   }
 
   const userPrompt = `Description: ${String(description).slice(0, 200)}${amount != null ? `, Amount: ${amount}` : ''}`;
@@ -1686,12 +1731,15 @@ async function handleAdminSetupOtp(req, res) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function handleReferralValidate(req, res) {
-  const { code, userId } = req.body ?? {};
+  const verifiedUid = await requireAuth(req, res);
+  if (!verifiedUid) return;
+
+  const { code } = req.body ?? {};
   if (!code) return res.status(400).json({ valid: false, error: 'missing_code' });
 
   // Try influencer code first
   const { validateInfluencerCode } = require('../_lib/referral/influencer');
-  const influencerResult = await validateInfluencerCode(code, userId || null);
+  const influencerResult = await validateInfluencerCode(code, verifiedUid);
   if (influencerResult.valid) {
     return res.status(200).json(influencerResult);
   }
@@ -1703,17 +1751,15 @@ async function handleReferralValidate(req, res) {
     return res.status(200).json({ valid: false, error: 'code_not_found' });
   }
 
-  // Self-referral check
-  if (userId && referrer.id === userId) {
+  // Self-referral check (uses verified uid — cannot be spoofed)
+  if (referrer.id === verifiedUid) {
     return res.status(200).json({ valid: false, error: 'self_referral' });
   }
 
   // Check if user already has a referrer
-  if (userId) {
-    const userSnap = await db.collection('users').doc(userId).get();
-    if (userSnap.exists && userSnap.data().referredBy) {
-      return res.status(200).json({ valid: false, error: 'already_referred' });
-    }
+  const userSnap = await db.collection('users').doc(verifiedUid).get();
+  if (userSnap.exists && userSnap.data().referredBy) {
+    return res.status(200).json({ valid: false, error: 'already_referred' });
   }
 
   return res.status(200).json({ valid: true, discountPercent: 0, type: 'user' });
@@ -1724,8 +1770,9 @@ async function handleReferralValidate(req, res) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function handleReferralInfo(req, res) {
-  const { userId } = req.body ?? {};
-  if (!userId) return res.status(400).json({ error: 'missing_userId' });
+  const verifiedUid = await requireAuth(req, res);
+  if (!verifiedUid) return;
+  const userId = verifiedUid;
 
   const { ensureReferralCode } = require('../_lib/referral/codes');
   const code = await ensureReferralCode(userId);

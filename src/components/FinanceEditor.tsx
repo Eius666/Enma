@@ -243,9 +243,10 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
           category:    preset ? catDisplayName(preset) : '',
         };
         if (selectedBank) data.bank = selectedBank;
+        const token = await user.getIdToken();
         const resp = await fetch('/api/ai/entityCreate', {
           method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({ userId: user.uid, entityType: 'transaction', docId: id, data }),
         });
         if (resp.status === 429) {

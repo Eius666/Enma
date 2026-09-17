@@ -210,11 +210,12 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   useEffect(() => {
     if (!user) return;
-    fetch('/api/ai/referralInfo', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ userId: user.uid }),
-    })
+    user.getIdToken()
+      .then(token => fetch('/api/ai/referralInfo', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body:    JSON.stringify({ userId: user.uid }),
+      }))
       .then(r => r.json())
       .then(d => {
         if (!d.ok) return;
