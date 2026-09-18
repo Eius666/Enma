@@ -43,6 +43,8 @@ import NoteEditor from './components/NoteEditor';
 import { Subscription, isSubscriptionActive, isInTrial, getActivePlan, trialDaysRemaining } from './subscription';
 import { LimitBanner } from './components/Paywall';
 import OnboardingDemo from './components/OnboardingDemo';
+import InsightsFeed from './components/InsightsFeed';
+import type { InsightAction } from './components/InsightsFeed';
 import './components/Subscription.css';
 import './components/Notes.css';
 import './components/Finance.css';
@@ -50,6 +52,7 @@ import './components/Habits.css';
 import './components/Day.css';
 import './components/Calendar.css';
 import './components/AppShell.css';
+import './components/Insights.css';
 
 type Theme = 'dark' | 'light';
 type Language = 'en' | 'ru';
@@ -989,14 +992,9 @@ const App: React.FC = () => {
 
   const persistReminderToFirestore = useCallback(
     async (reminder: Reminder, options?: { isNew?: boolean; status?: 'pending' | 'done' }) => {
-      if (!user) {
-         return;
-      }
-      if (!telegram?.initDataUnsafe?.user?.id) {
-         return;
-      }
-      
-      const chatId = telegram.initDataUnsafe.user.id;
+      if (!user) return;
+
+      const chatId = telegram?.initDataUnsafe?.user?.id ?? null;
       const scheduledAt = getReminderScheduledDate(reminder);
       const status = options?.status ?? (reminder.done ? 'done' : 'pending');
       const payload = {
@@ -1027,6 +1025,7 @@ const App: React.FC = () => {
 
   const remindersBackfillRef = useRef(false);
   const transactionsBackfillRef = useRef(false);
+  const notesLsMigrationRef = useRef(false);
 
   useEffect(() => {
     const uid = user?.uid ?? null;
@@ -1194,6 +1193,65 @@ const App: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid ?? null]);
 
+  // ── Firestore reminders onSnapshot ───────────────────────────────────────────────
+  useEffect(() => {
+    const uid = user?.uid ?? null;
+    if (!uid) return;
+
+    let mounted = true;
+    let unsub: (() => void) | null = null;
+
+    const timer = setTimeout(() => {
+      if (!mounted) return;
+      const q = query(
+        collection(db, 'reminders'),
+        where('userId', '==', uid)
+      );
+      try {
+        unsub = onSnapshot(
+          q,
+          snapshot => {
+            if (!mounted) return;
+            setReminders(prev => {
+              const updated = new Map(prev.map(r => [r.id, r]));
+              snapshot.docChanges().forEach(change => {
+                if (change.type === 'removed') {
+                  updated.delete(change.doc.id);
+                } else {
+                  const d = change.doc.data();
+                  updated.set(change.doc.id, {
+                    id: change.doc.id,
+                    title: String(d.title ?? ''),
+                    date: String(d.date ?? ''),
+                    time: String(d.time ?? '00:00'),
+                    notes: d.notes ? String(d.notes) : undefined,
+                    done: Boolean(d.done),
+                  } as Reminder);
+                }
+              });
+              return Array.from(updated.values()).sort((a, b) =>
+                a.date.localeCompare(b.date) || a.time.localeCompare(b.time)
+              );
+            });
+          },
+          err => {
+            if (!mounted) return;
+            console.warn('Reminders onSnapshot error', err);
+          }
+        );
+      } catch (err) {
+        console.warn('Failed to subscribe to reminders', err);
+      }
+    }, 100);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+      if (unsub) unsub();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid ?? null]);
+
   useEffect(() => {
     if (!user) return;
     if (transactionsBackfillRef.current) return;
@@ -1206,7 +1264,47 @@ const App: React.FC = () => {
   }, [transactions, persistTransactionToFirestore, user]);
 
   useEffect(() => {
-    if (!user || !telegram?.initDataUnsafe?.user?.id) return;
+    if (!user || notes.length === 0) return;
+    const markerKey = `enma.${user.uid}.notesLsMigrated`;
+    if (localStorage.getItem(markerKey) === '1') return;
+    if (notesLsMigrationRef.current) return;
+    notesLsMigrationRef.current = true;
+
+    const migrate = async () => {
+      for (const page of notes) {
+        if (!page.title && page.blocks.length === 0) continue;
+        try {
+          const ref = doc(db, 'notes', page.id);
+          const snap = await getDoc(ref);
+          if (snap.exists()) continue;
+          const content = page.blocks
+            .map(b => (b.type === 'todo' ? `- [${b.checked ? 'x' : ' '}] ${b.content}` : b.content))
+            .filter(Boolean)
+            .join('\n');
+          await setDoc(ref, {
+            id: page.id,
+            userId: user.uid,
+            title: page.title || '(без названия)',
+            content,
+            type: page.noteType === 'checklist' ? 'checklist' : 'text',
+            checklistItems: [],
+            category: null,
+            pinned: false,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        } catch {
+          // Free limit exceeded or permissions error — skip note
+        }
+      }
+      localStorage.setItem(markerKey, '1');
+    };
+
+    migrate().catch(() => { /* silent */ });
+  }, [user, notes]);
+
+  useEffect(() => {
+    if (!user) return;
     if (remindersBackfillRef.current) return;
     if (reminders.length === 0) {
       remindersBackfillRef.current = true;
@@ -1219,7 +1317,7 @@ const App: React.FC = () => {
         status: reminder.done ? 'done' : 'pending'
       });
     });
-  }, [reminders, persistReminderToFirestore, telegram, user]);
+  }, [reminders, persistReminderToFirestore, user]);
 
   useEffect(() => {
     if (!ENABLE_CLIENT_REMINDERS) return;
@@ -1567,6 +1665,20 @@ const App: React.FC = () => {
             onStartTrial={handleStartTrial}
             onDismiss={() => setShowOnboarding(false)}
             trialLoading={trialActivating}
+          />
+        )}
+        {activeTab === 'day-flow' && dayView === 'list' && (
+          <InsightsFeed
+            user={user}
+            language={language}
+            maxVisible={3}
+            onCta={(action: InsightAction) => {
+              // Route CTA to appropriate tab based on skill target domain
+              const target = action.target || '';
+              if (target.startsWith('finance.')) handleTabSwitch('finance');
+              else if (target.startsWith('tasks.'))   handleTabSwitch('calendar');
+              else if (target.startsWith('habits.'))  handleTabSwitch('habits');
+            }}
           />
         )}
         {activeTab === 'day-flow' && dayView === 'list' && (

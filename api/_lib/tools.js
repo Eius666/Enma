@@ -1,6 +1,9 @@
 'use strict';
 
 const { db, admin } = require('./firebaseAdmin');
+const txRepo        = require('./repositories/transactions');
+const tasksRepo     = require('./repositories/tasks');
+const remindersRepo = require('./repositories/reminders');
 
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -827,16 +830,19 @@ async function queryReminders(args, userId, timezone) {
   const tz     = timezone || DEFAULT_TZ;
   const offset = getUtcOffsetStr(tz);
 
-  let q = db.collection('reminders').where('userId', '==', userId);
-  if (status !== 'all') q = q.where('status', '==', status);
-  q = q.orderBy('scheduledAt', 'desc').limit(Math.min(limit, 20));
+  let reminders;
+  try {
+    reminders = await remindersRepo.getAllReminders(userId);
+  } catch (_) {
+    return { ok: true, message: 'Нет напоминаний.' };
+  }
 
-  const snap = await q.get();
-  if (snap.empty) return { ok: true, message: 'Нет напоминаний.' };
+  let filtered = remindersRepo.filterByStatus(reminders, status);
+  filtered = filtered.slice(0, Math.min(limit, 20));
+  if (!filtered.length) return { ok: true, message: 'Нет напоминаний.' };
 
   const icons = { pending: '⏳', sent: '✅', sending: '🔄', failed: '❌' };
-  const lines = snap.docs.map(d => {
-    const r    = d.data();
+  const lines = filtered.map(r => {
     const ts   = r.scheduledAt?.toDate?.();
     const tStr = ts ? ts.toLocaleString('ru-RU', {
       timeZone: tz, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
@@ -849,16 +855,21 @@ async function queryReminders(args, userId, timezone) {
 async function queryTasks(args, userId) {
   const { date, limit = 10 } = args || {};
 
-  let q = db.collection('tasks').where('userId', '==', userId);
-  if (date) q = q.where('date', '==', date);
-  q = q.orderBy('date', 'desc').limit(Math.min(limit, 20));
+  let tasks;
+  try {
+    tasks = await tasksRepo.getAllTasks(userId);
+  } catch (_) {
+    return { ok: true, message: 'Нет задач.' };
+  }
 
-  const snap = await q.get();
-  if (snap.empty) return { ok: true, message: 'Нет задач.' };
+  if (date) tasks = tasks.filter(t => t.date === date);
+  // getAllTasks returns date asc; for display, show date desc (most recent first)
+  tasks = tasks.slice().reverse().slice(0, Math.min(limit, 20));
 
-  const lines = snap.docs.map(d => {
-    const t    = d.data();
-    const icon = t.done ? '✅' : '📋';
+  if (!tasks.length) return { ok: true, message: 'Нет задач.' };
+
+  const lines = tasks.map(t => {
+    const icon = t.completed ? '✅' : '📋';
     const tStr = t.time ? ` в ${t.time}` : '';
     return `${icon} ${t.title} — ${t.date}${tStr}`;
   });
@@ -868,24 +879,24 @@ async function queryTasks(args, userId) {
 async function queryTransactions(args, userId, currency = 'RUB') {
   const { type = 'all', limit = 10, bank } = args || {};
 
-  let q = db.collection('transactions').where('userId', '==', userId);
-  if (type !== 'all') q = q.where('type', '==', type);
-  const fetchLimit = bank ? Math.min(limit * 4, 80) : Math.min(limit, 20);
-  q = q.orderBy('date', 'desc').limit(fetchLimit);
+  let txs;
+  try {
+    txs = await txRepo.getAllTransactions(userId);
+  } catch (_) {
+    return { ok: true, message: 'Нет транзакций.' };
+  }
 
-  const snap = await q.get();
-  let docs = snap.docs;
-  if (bank) docs = docs.filter(d => d.data().bank === bank);
-  docs = docs.slice(0, Math.min(limit, 20));
+  txs = txRepo.filterByType(txs, type);
+  if (bank) txs = txs.filter(t => t.bank === bank);
+  txs = txs.slice(0, Math.min(limit, 20));
 
-  if (!docs.length) return { ok: true, message: 'Нет транзакций.' };
+  if (!txs.length) return { ok: true, message: 'Нет транзакций.' };
 
   const sym   = CURRENCY_SYMBOLS[currency] || currency;
-  const lines = docs.map(d => {
-    const tx        = d.data();
-    const emoji     = tx.type === 'income' ? '💰' : '💸';
-    const bankLabel = tx.bank ? ` [${tx.bank}]` : '';
-    return `${emoji} ${tx.description} — ${tx.amount} ${sym}${bankLabel}`;
+  const lines = txs.map(t => {
+    const emoji     = t.type === 'income' ? '💰' : '💸';
+    const bankLabel = t.bank ? ` [${t.bank}]` : '';
+    return `${emoji} ${t.description} — ${t.amount} ${sym}${bankLabel}`;
   });
   return { ok: true, message: `💳 История:\n${lines.join('\n')}` };
 }
@@ -963,66 +974,92 @@ async function getFinanceStats(args, userId, currency = 'RUB') {
     startDate = new Date(now.getFullYear(), now.getMonth(), 1);
   }
 
-  const snap = await db.collection('transactions')
-    .where('userId', '==', userId)
-    .orderBy('date', 'desc')
-    .limit(200)
-    .get();
+  // CRITICAL: Single-field filter only — avoids composite index requirement.
+  // Use shared repository — single-field filter, no composite index required.
+  let allTransactions = [];
+  try {
+    allTransactions = await txRepo.getAllTransactions(userId);
+  } catch (err) {
+    console.error('[AI_FINANCE_CONTEXT] balance=FAILED reason=%s', err.code || err.message);
+    return { ok: false, error: 'Не удалось загрузить финансовые данные. Попробуй чуть позже.' };
+  }
 
+  // CRITICAL: actual balance = sum(all income) - sum(all expenses) over all time
+  const currentBalance = txRepo.calculateCurrentBalance(allTransactions);
+
+  // USEFUL: period breakdown — isolated in try/catch
   let totalExpense = 0;
   let totalIncome  = 0;
   const categories = {};
   const byBank     = {};
+  let periodOk = true;
 
-  for (const doc of snap.docs) {
-    const d      = doc.data();
-    const txDate = new Date(d.date);
-    if (startDate && txDate < startDate) continue;
+  try {
+    const periodTxs = startDate
+      ? allTransactions.filter(t => t.date && new Date(t.date) >= startDate)
+      : allTransactions;
 
-    if (d.type === 'expense') {
-      totalExpense += d.amount || 0;
-      const cat = (d.categoryId || 'cat-other').replace('cat-', '');
-      categories[cat] = (categories[cat] || 0) + (d.amount || 0);
-      if (d.bank) {
-        if (!byBank[d.bank]) byBank[d.bank] = { income: 0, expense: 0 };
-        byBank[d.bank].expense += d.amount || 0;
-      }
-    } else if (d.type === 'income') {
-      totalIncome += d.amount || 0;
-      if (d.bank) {
-        if (!byBank[d.bank]) byBank[d.bank] = { income: 0, expense: 0 };
-        byBank[d.bank].income += d.amount || 0;
+    for (const t of periodTxs) {
+      if (t.type === 'expense') {
+        totalExpense += t.amount;
+        const cat = (t.categoryId || 'cat-other').replace('cat-', '');
+        categories[cat] = (categories[cat] || 0) + t.amount;
+        if (t.bank) {
+          if (!byBank[t.bank]) byBank[t.bank] = { income: 0, expense: 0 };
+          byBank[t.bank].expense += t.amount;
+        }
+      } else if (t.type === 'income') {
+        totalIncome += t.amount;
+        if (t.bank) {
+          if (!byBank[t.bank]) byBank[t.bank] = { income: 0, expense: 0 };
+          byBank[t.bank].income += t.amount;
+        }
       }
     }
+  } catch (err) {
+    console.error('[AI_FINANCE_CONTEXT] balance=loaded periodBreakdown=FAILED reason=%s', err.message);
+    periodOk = false;
   }
 
-  const periodLabel = { today: 'Сегодня', week: 'За неделю', month: 'За месяц', all: 'За всё время' }[period] || 'За всё время';
-  const net = totalIncome - totalExpense;
   const sym = CURRENCY_SYMBOLS[currency] || currency;
+  const balanceSign = currentBalance >= 0 ? '+' : '';
 
   const lines = [
-    `📊 ${periodLabel}`,
-    `💸 Расходы: ${totalExpense.toFixed(2)} ${sym}`,
-    `💰 Доходы:  ${totalIncome.toFixed(2)} ${sym}`,
-    `${net >= 0 ? '✅' : '⚠️'} Баланс: ${net >= 0 ? '+' : ''}${net.toFixed(2)} ${sym}`,
+    `💳 Баланс: ${balanceSign}${currentBalance.toFixed(2)} ${sym}`,
   ];
 
-  const catEntries = Object.entries(categories).sort((a, b) => b[1] - a[1]);
-  if (catEntries.length) {
-    lines.push('', 'По категориям:');
-    for (const [cat, amount] of catEntries) {
-      lines.push(`  • ${cat}: ${amount.toFixed(2)} ${sym}`);
-    }
-  }
+  if (periodOk) {
+    const periodLabel = { today: 'Сегодня', week: 'За неделю', month: 'За месяц', all: 'За всё время' }[period] || 'За всё время';
+    const net = totalIncome - totalExpense;
+    lines.push(
+      `\n📊 ${periodLabel}`,
+      `💸 Расходы: ${totalExpense.toFixed(2)} ${sym}`,
+      `💰 Доходы:  ${totalIncome.toFixed(2)} ${sym}`,
+      `${net >= 0 ? '✅' : '⚠️'} Результат за период: ${net >= 0 ? '+' : ''}${net.toFixed(2)} ${sym}`,
+    );
 
-  const bankEntries = Object.entries(byBank).sort((a, b) => (b[1].expense + b[1].income) - (a[1].expense + a[1].income));
-  if (bankEntries.length) {
-    lines.push('', 'По банкам:');
-    for (const [bk, stats] of bankEntries) {
-      const parts = [];
-      if (stats.expense > 0) parts.push(`расходы ${stats.expense.toFixed(2)} ${sym}`);
-      if (stats.income  > 0) parts.push(`доходы ${stats.income.toFixed(2)} ${sym}`);
-      lines.push(`  • ${bk}: ${parts.join(', ')}`);
+    // OPTIONAL: categories and bank breakdown
+    try {
+      const catEntries = Object.entries(categories).sort((a, b) => b[1] - a[1]);
+      if (catEntries.length) {
+        lines.push('', 'По категориям:');
+        for (const [cat, amount] of catEntries) {
+          lines.push(`  • ${cat}: ${amount.toFixed(2)} ${sym}`);
+        }
+      }
+
+      const bankEntries = Object.entries(byBank).sort((a, b) => (b[1].expense + b[1].income) - (a[1].expense + a[1].income));
+      if (bankEntries.length) {
+        lines.push('', 'По банкам:');
+        for (const [bk, stats] of bankEntries) {
+          const parts = [];
+          if (stats.expense > 0) parts.push(`расходы ${stats.expense.toFixed(2)} ${sym}`);
+          if (stats.income  > 0) parts.push(`доходы ${stats.income.toFixed(2)} ${sym}`);
+          lines.push(`  • ${bk}: ${parts.join(', ')}`);
+        }
+      }
+    } catch (err) {
+      console.error('[AI_FINANCE_CONTEXT] balance=loaded periodBreakdown=loaded categories=FAILED reason=%s', err.message);
     }
   }
 
@@ -1374,4 +1411,4 @@ async function executeTool(name, args, userId, chatId, timezone, currency = 'RUB
   }
 }
 
-module.exports = { TOOL_DEFINITIONS, executeTool, getUserTimezone, getUserCurrency, isValidTimezone, getUtcOffsetStr, calculateNextRun };
+module.exports = { TOOL_DEFINITIONS, executeTool, getFinanceStats, getUserTimezone, getUserCurrency, isValidTimezone, getUtcOffsetStr, calculateNextRun };

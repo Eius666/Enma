@@ -158,6 +158,8 @@ export interface ChatMessage {
 export interface ChatResponse {
   message: string;
   remaining?: number;
+  toolCalls?: Array<{ tool: string; success: boolean }>;
+  conversationId?: string;
 }
 
 export async function chatAssistant(
@@ -165,9 +167,13 @@ export async function chatAssistant(
   history: ChatMessage[],
   _userId: string,
   _plan: PlanType,
+  conversationId?: string,
 ): Promise<ChatResponse> {
   // userId is not sent in the body — backend derives uid from the verified Firebase token
-  return aiPost<ChatResponse>('/api/ai/chat', { message, history });
+  const requestId = typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return aiPost<ChatResponse>('/api/ai/chat', { message, history, requestId, conversationId });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

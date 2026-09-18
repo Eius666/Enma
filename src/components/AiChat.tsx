@@ -66,6 +66,24 @@ const AiChat: React.FC<AiChatProps> = ({ user, language, subscription, onBack })
   const t    = T[language];
   const plan = getActivePlan(subscription ?? null);
 
+  // Stable conversation ID per user — generated once, stored in localStorage.
+  // The server scopes it to verifiedUid, so the value itself is not a security boundary.
+  const conversationId = React.useMemo(() => {
+    if (!user) return 'default';
+    const key = `enma.ai.convId.${user.uid}`;
+    try {
+      const stored = localStorage.getItem(key);
+      if (stored) return stored;
+      const id = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem(key, id);
+      return id;
+    } catch {
+      return 'default';
+    }
+  }, [user]);
+
   const [messages,     setMessages]     = useState<ChatMsg[]>([]);
   const [input,        setInput]        = useState('');
   const [sending,      setSending]      = useState(false);
@@ -126,7 +144,7 @@ const AiChat: React.FC<AiChatProps> = ({ user, language, subscription, onBack })
 
     try {
       const history = messages.slice(-10).map(m => ({ role: m.role, content: m.content }));
-      const resp    = await chatAssistant(text, history, user.uid, plan);
+      const resp    = await chatAssistant(text, history, user.uid, plan, conversationId);
 
       await addDoc(collection(db, 'users', user.uid, 'aiChats'), {
         role: 'user', content: text, createdAt: serverTimestamp(),

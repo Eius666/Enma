@@ -5,10 +5,19 @@
     "api/cron/content-plan.js":     { "maxDuration": 30 },
     "api/cron/content-publish.js":  { "maxDuration": 30 },
     "api/cron/maintenance.js":      { "maxDuration": 30 },
+    "api/cron/insights.js":         { "maxDuration": 30 },
     "api/ai/[action].js":           { "maxDuration": 30 },
+    "api/insights/list.js":         { "maxDuration": 15 },
+    "api/insights/dismiss.js":      { "maxDuration": 10 },
     "api/payment/create.js":        { "maxDuration": 15 },
     "api/payment/callback.js":      { "maxDuration": 15 }
   },
+  "crons": [
+    {
+      "path":     "/api/cron/insights",
+      "schedule": "0 * * * *"
+    }
+  ],
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]

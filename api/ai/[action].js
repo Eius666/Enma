@@ -2,7 +2,29 @@
 
 const { db, admin, getBucket } = require('../_lib/firebaseAdmin');
 const { rateLimit }  = require('../_lib/rateLimit');
-const crypto         = require('crypto');
+const { TOOL_DEFINITIONS, executeTool } = require('../_lib/aiTools');
+const { routeByRules, getToolsForDomains } = require('../_lib/contextRouter');
+const { routeSkill, resolveSkills, mergeContextDomains, getToolsForSkills, composeSystemPrompt } = require('../_lib/skillRouter');
+const {
+  detectCancelIntent, detectFollowUp, detectTopicSwitch,
+  formatStateForPrompt, isStateRelevant,
+  validateToolArgs,
+  computeNextState,
+  shouldGenerateSummary, buildSummaryPrompt,
+  loadConversationState, updateConversationState,
+  makeEntityDocId,
+  reserveIdempotency, completeIdempotency, failIdempotency,
+  MAX_SUMMARY_CHARS,
+} = require('../_lib/conversationState');
+const { CORE_PROMPT } = require('../_lib/skills/core');
+const { runFinanceEngine } = require('../_lib/finance/engine');
+const txRepo        = require('../_lib/repositories/transactions');
+const tasksRepo     = require('../_lib/repositories/tasks');
+const remindersRepo = require('../_lib/repositories/reminders');
+const notesRepo     = require('../_lib/repositories/notes');
+const habitsRepo    = require('../_lib/repositories/habits');
+const goalsRepo     = require('../_lib/repositories/goals');
+const crypto        = require('crypto');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TOTP (RFC 6238) — no external dependencies, uses Node.js built-in crypto
@@ -200,6 +222,63 @@ async function callOpenRouter(messages, taskType = 'chat', maxTokens = 1000) {
   }
 
   return data.choices?.[0]?.message?.content ?? '';
+}
+
+// callOpenRouterFull — like callOpenRouter but returns the full message object.
+// Supports function calling via the `tools` parameter.
+// Used exclusively by handleChat.
+async function callOpenRouterFull(messages, maxTokens, tools) {
+  const cfg  = aiConfig();
+  const task = AI_TASKS.chat;
+
+  const body = {
+    model:       process.env.OPENROUTER_API_KEY ? task.model : cfg.textModel,
+    messages,
+    max_tokens:  maxTokens ?? 1200,
+    temperature: task.temp,
+  };
+  if (tools && tools.length > 0) {
+    body.tools       = tools;
+    body.tool_choice = 'auto';
+  }
+
+  const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.apiKey}` };
+  if (process.env.OPENROUTER_API_KEY) {
+    headers['HTTP-Referer'] = 'https://enma.app';
+    headers['X-Title']      = 'Enma';
+  }
+
+  let resp;
+  try {
+    resp = await fetch(`${cfg.baseURL}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body) });
+  } catch (e) {
+    const netErr = new Error(`LLM network error: ${e.message}`);
+    netErr.statusCode = 503;
+    throw netErr;
+  }
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    const e    = new Error(`LLM error ${resp.status}: ${text.slice(0, 200)}`);
+    if (resp.status === 429 || resp.status === 503 || resp.status === 504) e.statusCode = 503;
+    throw e;
+  }
+
+  const data = await resp.json().catch(() => null);
+  if (!data) throw new Error('Invalid JSON from LLM');
+
+  const usage = data.usage;
+  if (usage) {
+    const modelUsed = data.model ?? body.model;
+    const pricing   = MODEL_PRICING[modelUsed] ?? MODEL_PRICING[task.model];
+    if (pricing) {
+      const cost = (usage.prompt_tokens / 1e6) * pricing.input
+                 + (usage.completion_tokens / 1e6) * pricing.output;
+      console.log(`[AI] task:chat-tools model:${modelUsed} cost:${cost.toFixed(5)}RUB in:${usage.prompt_tokens} out:${usage.completion_tokens}`);
+    }
+  }
+
+  return data.choices?.[0]?.message ?? null;
 }
 
 async function callImage(prompt) {
@@ -418,253 +497,303 @@ async function handleAnalyze(req, res) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CHAT_SYSTEM_BASE = `Ты — Энма, персональный ассистент пользователя в приложении ENMA.
-
-ENMA — приложение для управления жизнью: задачи, привычки, финансы, напоминания, цели.
-
-Ниже тебе передаётся актуальный контекст текущего пользователя из ENMA.
-Используй эти данные при ответе.
-Если информация присутствует в контексте ENMA, не проси пользователя вводить её повторно.
-Не придумывай значения, которых нет в переданном контексте.
-
-Отличай:
-1. Факты из данных ENMA — используй их напрямую.
-2. Расчёты на основе этих данных — выполняй сам.
-3. Предположения — явно предупреждай о них.
-Если для ответа нужной информации действительно нет, скажи, каких именно данных не хватает.
-
-Личность:
-- Говоришь живо и по-человечески, без канцеляризмов
-- Короткие ответы, максимум 3-4 предложения
-- Не пишешь "Конечно!", "Без проблем!", "Я рада помочь!"
-- Не называешь себя ИИ или ассистентом
-- Отвечаешь на русском`;
+// CHAT_SYSTEM_BASE is now CORE_PROMPT from _lib/skills/core.js
+// Skill-specific prompts are composed dynamically in handleChat via composeSystemPrompt().
 
 // ─────────────────────────────────────────────────────────────────────────────
-// User Context Builder — fetches fresh data from Firestore before each AI request
+// Modular Context Section Builders
+// Each builder returns a formatted string section or null on error/empty.
+// All run in parallel inside buildUserContext.
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function buildUserContext(userId) {
-  const now       = new Date();
-  const today     = now.toISOString().slice(0, 10);
-  const monthKey  = now.toISOString().slice(0, 7);
-
-  const logs = {
-    userId,
-    financesLoaded: false,
-    transactionsCount: 0,
-    tasksLoaded: false,
-    habitsLoaded: false,
-    remindersLoaded: false,
-    goalsLoaded: false,
-  };
-
-  const sections = [];
-
-  // 1. User profile (currency, timezone, banks)
+async function _buildFinanceSection(userId, today, monthKey) {
   try {
-    const userSnap = await db.collection('users').doc(userId).get();
-    const ud       = userSnap.exists ? userSnap.data() : {};
-    const currency = ud.currency || 'RUB';
-    const timezone = ud.timezone || 'Europe/Moscow';
-    const banks    = Array.isArray(ud.banks) ? ud.banks : [];
+    const allTx = await txRepo.getAllTransactions(userId);
+    console.log('[CHAT_TRACE] financeLoader=ok docs=' + allTx.length);
 
-    const profileLines = [`Валюта: ${currency}`, `Часовой пояс: ${timezone}`];
-    if (banks.length) profileLines.push(`Банки: ${banks.join(', ')}`);
-    sections.push(`Профиль:\n${profileLines.join('\n')}`);
-  } catch (err) {
-    console.warn('[AI_CONTEXT] profile:', err.message);
-  }
+    // All-time balance via shared repository helper
+    const currentBalance = txRepo.calculateCurrentBalance(allTx);
 
-  // 2. Finances — transactions of current month + last 5 entries
-  try {
-    const txSnap = await db.collection('transactions')
-      .where('userId', '==', userId)
-      .orderBy('date', 'desc')
-      .limit(200)
-      .get();
+    let monthIncome = 0, monthExpenses = 0;
+    const cats = {};
+    const recentTx = [];
 
-    logs.transactionsCount = txSnap.size;
-    logs.financesLoaded    = true;
-
-    let income = 0, expenses = 0;
-    const cats      = {};
-    const recentTx  = [];
-
-    for (const d of txSnap.docs) {
-      const tx      = d.data();
-      const txMonth = (typeof tx.date === 'string' ? tx.date : new Date(tx.date).toISOString()).slice(0, 7);
+    for (const tx of allTx) {
+      const txMonth = (tx.date || '').slice(0, 7);
 
       if (txMonth === monthKey) {
         if (tx.type === 'income') {
-          income += tx.amount || 0;
+          monthIncome += tx.amount;
         } else if (tx.type === 'expense') {
-          expenses += tx.amount || 0;
+          monthExpenses += tx.amount;
           const cat = String(tx.categoryId || 'other').replace(/^(cat-|p-)/, '');
-          cats[cat] = (cats[cat] || 0) + (tx.amount || 0);
+          cats[cat] = (cats[cat] || 0) + tx.amount;
         }
       }
 
       if (recentTx.length < 5) {
         const sign = tx.type === 'income' ? '+' : '-';
-        const dateStr = (typeof tx.date === 'string' ? tx.date : new Date(tx.date).toISOString()).slice(0, 10);
-        recentTx.push(`${sign}${tx.amount} (${tx.description || 'транзакция'}) ${dateStr}`);
+        recentTx.push(`${sign}${tx.amount} (${tx.description || 'транзакция'}) ${(tx.date || '').slice(0, 10)}`);
       }
     }
 
-    const finLines = [
+    const lines = [
+      `Общий баланс (все время): ${currentBalance >= 0 ? '+' : ''}${currentBalance.toFixed(0)}`,
       `Текущий месяц (${monthKey}):`,
-      `  Доходы: ${income.toFixed(0)}`,
-      `  Расходы: ${expenses.toFixed(0)}`,
-      `  Разница: ${(income - expenses) >= 0 ? '+' : ''}${(income - expenses).toFixed(0)}`,
+      `  Доходы: ${monthIncome.toFixed(0)}`,
+      `  Расходы: ${monthExpenses.toFixed(0)}`,
+      `  Разница: ${(monthIncome - monthExpenses) >= 0 ? '+' : ''}${(monthIncome - monthExpenses).toFixed(0)}`,
     ];
 
     const topCats = Object.entries(cats).sort((a, b) => b[1] - a[1]).slice(0, 5);
     if (topCats.length) {
-      finLines.push('  Основные категории расходов:');
-      for (const [cat, amt] of topCats) finLines.push(`    - ${cat}: ${Number(amt).toFixed(0)}`);
+      lines.push('  Основные категории расходов:');
+      for (const [cat, amt] of topCats) lines.push(`    - ${cat}: ${Number(amt).toFixed(0)}`);
     }
-
     if (recentTx.length) {
-      finLines.push('Последние операции:');
-      for (const t of recentTx) finLines.push(`  ${t}`);
+      lines.push('Последние операции:');
+      for (const t of recentTx) lines.push(`  ${t}`);
     }
 
-    sections.push(`Финансы:\n${finLines.join('\n')}`);
-  } catch (err) {
-    console.warn('[AI_CONTEXT] transactions:', err.message);
+    return `[ФИНАНСЫ]\n${lines.join('\n')}`;
+  } catch (e) {
+    console.error('[CHAT_TRACE] financeLoader=FAILED code=%s msg=%s', e.code, e.message);
+    return null;
   }
+}
 
-  // 3. Tasks — today + upcoming (next 7 days)
+async function _buildTasksSection(userId, today) {
   try {
-    const tasksSnap = await db.collection('tasks')
-      .where('userId', '==', userId)
-      .orderBy('date', 'asc')
-      .limit(50)
-      .get();
+    const allTasks   = await tasksRepo.getAllTasks(userId);
+    const todayList  = tasksRepo.filterToday(allTasks, today);
+    const upcoming   = tasksRepo.filterUpcoming(allTasks, today);
 
-    logs.tasksLoaded = true;
+    const todayTasks    = todayList.map(t =>
+      `${t.completed ? '[v]' : '[ ]'} ${t.title}${t.time ? ' в ' + t.time : ''} [${t.priority}]`
+    );
+    const upcomingTasks = upcoming.map(t =>
+      `${t.date}: ${t.title}${t.time ? ' в ' + t.time : ''}`
+    );
 
-    const todayTasks    = [];
-    const upcomingTasks = [];
-
-    for (const d of tasksSnap.docs) {
-      const task = d.data();
-      if (task.date === today) {
-        const done = task.completed || task.done;
-        todayTasks.push(`${done ? '[v]' : '[ ]'} ${task.title}${task.time ? ' в ' + task.time : ''} [${task.priority || 'medium'}]`);
-      } else if (task.date > today) {
-        upcomingTasks.push(`${task.date}: ${task.title}${task.time ? ' в ' + task.time : ''}`);
-      }
-    }
-
-    const taskLines = [];
+    const lines = [];
     if (todayTasks.length) {
-      taskLines.push(`Задачи на сегодня (${today}):`);
-      for (const t of todayTasks) taskLines.push(`  ${t}`);
+      lines.push(`Задачи на сегодня (${today}):`);
+      for (const t of todayTasks) lines.push(`  ${t}`);
     } else {
-      taskLines.push(`Задачи на сегодня (${today}): нет`);
+      lines.push(`Задачи на сегодня (${today}): нет`);
     }
     if (upcomingTasks.length) {
-      taskLines.push('Предстоящие задачи:');
-      for (const t of upcomingTasks.slice(0, 10)) taskLines.push(`  ${t}`);
+      lines.push('Предстоящие задачи:');
+      for (const t of upcomingTasks.slice(0, 10)) lines.push(`  ${t}`);
     }
 
-    sections.push(`Задачи:\n${taskLines.join('\n')}`);
-  } catch (err) {
-    console.warn('[AI_CONTEXT] tasks:', err.message);
+    return `[ЗАДАЧИ]\n${lines.join('\n')}`;
+  } catch (e) {
+    console.warn('[AI_CONTEXT] tasks:', e.message);
+    return null;
   }
+}
 
-  // 4. Habits — active habits + today's completion
+async function _buildHabitsSection(userId, today) {
   try {
-    const habitsSnap = await db.collection('habits')
-      .where('userId', '==', userId)
-      .limit(30)
-      .get();
-
-    logs.habitsLoaded = true;
-
-    const habitLines = [];
-    for (const d of habitsSnap.docs) {
-      const h = d.data();
-      if (h.archived) continue;
-      const doneToday = Array.isArray(h.completedDates) && h.completedDates.includes(today);
-      habitLines.push(`  ${doneToday ? '[v]' : '[ ]'} ${h.title}`);
-    }
-
-    if (habitLines.length) {
-      sections.push(`Привычки (сегодня ${today}):\n${habitLines.join('\n')}`);
-    }
-  } catch (err) {
-    console.warn('[AI_CONTEXT] habits:', err.message);
+    const habits = habitsRepo.filterActive(await habitsRepo.getAllHabits(userId));
+    if (!habits.length) return null;
+    const lines = habits.map(h =>
+      `  ${habitsRepo.isCompletedToday(h, today) ? '[v]' : '[ ]'} ${h.title}`
+    );
+    return `[ПРИВЫЧКИ] (сегодня ${today}):\n${lines.join('\n')}`;
+  } catch (e) {
+    console.warn('[AI_CONTEXT] habits:', e.message);
+    return null;
   }
+}
 
-  // 5. Reminders — upcoming pending
+async function _buildRemindersSection(userId, timezone) {
   try {
-    const remindersSnap = await db.collection('reminders')
-      .where('userId', '==', userId)
-      .where('status', '==', 'pending')
-      .orderBy('scheduledAt', 'asc')
-      .limit(10)
-      .get();
+    const tz      = timezone || 'Europe/Moscow';
+    const pending = remindersRepo.filterPending(
+      await remindersRepo.getAllReminders(userId)
+    ).slice(0, 10);
 
-    logs.remindersLoaded = true;
+    if (!pending.length) return null;
 
-    const reminderLines = [];
-    for (const d of remindersSnap.docs) {
-      const r = d.data();
-      const ts = r.scheduledAt?.toDate?.();
+    const lines = pending.map(r => {
+      const ts      = r.scheduledAt?.toDate?.();
       const dateStr = ts
-        ? ts.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+        ? ts.toLocaleString('ru-RU', { timeZone: tz, day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
         : (r.date ? `${r.date} ${r.time || ''}` : '?');
-      reminderLines.push(`  ${r.title} — ${dateStr}`);
-    }
+      return `  ${r.title} — ${dateStr}`;
+    });
 
-    if (reminderLines.length) {
-      sections.push(`Ближайшие напоминания:\n${reminderLines.join('\n')}`);
-    }
-  } catch (err) {
-    console.warn('[AI_CONTEXT] reminders:', err.message);
+    return `[НАПОМИНАНИЯ]\n${lines.join('\n')}`;
+  } catch (e) {
+    console.warn('[AI_CONTEXT] reminders:', e.message);
+    return null;
   }
+}
 
-  // 6. Goals — savings progress
+async function _buildNotesSection(userId) {
   try {
-    const goalsSnap = await db.collection('goals')
-      .where('userId', '==', userId)
-      .limit(10)
-      .get();
+    const recent = (await notesRepo.getAllNotes(userId)).slice(0, 5);
+    if (!recent.length) return null;
+    const lines = recent.map(n => {
+      const preview = String(n.content || '').slice(0, 150).replace(/\n+/g, ' ').trim();
+      return `  [${n.type}] ${n.title || '(без названия)'}${preview ? ': ' + preview : ''}`;
+    });
+    return `[ЗАМЕТКИ] (последние ${lines.length}):\n${lines.join('\n')}`;
+  } catch (e) {
+    console.warn('[AI_CONTEXT] notes:', e.message);
+    return null;
+  }
+}
 
-    logs.goalsLoaded = true;
+async function _buildGoalsSection(userId) {
+  try {
+    const goals = await goalsRepo.getAllGoals(userId);
+    if (!goals.length) return null;
+    const lines = goals.map(g => {
+      const pct = Math.round(g.currentAmount / (g.targetAmount || 1) * 100);
+      return `  ${g.title}: ${g.currentAmount} / ${g.targetAmount} (${pct}%)`;
+    });
+    return `[ЦЕЛИ НАКОПЛЕНИЯ]\n${lines.join('\n')}`;
+  } catch (e) {
+    console.warn('[AI_CONTEXT] goals:', e.message);
+    return null;
+  }
+}
 
-    const goalLines = [];
-    for (const d of goalsSnap.docs) {
-      const g   = d.data();
-      const pct = Math.round((g.currentAmount || 0) / (g.targetAmount || 1) * 100);
-      goalLines.push(`  ${g.title}: ${g.currentAmount || 0} / ${g.targetAmount} (${pct}%)`);
-    }
+// ─────────────────────────────────────────────────────────────────────────────
+// buildUserContext — selective, modular context assembly.
+// sections: array of domain names to load (e.g. ['finance', 'tasks']).
+// Profile is always fetched when any personal domain is selected (single doc get).
+// All section builders run in parallel after profile is resolved.
+// ─────────────────────────────────────────────────────────────────────────────
 
-    if (goalLines.length) {
-      sections.push(`Цели накопления:\n${goalLines.join('\n')}`);
-    }
-  } catch (err) {
-    console.warn('[AI_CONTEXT] goals:', err.message);
+async function buildUserContext(userId, sections) {
+  const now      = new Date();
+  const today    = now.toISOString().slice(0, 10);
+  const monthKey = now.toISOString().slice(0, 7);
+
+  const domainSet = new Set(Array.isArray(sections) ? sections : []);
+
+  // 'general' only — no personal Firestore reads
+  const hasPersonal = [...domainSet].some(s => s !== 'general');
+  if (!hasPersonal) return null;
+
+  // Profile is always fetched for any personal domain (single get, cheap, provides timezone/currency)
+  let profileText = null;
+  let timezone    = 'Europe/Moscow';
+
+  try {
+    const userSnap = await db.collection('users').doc(userId).get();
+    const ud       = userSnap.exists ? userSnap.data() : {};
+    timezone       = ud.timezone || 'Europe/Moscow';
+    const currency = ud.currency || 'RUB';
+    const banks    = Array.isArray(ud.banks) ? ud.banks : [];
+
+    const profileLines = [`Валюта: ${currency}`, `Часовой пояс: ${timezone}`];
+    if (banks.length) profileLines.push(`Банки: ${banks.join(', ')}`);
+    profileText = `[ПРОФИЛЬ]\n${profileLines.join('\n')}`;
+  } catch (e) {
+    console.warn('[AI_CONTEXT] profile:', e.message);
   }
 
-  console.log('[AI_CONTEXT]', JSON.stringify(logs));
+  // Launch all requested section builders in parallel
+  const loaders = [];
+  if (domainSet.has('finance'))   loaders.push(_buildFinanceSection(userId, today, monthKey));
+  if (domainSet.has('tasks'))     loaders.push(_buildTasksSection(userId, today));
+  if (domainSet.has('habits'))    loaders.push(_buildHabitsSection(userId, today));
+  if (domainSet.has('reminders')) loaders.push(_buildRemindersSection(userId, timezone));
+  if (domainSet.has('notes'))     loaders.push(_buildNotesSection(userId));
+  if (domainSet.has('goals'))     loaders.push(_buildGoalsSection(userId));
 
-  if (!sections.length) return null;
-  return `Актуальные данные пользователя из ENMA (дата: ${today}):\n\n${sections.join('\n\n')}`;
+  const results = await Promise.all(loaders);
+
+  const parts = [profileText, ...results].filter(Boolean);
+  if (!parts.length) return null;
+  return `Актуальные данные пользователя из ENMA (дата: ${today}):\n\n${parts.join('\n\n')}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Context Router — determines which domain sections to load before calling LLM.
+// Hybrid: fast rule-based path first; lightweight LLM classifier as fallback.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const VALID_ROUTE_DOMAINS = ['finance', 'tasks', 'habits', 'reminders', 'notes', 'goals', 'general'];
+
+async function _routeByLLM(message, history) {
+  const historyText = (Array.isArray(history) ? history.slice(-4) : [])
+    .map(m => `${m.role}: ${String(m.content ?? '').slice(0, 100)}`)
+    .join('\n');
+
+  const classifyPrompt =
+    `Classify which ENMA data domains are needed to answer the user message.\n` +
+    `Domains: finance, tasks, habits, reminders, notes, goals, general\n` +
+    `Return ONLY JSON: {"domains":["domain1"],"confidence":0.0}\n\n` +
+    (historyText ? `Recent turns:\n${historyText}\n\n` : '') +
+    `User: ${message.slice(0, 300)}`;
+
+  try {
+    const raw = await callOpenRouter(
+      [
+        { role: 'system', content: 'You classify user messages into data domains. Return only JSON.' },
+        { role: 'user',   content: classifyPrompt },
+      ],
+      'categorize', // cheap llama-3.1-8b model
+      120,
+    );
+    const parsed  = JSON.parse(raw.replace(/```json\n?|```/g, '').trim());
+    const domains = (parsed.domains ?? []).filter(d => VALID_ROUTE_DOMAINS.includes(d));
+    return {
+      domains:    domains.length ? domains : ['general'],
+      confidence: parsed.confidence ?? 0.7,
+      source:     'llm',
+    };
+  } catch {
+    return null; // LLM classifier failed — use fallback
+  }
+}
+
+// Returns { domains, confidence, source } — never throws
+async function resolveContextRoute(message, history) {
+  // Fast rule-based path
+  const ruleResult = routeByRules(message, history);
+  if (ruleResult) return ruleResult;
+
+  // Lightweight LLM classifier for ambiguous queries
+  try {
+    const llmResult = await _routeByLLM(message, history);
+    if (llmResult) return llmResult;
+  } catch { /* ignore */ }
+
+  // Safe fallback — minimal useful context without assuming all domains
+  return { domains: ['tasks', 'reminders'], confidence: 0.4, source: 'fallback' };
+}
+
+// Loads raw transactions and goals for the Finance Calculation Engine via repositories.
+// Engine needs normalized arrays, not formatted strings — kept separate from buildUserContext.
+async function loadRawFinanceData(userId) {
+  const [transactions, goals] = await Promise.all([
+    txRepo.getAllTransactions(userId),
+    goalsRepo.getAllGoals(userId),
+  ]);
+  console.log('[CHAT_TRACE] loadRawFinanceData=ok txCount=' + transactions.length);
+  return { transactions, goals };
 }
 
 async function handleChat(req, res) {
-  // uid comes from the verified Firebase token — req.body.userId is ignored for auth
+  console.log('[CHAT_TRACE] ENTER handleChat api/ai/[action].js ENMA_BACKEND_VERSION=shared-data-v1');
+  // uid comes exclusively from the verified Firebase token — req.body.userId is ignored
   const verifiedUid = await requireAuth(req, res);
   if (!verifiedUid) return;
 
-  const { message, history } = req.body ?? {};
-  if (!message) {
-    return res.status(400).json({ error: 'Missing message' });
-  }
+  const { message, history, requestId, conversationId } = req.body ?? {};
+  if (!message) return res.status(400).json({ error: 'Missing message' });
+
+  // Sanitise conversationId — must be alphanumeric/dash/underscore, max 64 chars.
+  // Never trust the body value as an ownership proof — ownership is enforced by
+  // loadConversationState scoping to verifiedUid.
+  const convId = String(conversationId || 'default').replace(/[^a-zA-Z0-9\-_]/g, '').slice(0, 64) || 'default';
 
   const plan = await getActivePlan(verifiedUid);
 
@@ -678,43 +807,310 @@ async function handleChat(req, res) {
 
   try {
     const historyMsgs = (Array.isArray(history) ? history.slice(-10) : [])
-      .map(m => ({ role: m.role, content: m.content }));
+      .map(m => ({ role: m.role, content: String(m.content ?? '') }));
 
-    // Fetch fresh user context from Firestore (verifiedUid guaranteed by requireAuth above)
+    // ── Load conversation state + context route in parallel ─────────────────
+    const t0Route = Date.now();
+    let [route, convState] = await Promise.all([
+      resolveContextRoute(message, historyMsgs),
+      loadConversationState(verifiedUid, convId),
+    ]);
+    const routeMs = Date.now() - t0Route;
+
+    // ── Pre-flight: cancel intent clears pending action immediately ─────────
+    if (convState.pendingAction && detectCancelIntent(message)) {
+      convState = { ...convState, pendingAction: null, pendingClarification: null };
+    }
+
+    // ── Skill Router ────────────────────────────────────────────────────────
+    const t0Skill    = Date.now();
+    let   skillRoute = routeSkill({ message, history: historyMsgs, domains: route.domains });
+    const skillMs    = Date.now() - t0Skill;
+
+    // ── Follow-up: inherit active skills from state when routing returns nothing ──
+    if (skillRoute.skills.length === 0 && detectFollowUp(message, convState)) {
+      const inherited = resolveSkills(convState.activeSkills || []);
+      if (inherited.length > 0) {
+        skillRoute = { ...skillRoute, skills: inherited, skillIds: convState.activeSkills || [], source: 'state_followup', confidence: 0.75 };
+        console.log(`[AI_SKILL_ROUTER] follow-up inheritance: ${(convState.activeSkills || []).join(',')}`);
+      }
+    }
+
+    // ── Topic switch clears pending action ──────────────────────────────────
+    const newSkillIds = skillRoute.skills.map(s => s.id);
+    if (convState.pendingAction && detectTopicSwitch(convState, newSkillIds)) {
+      convState = { ...convState, pendingAction: null, pendingClarification: null };
+    }
+
+    console.log(
+      `[AI_SKILL_ROUTER] skills=${newSkillIds.join(',') || 'none'} ` +
+      `src=${skillRoute.source} conf=${skillRoute.confidence.toFixed(2)} dur=${skillMs}ms`
+    );
+
+    // ── Merge required context domains ─────────────────────────────────────
+    const finalDomains = mergeContextDomains(route.domains, skillRoute.skills);
+
+    console.log(
+      `[AI_CONTEXT_ROUTER] domains=${route.domains.join(',')} ` +
+      `→ merged=${finalDomains.join(',')} ` +
+      `src=${route.source} conf=${route.confidence.toFixed(2)} router=${routeMs}ms`
+    );
+
+    // ── Selective Context Build ─────────────────────────────────────────────
+    const t0Ctx = Date.now();
     let userContext = null;
     try {
-      userContext = await buildUserContext(verifiedUid);
+      userContext = await buildUserContext(verifiedUid, finalDomains);
     } catch (ctxErr) {
       console.warn('[ai/chat] context build error:', ctxErr.message);
     }
+    const ctxMs = Date.now() - t0Ctx;
 
-    const systemContent = userContext
-      ? `${CHAT_SYSTEM_BASE}\n\n${userContext}`
-      : CHAT_SYSTEM_BASE;
-
-    const content = await callOpenRouter(
-      [
-        { role: 'system', content: systemContent },
-        ...historyMsgs,
-        { role: 'user', content: message },
-      ],
-      'chat',
-      800,
+    // ── Tool set filtered by skills (or domain-based fallback) ─────────────
+    const activeTools = getToolsForSkills(
+      TOOL_DEFINITIONS, finalDomains, skillRoute.skills, getToolsForDomains
     );
 
-    // Persist to Firestore (best-effort, non-fatal)
+    // ── Finance Calculation Engine ──────────────────────────────────────────
+    let calculatedMetrics = null;
+    const activeFinanceSkills = skillRoute.skills.filter(s => s.id.startsWith('finance.'));
+
+    if (activeFinanceSkills.length > 0) {
+      try {
+        const t0Eng = Date.now();
+
+        // Read timezone/currency from profile (cheap — Firestore SDK caches within process)
+        const userSnap  = await db.collection('users').doc(verifiedUid).get();
+        const ud        = userSnap.exists ? userSnap.data() : {};
+        const timezone  = ud.timezone || 'Europe/Moscow';
+        const currency  = ud.currency || 'RUB';
+
+        const rawFinance = await loadRawFinanceData(verifiedUid);
+        const skillIds   = activeFinanceSkills.map(s => s.id);
+
+        calculatedMetrics = runFinanceEngine({
+          skillIds,
+          financeData: rawFinance,
+          timezone,
+          currency,
+          message,
+        });
+
+        const engDur = Date.now() - t0Eng;
+        for (const sk of activeFinanceSkills) {
+          console.log(
+            `[AI_FINANCE_SKILL] skill=${sk.id}` +
+            ` context=${finalDomains.join(',')}` +
+            ` tools=${(sk.allowedTools ?? []).join(',')}` +
+            ` dur=${engDur}ms`
+          );
+        }
+      } catch (engErr) {
+        console.warn('[FINANCE_ENGINE] failed (non-fatal):', engErr.message);
+      }
+    }
+
+    // ── Prompt composition: CORE + skill prompt(s) + state + context + metrics ──
+    const stateSection = (isStateRelevant(convState, newSkillIds) || detectFollowUp(message, convState))
+      ? formatStateForPrompt(convState)
+      : null;
+    const systemContent = composeSystemPrompt(skillRoute.skills, userContext, calculatedMetrics, stateSection);
+
+    // Token usage estimate for monitoring (chars ÷ 4 ≈ tokens)
+    const coreTokens    = Math.ceil(CORE_PROMPT.length / 4);
+    const skillTokens   = skillRoute.skills.reduce((s, sk) => s + Math.ceil((sk.prompt ?? '').length / 4), 0);
+    const ctxTokens     = Math.ceil((userContext ?? '').length / 4);
+    console.log(
+      `[AI_PROMPT_TOKENS] core≈${coreTokens} skill≈${skillTokens} ` +
+      `context≈${ctxTokens} total≈${coreTokens + skillTokens + ctxTokens} ` +
+      `context=${ctxMs}ms tools=${activeTools.length}`
+    );
+
+    // messages array grows as tool calls are appended (multi-round loop)
+    const messages = [
+      { role: 'system', content: systemContent },
+      ...historyMsgs,
+      { role: 'user', content: message },
+    ];
+
+    const MAX_TOOL_ROUNDS  = 4;
+    let   finalContent     = null;
+    const toolCallsLog     = [];
+    let   pendingActionInfo = null; // set when a tool call has missing required fields
+
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const assistantMsg = await callOpenRouterFull(
+        messages,
+        round === 0 ? 1200 : 800,
+        activeTools,
+      );
+
+      if (!assistantMsg) throw new Error('No response from LLM');
+
+      const toolCalls = assistantMsg.tool_calls;
+
+      if (!toolCalls || toolCalls.length === 0) {
+        finalContent = assistantMsg.content ?? '';
+        break;
+      }
+
+      messages.push({
+        role:       'assistant',
+        content:    assistantMsg.content ?? null,
+        tool_calls: toolCalls,
+      });
+
+      for (const tc of toolCalls) {
+        const toolName = tc.function?.name ?? '';
+        let   args     = {};
+        try { args = JSON.parse(tc.function?.arguments ?? '{}'); } catch { /* malformed */ }
+
+        // ── Pre-execution: validate required fields ────────────────────────
+        const argValidation = validateToolArgs(toolName, args);
+        if (!argValidation.valid) {
+          pendingActionInfo = {
+            toolName,
+            collectedArgs: argValidation.collectedArgs,
+            missingFields: argValidation.missingFields,
+          };
+          toolCallsLog.push({ tool: toolName, success: false, pending: true });
+          messages.push({
+            role:         'tool',
+            tool_call_id: tc.id,
+            content:      JSON.stringify({
+              success:       false,
+              errorCode:     'MISSING_REQUIRED_FIELDS',
+              missingFields: argValidation.missingFields,
+              message:       `Требуются поля: ${argValidation.missingFields.join(', ')}. Запросите у пользователя.`,
+            }),
+          });
+          continue;
+        }
+
+        // ── Atomic idempotency reservation ────────────────────────────────
+        const reservation = await reserveIdempotency(verifiedUid, requestId, tc.id, toolName);
+
+        if (reservation.status === 'cached') {
+          toolCallsLog.push({ tool: toolName, success: reservation.result?.success ?? true });
+          messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(reservation.result) });
+          continue;
+        }
+
+        if (reservation.status === 'in_progress') {
+          toolCallsLog.push({ tool: toolName, success: false });
+          messages.push({
+            role: 'tool', tool_call_id: tc.id,
+            content: JSON.stringify({ success: false, errorCode: 'IN_PROGRESS', message: 'Действие уже выполняется.' }),
+          });
+          continue;
+        }
+
+        if (reservation.status === 'failed') {
+          toolCallsLog.push({ tool: toolName, success: false });
+          messages.push({
+            role: 'tool', tool_call_id: tc.id,
+            content: JSON.stringify({ success: false, errorCode: reservation.errorCode }),
+          });
+          continue;
+        }
+
+        // status === 'reserved' | 'skip' — we own the execution
+        // Pass a deterministic entity doc ID to create handlers so a crash-after-write
+        // doesn't produce a duplicate on retry.
+        const toolOpts = (reservation.status === 'reserved')
+          ? { docId: makeEntityDocId(requestId, tc.id) }
+          : {};
+
+        const t0Tool  = Date.now();
+        const result  = await executeTool(verifiedUid, toolName, args, toolOpts);
+        const durTool = Date.now() - t0Tool;
+
+        console.log(`[AI_TOOL] uid=${verifiedUid} tool=${toolName} success=${result.success} dur=${durTool}ms`);
+        toolCallsLog.push({ tool: toolName, success: result.success });
+
+        if (reservation.status === 'reserved') {
+          const retryable = result.success
+            ? false
+            : (result.errorCode !== 'VALIDATION_ERROR' && result.errorCode !== 'LIMIT_REACHED');
+          if (result.success) {
+            completeIdempotency(verifiedUid, requestId, tc.id, result).catch(() => {});
+          } else {
+            failIdempotency(verifiedUid, requestId, tc.id, result.errorCode, retryable).catch(() => {});
+          }
+        }
+
+        messages.push({
+          role:         'tool',
+          tool_call_id: tc.id,
+          content:      JSON.stringify(result),
+        });
+      }
+    }
+
+    if (finalContent === null) {
+      const summary = await callOpenRouterFull(messages, 600, []);
+      finalContent  = summary?.content ?? 'Готово.';
+    }
+
+    // ── Compute next state ────────────────────────────────────────────────────
+    const nextState = computeNextState(convState, {
+      message,
+      skillRoute,
+      toolCallsLog,
+      responseText:     finalContent,
+      pendingActionInfo,
+    });
+
+    // ── Auto-summary (every SUMMARY_EVERY_N turns, cheap model) ──────────────
+    if (shouldGenerateSummary(nextState)) {
+      try {
+        const t0Sum       = Date.now();
+        const sumPrompt   = buildSummaryPrompt(convState.summary, historyMsgs);
+        const summaryText = await callOpenRouter(
+          [
+            { role: 'system', content: 'You are a conversation summarizer. Output plain text only, no headers, no bullet points.' },
+            { role: 'user',   content: sumPrompt },
+          ],
+          'categorize',          // cheap llama-3.1-8b model
+          MAX_SUMMARY_CHARS + 50,
+        );
+        nextState.summary          = summaryText.trim().slice(0, MAX_SUMMARY_CHARS);
+        nextState.summaryUpdatedAt = Date.now();
+        console.log(`[AI_SUMMARY] generated=true messages=${nextState.messageCount} duration=${Date.now() - t0Sum}ms`);
+      } catch (sumErr) {
+        console.warn('[AI_SUMMARY] generation failed (non-fatal):', sumErr.message);
+        // Retain previous summary unchanged
+      }
+    }
+
+    // ── Await state write (critical — next request must see updated state) ────
+    const t0StateWrite = Date.now();
+    try {
+      await updateConversationState(verifiedUid, convId, nextState);
+      console.log(`[AI_CONVERSATION_STATE] write=success duration=${Date.now() - t0StateWrite}ms`);
+    } catch (stateErr) {
+      console.warn(`[AI_CONVERSATION_STATE] write=failed duration=${Date.now() - t0StateWrite}ms err=${stateErr.message}`);
+      // Non-fatal: user still gets their response
+    }
+
+    // Persist chat messages to Firestore (best-effort, non-fatal)
     try {
       const chatRef = db.collection('users').doc(verifiedUid).collection('aiChats');
-      const now     = admin.firestore.FieldValue.serverTimestamp();
+      const nowTs   = admin.firestore.FieldValue.serverTimestamp();
       const batch   = db.batch();
-      batch.set(chatRef.doc(), { role: 'user',      content: message, createdAt: now });
-      batch.set(chatRef.doc(), { role: 'assistant', content,          createdAt: now });
+      batch.set(chatRef.doc(), { role: 'user',      content: message,       createdAt: nowTs });
+      batch.set(chatRef.doc(), { role: 'assistant', content: finalContent,   createdAt: nowTs });
       await batch.commit();
     } catch (fsErr) {
       console.warn('[ai/chat] Firestore persist failed:', fsErr.message);
     }
 
-    return res.status(200).json({ message: content, remaining: usage.remaining });
+    return res.status(200).json({
+      message:        finalContent,
+      remaining:      usage.remaining,
+      toolCalls:      toolCallsLog,
+      conversationId: convId,
+    });
   } catch (err) {
     if (err.statusCode === 503) {
       return res.status(503).json({ error: 'AI перегружен, повторите через минуту' });

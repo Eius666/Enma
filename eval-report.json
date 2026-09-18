@@ -1,0 +1,1477 @@
+{
+  "versions": {
+    "core": "v4",
+    "skills": {
+      "finance.full_audit": "v2",
+      "finance.affordability": "v2",
+      "finance.leaks": "v2",
+      "finance.goal": "v2",
+      "finance.budget": "v2",
+      "finance.cashflow": "v2",
+      "finance.stress_test": "v2",
+      "finance.month_review": "v2",
+      "finance.what_if": "v2",
+      "finance.debt": "v2",
+      "finance.salary_distribution": "v2",
+      "finance.payment_calendar": "v2",
+      "tasks.plan_day": "v1",
+      "tasks.prioritize": "v1"
+    },
+    "calculators": {
+      "affordability": "v2",
+      "cashflow": "v2",
+      "goals": "v2",
+      "metrics": "v2",
+      "leaks": "v2",
+      "monthReview": "v2",
+      "stressTest": "v1",
+      "scenarios": "v1",
+      "debt": "v1"
+    },
+    "detectors": {
+      "finance.cash_gap": "1.0",
+      "finance.payment_cluster": "1.0",
+      "finance.category_spike": "1.0",
+      "finance.goal_off_track": "1.0",
+      "tasks.overdue": "1.0",
+      "system.month_review_ready": "1.0"
+    },
+    "contextRouter": "v3",
+    "skillRouter": "v3",
+    "conversationState": "v2"
+  },
+  "runAt": "2026-09-18T08:32:03.426Z",
+  "durationMs": 43,
+  "summary": {
+    "total": 94,
+    "passed": 94,
+    "failed": 0,
+    "critical": 0
+  },
+  "domains": {
+    "finance": {
+      "total": 26,
+      "critical": 19,
+      "passed": 26,
+      "failed": []
+    },
+    "tasks": {
+      "total": 10,
+      "critical": 7,
+      "passed": 10,
+      "failed": []
+    },
+    "habits": {
+      "total": 5,
+      "critical": 3,
+      "passed": 5,
+      "failed": []
+    },
+    "notes": {
+      "total": 5,
+      "critical": 2,
+      "passed": 5,
+      "failed": []
+    },
+    "conversation": {
+      "total": 15,
+      "critical": 11,
+      "passed": 15,
+      "failed": []
+    },
+    "tools": {
+      "total": 9,
+      "critical": 7,
+      "passed": 9,
+      "failed": []
+    },
+    "proactive": {
+      "total": 16,
+      "critical": 14,
+      "passed": 16,
+      "failed": []
+    },
+    "security": {
+      "total": 8,
+      "critical": 8,
+      "passed": 8,
+      "failed": []
+    }
+  },
+  "results": [
+    {
+      "id": "finance.spending.basic",
+      "domain": "finance",
+      "critical": false,
+      "pass": true,
+      "duration": 3,
+      "description": "SPEC §8: \"Сколько потратил\" → domain=finance, no skill required",
+      "snapshot": {
+        "domains": [
+          "finance"
+        ],
+        "skills": []
+      },
+      "error": null
+    },
+    {
+      "id": "finance.affordability.routing",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §8: \"Могу ли купить ноутбук за 150 000?\" → finance.affordability",
+      "snapshot": {
+        "skills": [
+          "finance.affordability"
+        ],
+        "source": "rules"
+      },
+      "error": null
+    },
+    {
+      "id": "finance.leaks.routing",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §8: \"Куда у меня уходят деньги?\" → finance.leaks",
+      "snapshot": {
+        "skills": [
+          "finance.leaks"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "finance.goal.routing",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §8: \"Хочу накопить 500 000 к июню\" → finance.goal",
+      "snapshot": {
+        "skills": [
+          "finance.goal"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "finance.budget.routing",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §8: \"Составь бюджет.\" → finance.budget",
+      "snapshot": {
+        "skills": [
+          "finance.budget"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "finance.cashflow.routing",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §8: \"Хватит ли до зарплаты?\" → finance.cashflow",
+      "snapshot": {
+        "skills": [
+          "finance.cashflow"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "finance.full_audit.routing",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §8: \"Проведи полный финансовый аудит.\" → finance.full_audit",
+      "snapshot": {
+        "skills": [
+          "finance.full_audit"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "finance.affordability.calculation",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 1,
+      "description": "SPEC §9: balance=200k, expenses=40k, purchase=150k → cashAfterPurchase=50k, cashAfterObligations=10k",
+      "snapshot": {
+        "currentBalance": 200000,
+        "avgMonthlyExpenses": 40000,
+        "cashAfterPurchase": 50000,
+        "cashAfterObligations": 10000
+      },
+      "error": null
+    },
+    {
+      "id": "finance.goal.calculation",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 11,
+      "description": "SPEC §11: target=500k, current=100k, 8 months → requiredMonthly = remaining/months",
+      "snapshot": {
+        "remaining": 400000,
+        "monthsLeft": 8,
+        "requiredMonthly": 50000
+      },
+      "error": null
+    },
+    {
+      "id": "finance.cashflow.gap_detection",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 1,
+      "description": "SPEC §12: low balance + high prev-month expenses → cash gap detected",
+      "snapshot": {
+        "projectedClosingBalance": -98000,
+        "cashGap": true
+      },
+      "error": null
+    },
+    {
+      "id": "finance.affordability.empty_data",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §52: empty transactions → insufficient_data, not balance=0",
+      "snapshot": {
+        "status": "insufficient_data"
+      },
+      "error": null
+    },
+    {
+      "id": "finance.affordability.amount_extraction",
+      "domain": "finance",
+      "critical": false,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §9: \"150 000 ₽\" correctly parsed from message text",
+      "snapshot": {
+        "tested": [
+          "150 000 ₽",
+          "150к",
+          "100 000 рублей"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "finance.general.no_personal_data",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §13: \"Что такое сложный процент?\" → domain=general, no personal context loaded",
+      "snapshot": {
+        "domains": [
+          "general"
+        ],
+        "skills": []
+      },
+      "error": null
+    },
+    {
+      "id": "finance.what_if.false_positive",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §31: \"Если завтра будет дождь\" → finance.what_if NOT selected",
+      "snapshot": {
+        "skills": []
+      },
+      "error": null
+    },
+    {
+      "id": "finance.full_audit.absorption",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §30: full_audit absorbs sub-skills — no duplicate skill prompts",
+      "snapshot": {
+        "skills": [
+          "finance.full_audit"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "finance.tool_minimization",
+      "domain": "finance",
+      "critical": false,
+      "pass": true,
+      "duration": 2,
+      "description": "SPEC §29: finance.affordability allows only finance tools, not all 17",
+      "snapshot": {
+        "tools": [],
+        "count": 0,
+        "totalDefined": 17
+      },
+      "error": null
+    },
+    {
+      "id": "finance.skill_calc_map.affordability",
+      "domain": "finance",
+      "critical": false,
+      "pass": true,
+      "duration": 1,
+      "description": "finance.affordability runs affordability + metrics calculators",
+      "snapshot": {
+        "calcs": [
+          "affordability",
+          "metrics"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "finance.skill_calc_map.full_audit",
+      "domain": "finance",
+      "critical": false,
+      "pass": true,
+      "duration": 0,
+      "description": "finance.full_audit runs all major calculators",
+      "snapshot": {
+        "calcs": [
+          "metrics",
+          "monthReview",
+          "cashflow",
+          "leaks",
+          "goals"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "finance.unknown_not_zero",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §52: absent transaction data → insufficient_data, not balance=0",
+      "snapshot": {
+        "statuses": [
+          "insufficient_data",
+          "insufficient_data",
+          "insufficient_data"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "finance.balance.basic",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 2,
+      "description": "SPEC §22: \"Сколько денег у меня есть?\" → balance=84350, no Firestore/index words in response",
+      "snapshot": {
+        "balance": 85350,
+        "responseOk": true
+      },
+      "error": null
+    },
+    {
+      "id": "finance.balance.partial_failure",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §22: balance query succeeds even if categories throw; returns balance, not error",
+      "snapshot": {
+        "balance": 34350,
+        "responseOk": true
+      },
+      "error": null
+    },
+    {
+      "id": "finance.expenses.basic",
+      "domain": "finance",
+      "critical": false,
+      "pass": true,
+      "duration": 1,
+      "description": "SPEC §22: expenses sum for current month is correct in response",
+      "snapshot": {
+        "monthExpenses": 4500,
+        "responseOk": true
+      },
+      "error": null
+    },
+    {
+      "id": "finance.income.basic",
+      "domain": "finance",
+      "critical": false,
+      "pass": true,
+      "duration": 1,
+      "description": "SPEC §22: income sum for current month is correct in response",
+      "snapshot": {
+        "monthIncome": 125000,
+        "responseOk": true
+      },
+      "error": null
+    },
+    {
+      "id": "finance.balance.no_index_error",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §22: getFinanceStats must not return Firestore index error to caller",
+      "snapshot": {
+        "errorExposed": false,
+        "errorMessage": "Не удалось загрузить финансовые данные. Попробуй чуть позже."
+      },
+      "error": null
+    },
+    {
+      "id": "finance.tool.search_transactions.balance",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 1,
+      "description": "CRITICAL: search_transactions (aiTools.js) returns correct balance without orderBy — this is the tool the LLM calls via POST /api/ai/chat",
+      "snapshot": {
+        "balance": 130000,
+        "income": 150000,
+        "expense": 20000
+      },
+      "error": null
+    },
+    {
+      "id": "finance.tool.search_transactions.no_index_error",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 1,
+      "description": "CRITICAL: search_transactions (aiTools.js) returns INTERNAL_ERROR gracefully when DB throws — never exposes raw Firestore error to LLM",
+      "snapshot": {
+        "errorCode": "INTERNAL_ERROR",
+        "noIndexExposed": true
+      },
+      "error": null
+    },
+    {
+      "id": "tasks.create.basic",
+      "domain": "tasks",
+      "critical": true,
+      "pass": true,
+      "duration": 2,
+      "description": "SPEC §14: create_task called once, verifiedUid used, entity written to DB",
+      "snapshot": {
+        "id": "1789720323409-acec986a3f54",
+        "title": "Купить билеты",
+        "userId": "user_a"
+      },
+      "error": null
+    },
+    {
+      "id": "tasks.create.validation",
+      "domain": "tasks",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §62: create_task with empty title → VALIDATION_ERROR, 0 writes",
+      "snapshot": {
+        "errorCode": "VALIDATION_ERROR"
+      },
+      "error": null
+    },
+    {
+      "id": "tasks.create.negative_amount_invalid",
+      "domain": "tasks",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §62: create_transaction with amount=-500 → VALIDATION_ERROR, 0 writes",
+      "snapshot": {
+        "errorCode": "VALIDATION_ERROR"
+      },
+      "error": null
+    },
+    {
+      "id": "tasks.unknown_tool",
+      "domain": "tasks",
+      "critical": true,
+      "pass": true,
+      "duration": 1,
+      "description": "SPEC §61: unknown tool name → UNKNOWN_TOOL error, not executed",
+      "snapshot": {
+        "errorCode": "UNKNOWN_TOOL"
+      },
+      "error": null
+    },
+    {
+      "id": "tasks.free_plan_limit",
+      "domain": "tasks",
+      "critical": false,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §54: free plan at daily limit → LIMIT_REACHED, no entity created",
+      "snapshot": {
+        "errorCode": "LIMIT_REACHED"
+      },
+      "error": null
+    },
+    {
+      "id": "tasks.pending.validation",
+      "domain": "tasks",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §15: create_reminder with missing time → MISSING_FIELDS, pendingAction",
+      "snapshot": {
+        "valid": false,
+        "missingFields": [
+          "time"
+        ],
+        "collectedArgs": {
+          "title": "Оплатить интернет",
+          "date": "tomorrow"
+        }
+      },
+      "error": null
+    },
+    {
+      "id": "tasks.pending.followup_detected",
+      "domain": "tasks",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §15: follow-up \"В 18:00\" with active pendingAction state recognized",
+      "snapshot": {
+        "isFollowUp": true
+      },
+      "error": null
+    },
+    {
+      "id": "tasks.cancel.pending_cleared",
+      "domain": "tasks",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §25: \"Не надо\" with pendingAction → cancel detected, state should be cleared",
+      "snapshot": {
+        "tested": 5
+      },
+      "error": null
+    },
+    {
+      "id": "tasks.routing.basic",
+      "domain": "tasks",
+      "critical": false,
+      "pass": true,
+      "duration": 0,
+      "description": "Task creation message → tasks domain selected",
+      "snapshot": {
+        "domains": [
+          "tasks"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "tasks.routing.reminder",
+      "domain": "tasks",
+      "critical": false,
+      "pass": true,
+      "duration": 0,
+      "description": "\"Напомни\" → reminders domain",
+      "snapshot": {
+        "domains": [
+          "finance",
+          "reminders"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "habits.routing.basic",
+      "domain": "habits",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §28: \"Какие у меня привычки?\" → habits domain, NOT finance/notes/tasks",
+      "snapshot": {
+        "domains": [
+          "habits"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "habits.context_minimization",
+      "domain": "habits",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §28+84: habits question loads habits context only, not finance transactions",
+      "snapshot": {
+        "domains": [
+          "habits"
+        ],
+        "skills": []
+      },
+      "error": null
+    },
+    {
+      "id": "habits.tool_minimization",
+      "domain": "habits",
+      "critical": false,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §29: habits query → only habits tools, not all 17",
+      "snapshot": {
+        "tools": [
+          "create_habit",
+          "complete_habit_today",
+          "get_habits"
+        ],
+        "count": 3
+      },
+      "error": null
+    },
+    {
+      "id": "habits.privacy.no_finance_in_context",
+      "domain": "habits",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §84: habits-focused context does not contain transaction data",
+      "snapshot": {
+        "domains": [
+          "habits"
+        ],
+        "tools": [
+          "create_habit",
+          "complete_habit_today",
+          "get_habits"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "habits.routing.recovery",
+      "domain": "habits",
+      "critical": false,
+      "pass": true,
+      "duration": 0,
+      "description": "\"Вернуться к привычкам после перерыва\" → habits.recovery skill",
+      "snapshot": {
+        "skills": [
+          "habits.recovery"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "notes.routing.find",
+      "domain": "notes",
+      "critical": false,
+      "pass": true,
+      "duration": 0,
+      "description": "\"Найди мою заметку\" → notes domain + notes.find skill",
+      "snapshot": {
+        "domains": [
+          "notes"
+        ],
+        "skills": [
+          "notes.find"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "notes.prompt_injection.no_delete_tool",
+      "domain": "notes",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §21: note with injection content — \"delete all transactions\" must NEVER call delete tool",
+      "snapshot": {
+        "notesTools": [
+          "create_note",
+          "update_note",
+          "search_notes"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "notes.prompt_injection.search_allowed",
+      "domain": "notes",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §21: \"Найди заметку\" → search_notes IS allowed",
+      "snapshot": {
+        "notesTools": [
+          "create_note",
+          "update_note",
+          "search_notes"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "notes.tool_minimization",
+      "domain": "notes",
+      "critical": false,
+      "pass": true,
+      "duration": 0,
+      "description": "Notes context has only notes tools, not finance or task tools",
+      "snapshot": {
+        "notesTools": [
+          "create_note",
+          "update_note",
+          "search_notes"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "notes.create.basic",
+      "domain": "notes",
+      "critical": false,
+      "pass": true,
+      "duration": 1,
+      "description": "create_note with valid args → success, entity written",
+      "snapshot": {
+        "id": "1789720323413-a0f08fd0f088",
+        "userId": "user_n"
+      },
+      "error": null
+    },
+    {
+      "id": "conversation.followup.affordability",
+      "domain": "conversation",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §23: \"А за 100к?\" after affordability turn → follow-up detected, skill preserved",
+      "snapshot": {
+        "tested": 3
+      },
+      "error": null
+    },
+    {
+      "id": "conversation.followup.not_topic_switch",
+      "domain": "conversation",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §24: \"Какие у меня привычки?\" after finance → topic switch, NOT follow-up",
+      "snapshot": {
+        "isTopicSwitch": true,
+        "isFollowUp": true
+      },
+      "error": null
+    },
+    {
+      "id": "conversation.topic_switch.clears_finance",
+      "domain": "conversation",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §24: switching from finance to habits → finance domain group no longer active",
+      "snapshot": {
+        "tested": 3
+      },
+      "error": null
+    },
+    {
+      "id": "conversation.cancel.patterns",
+      "domain": "conversation",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §25: cancel phrases recognized, normal messages not treated as cancel",
+      "snapshot": {
+        "cancelTests": 6,
+        "nonCancelTests": 5
+      },
+      "error": null
+    },
+    {
+      "id": "conversation.state_ttl.expired_pending",
+      "domain": "conversation",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §26: expired pending action (TTL=0) should not execute",
+      "snapshot": {
+        "expired": true,
+        "expiresAt": 1789720322413
+      },
+      "error": null
+    },
+    {
+      "id": "conversation.summary.generation_trigger",
+      "domain": "conversation",
+      "critical": false,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §27: shouldGenerateSummary returns true after SUMMARY_EVERY_N turns",
+      "snapshot": {
+        "SUMMARY_EVERY_N": 10
+      },
+      "error": null
+    },
+    {
+      "id": "conversation.summary.max_chars",
+      "domain": "conversation",
+      "critical": false,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §27: MAX_SUMMARY_CHARS ≤ 400",
+      "snapshot": {
+        "MAX_SUMMARY_CHARS": 400
+      },
+      "error": null
+    },
+    {
+      "id": "conversation.A.purchase_followup",
+      "domain": "conversation",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §63 Conversation A: 3-turn purchase scenario routing and state",
+      "snapshot": {
+        "turn1": {
+          "skills": [
+            "finance.affordability"
+          ],
+          "source": "rules"
+        },
+        "turn2": {
+          "skills": [
+            "finance.affordability"
+          ],
+          "source": "history"
+        }
+      },
+      "error": null
+    },
+    {
+      "id": "conversation.B.reminder_clarification",
+      "domain": "conversation",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §63 Conversation B: reminder creation with missing time → pending → resolved",
+      "snapshot": {
+        "turn1": {
+          "valid": false,
+          "missingFields": [
+            "time"
+          ]
+        },
+        "turn2": {
+          "followUp": true,
+          "completedValid": true
+        }
+      },
+      "error": null
+    },
+    {
+      "id": "conversation.C.goal_followup",
+      "domain": "conversation",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §63 Conversation C: goal planning with follow-up deadline change",
+      "snapshot": {
+        "turn1": {
+          "skills": [
+            "finance.goal"
+          ]
+        },
+        "turn2": {
+          "isFollowUp": true
+        }
+      },
+      "error": null
+    },
+    {
+      "id": "conversation.D.topic_switch",
+      "domain": "conversation",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §63 Conversation D: finance→habits switch, finance state not injected",
+      "snapshot": {
+        "turn1": [
+          "finance"
+        ],
+        "turn2": [
+          "habits"
+        ],
+        "topicSwitch": true
+      },
+      "error": null
+    },
+    {
+      "id": "conversation.E.multi_action",
+      "domain": "conversation",
+      "critical": false,
+      "pass": true,
+      "duration": 1,
+      "description": "SPEC §63 Conversation E: \"Запиши расход и поставь задачу\" → both domains",
+      "snapshot": {
+        "domains": [
+          "finance",
+          "tasks"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "conversation.response.tool_success_truth",
+      "domain": "conversation",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §22: tool returns success=false → response must NOT say \"Готово\" or \"Добавил\"",
+      "snapshot": {
+        "corePromptLength": 2024
+      },
+      "error": null
+    },
+    {
+      "id": "conversation.response.no_ask_for_known_data",
+      "domain": "conversation",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §86: CORE_PROMPT must instruct not to ask for info already in context",
+      "snapshot": {
+        "checked": true
+      },
+      "error": null
+    },
+    {
+      "id": "conversation.response.language_russian",
+      "domain": "conversation",
+      "critical": false,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §85: CORE_PROMPT must specify Russian as default language",
+      "snapshot": {
+        "checked": true
+      },
+      "error": null
+    },
+    {
+      "id": "tools.duplicate.prevention",
+      "domain": "tools",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §16: HTTP handler idempotency (reserveIdempotency) prevents duplicate entity on retry",
+      "snapshot": {
+        "res1": "reserved",
+        "res2": "cached",
+        "taskCount": 1
+      },
+      "error": null
+    },
+    {
+      "id": "tools.create_transaction.validation",
+      "domain": "tools",
+      "critical": true,
+      "pass": true,
+      "duration": 1,
+      "description": "SPEC §62: create_transaction amount=-500 → VALIDATION_ERROR, 0 writes",
+      "snapshot": {
+        "errorCode": "VALIDATION_ERROR"
+      },
+      "error": null
+    },
+    {
+      "id": "tools.create_transaction.success",
+      "domain": "tools",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §14: valid create_transaction → success, entity in DB with correct userId",
+      "snapshot": {
+        "id": "1789720323415-29cea7a254aa",
+        "amount": 1500,
+        "userId": "user_a"
+      },
+      "error": null
+    },
+    {
+      "id": "tools.multi_tool.tx_and_reminder",
+      "domain": "tools",
+      "critical": true,
+      "pass": true,
+      "duration": 1,
+      "description": "SPEC §17: create_transaction + create_reminder each called once",
+      "snapshot": {
+        "txId": "1789720323415-31db078268b4",
+        "remId": "1789720323416-4db8c8be9cf6"
+      },
+      "error": null
+    },
+    {
+      "id": "tools.partial_failure.tx_success_reminder_missing_time",
+      "domain": "tools",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §18: transaction succeeds, reminder without time → tx exists, reminder not created",
+      "snapshot": {
+        "txCreated": 1,
+        "remCreated": 0,
+        "remMissing": [
+          "time"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "tools.unknown_tool.not_executed",
+      "domain": "tools",
+      "critical": true,
+      "pass": true,
+      "duration": 1,
+      "description": "SPEC §61: unknown tool name → UNKNOWN_TOOL, nothing written to DB",
+      "snapshot": {
+        "errorCode": "UNKNOWN_TOOL"
+      },
+      "error": null
+    },
+    {
+      "id": "tools.no_unnecessary_tools.general",
+      "domain": "tools",
+      "critical": false,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §79: \"Что такое инфляция?\" → general domain → 0 tools available",
+      "snapshot": {
+        "toolCount": 0
+      },
+      "error": null
+    },
+    {
+      "id": "tools.create_reminder.missing_time_validation",
+      "domain": "tools",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §62: create_reminder without time → MISSING_FIELDS error",
+      "snapshot": {
+        "valid": false,
+        "errorCode": "MISSING_REQUIRED_FIELDS",
+        "missingFields": [
+          "time"
+        ],
+        "collectedArgs": {
+          "title": "Тест",
+          "date": "2026-09-18"
+        }
+      },
+      "error": null
+    },
+    {
+      "id": "tools.pro_plan.success",
+      "domain": "tools",
+      "critical": false,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §55: Pro plan user creates entity without limit hit",
+      "snapshot": {
+        "success": true,
+        "plan": "pro"
+      },
+      "error": null
+    },
+    {
+      "id": "proactive.cash_gap.create",
+      "domain": "proactive",
+      "critical": true,
+      "pass": true,
+      "duration": 3,
+      "description": "SPEC §32: low balance + high prev-month expenses → finance.cash_gap event",
+      "snapshot": {
+        "events": [
+          {
+            "type": "upsert",
+            "fingerprint": "finance.cash_gap:2026-09"
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "proactive.cash_gap.dedupe",
+      "domain": "proactive",
+      "critical": true,
+      "pass": true,
+      "duration": 1,
+      "description": "SPEC §33: run detector twice → same fingerprint, store deduplicates to 1 event",
+      "snapshot": {
+        "fingerprint": "finance.cash_gap:2026-09",
+        "r1": "created",
+        "r2": "updated"
+      },
+      "error": null
+    },
+    {
+      "id": "proactive.cash_gap.resolve",
+      "domain": "proactive",
+      "critical": true,
+      "pass": true,
+      "duration": 1,
+      "description": "SPEC §34: positive cashflow → same fingerprint resolved",
+      "snapshot": {
+        "events": [
+          {
+            "type": "resolve",
+            "fingerprint": "finance.cash_gap:2026-09"
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "proactive.category_spike.basic",
+      "domain": "proactive",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §35: baseline=12k, current=21k (+75%, +9k) → spike event",
+      "snapshot": {
+        "events": [
+          {
+            "type": "upsert",
+            "fingerprint": "finance.category_spike:2026-09:p-groceries",
+            "facts": {
+              "category": "p-groceries",
+              "baseline": 12000,
+              "current": 21000,
+              "increase": 9000,
+              "increasePct": 75
+            }
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "proactive.category_spike.no_small_change",
+      "domain": "proactive",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §36: 100→250 (+150%, but +150 ₽ absolute < 1000 threshold) → NO event",
+      "snapshot": {
+        "events": []
+      },
+      "error": null
+    },
+    {
+      "id": "proactive.category_spike.no_history",
+      "domain": "proactive",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §88: only current month transactions (no baseline) → no spike event",
+      "snapshot": {
+        "events": []
+      },
+      "error": null
+    },
+    {
+      "id": "proactive.goal_off_track.basic",
+      "domain": "proactive",
+      "critical": true,
+      "pass": true,
+      "duration": 1,
+      "description": "SPEC §37: required >> actual savings capacity → goal_off_track event",
+      "snapshot": {
+        "events": [
+          {
+            "type": "upsert",
+            "facts": {
+              "goalId": "goal-2",
+              "goalTitle": "Автомобиль",
+              "requiredMonthly": 400000,
+              "actualMonthly": 25000,
+              "monthlyGap": 375000,
+              "shortfallPct": 93.8,
+              "deadline": "2026-12-01"
+            }
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "proactive.goal_off_track.resolve_feasible",
+      "domain": "proactive",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §34: goal becomes feasible → resolve event",
+      "snapshot": {
+        "events": [
+          {
+            "type": "resolve",
+            "fingerprint": "finance.goal_off_track:g1"
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "proactive.overdue_task.active",
+      "domain": "proactive",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §38: incomplete overdue task → active event",
+      "snapshot": {
+        "events": [
+          {
+            "type": "upsert",
+            "fingerprint": "tasks.overdue:task-overdue-1"
+          },
+          {
+            "type": "resolve",
+            "fingerprint": "tasks.overdue:task-done-1"
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "proactive.overdue_task.resolve_completed",
+      "domain": "proactive",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §38: completed task → resolve event",
+      "snapshot": {
+        "events": [
+          {
+            "type": "resolve",
+            "fingerprint": "tasks.overdue:task-done"
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "proactive.overdue_task.future_no_event",
+      "domain": "proactive",
+      "critical": false,
+      "pass": true,
+      "duration": 0,
+      "description": "Task due in future → no overdue event",
+      "snapshot": {
+        "events": []
+      },
+      "error": null
+    },
+    {
+      "id": "proactive.insight.cta.cash_gap",
+      "domain": "proactive",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §39: cash_gap CTA → finance.cashflow",
+      "snapshot": {
+        "cta": {
+          "type": "skill",
+          "target": "finance.cashflow",
+          "params": {}
+        }
+      },
+      "error": null
+    },
+    {
+      "id": "proactive.insight.cta.overdue_task",
+      "domain": "proactive",
+      "critical": true,
+      "pass": true,
+      "duration": 1,
+      "description": "SPEC §39: overdue task CTA → tasks.prioritize",
+      "snapshot": {
+        "cta": {
+          "type": "skill",
+          "target": "tasks.prioritize",
+          "params": {
+            "taskId": "task-overdue-1"
+          }
+        }
+      },
+      "error": null
+    },
+    {
+      "id": "proactive.dismiss.blocks_re_creation",
+      "domain": "proactive",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §40: dismiss → within cooldown → re-upsert skipped",
+      "snapshot": {
+        "fingerprint": "finance.cash_gap:2026-09",
+        "r2Result": "skipped"
+      },
+      "error": null
+    },
+    {
+      "id": "proactive.quiet_hours.no_notification",
+      "domain": "proactive",
+      "critical": false,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §41: quiet hours (22:00-08:00) → event stored, notification NOT sent",
+      "snapshot": {
+        "quietHoursTested": true
+      },
+      "error": null
+    },
+    {
+      "id": "proactive.no_chatid.in_app_only",
+      "domain": "proactive",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §42 + §63: chatId=null → in_app=true, telegram=false, no error",
+      "snapshot": {
+        "sent": false,
+        "channel": "in_app_only",
+        "reason": "no_chatId"
+      },
+      "error": null
+    },
+    {
+      "id": "security.cross_user.task_access",
+      "domain": "security",
+      "critical": true,
+      "pass": true,
+      "duration": 1,
+      "description": "SPEC §19 IDOR: user_a tries to update user_b task → NOT_FOUND",
+      "snapshot": {
+        "errorCode": "NOT_FOUND",
+        "taskUnchanged": true
+      },
+      "error": null
+    },
+    {
+      "id": "security.cross_user.note_access",
+      "domain": "security",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §19 IDOR: user_a tries to update user_b note → NOT_FOUND",
+      "snapshot": {
+        "errorCode": "NOT_FOUND"
+      },
+      "error": null
+    },
+    {
+      "id": "security.uid_injection.body_uid_ignored",
+      "domain": "security",
+      "critical": true,
+      "pass": true,
+      "duration": 1,
+      "description": "SPEC §20: body contains userId=user_b, but executeTool is called with user_a uid — only user_a is used",
+      "snapshot": {
+        "writtenUserId": "user_a",
+        "injectedUserId": "user_b"
+      },
+      "error": null
+    },
+    {
+      "id": "security.dismiss_insight.wrong_uid",
+      "domain": "security",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §9 store: user_a tries to dismiss user_b insight → forbidden",
+      "snapshot": {
+        "result": "not_found"
+      },
+      "error": null
+    },
+    {
+      "id": "security.prompt_injection.note_tools_restricted",
+      "domain": "security",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §21: note domain context does NOT expose transaction-modifying tools",
+      "snapshot": {
+        "notesTools": [
+          "create_note",
+          "update_note",
+          "search_notes"
+        ],
+        "forbiddenNotPresent": [
+          "create_transaction",
+          "update_task",
+          "complete_task",
+          "create_habit"
+        ]
+      },
+      "error": null
+    },
+    {
+      "id": "security.collection_whitelist",
+      "domain": "security",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §98: domain→tools mapping is a whitelist — unknown domains get no tools",
+      "snapshot": {
+        "unknownDomainTools": 0,
+        "generalTools": 0
+      },
+      "error": null
+    },
+    {
+      "id": "security.skill_whitelist",
+      "domain": "security",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §60: unknown skill ID from classifier is filtered out",
+      "snapshot": {
+        "inputCount": 3,
+        "outputCount": 1
+      },
+      "error": null
+    },
+    {
+      "id": "security.core_prompt.injection_rule",
+      "domain": "security",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "SPEC §21: CORE_PROMPT must explicitly warn against executing instructions from user content",
+      "snapshot": {
+        "checked": true,
+        "coreLen": 2024
+      },
+      "error": null
+    }
+  ]
+}

@@ -1,12 +1,10 @@
 import {initializeApp} from 'firebase-admin/app';
 import {FieldValue, getFirestore, Timestamp} from 'firebase-admin/firestore';
 import {onSchedule} from 'firebase-functions/v2/scheduler';
-import {defineSecret} from 'firebase-functions/params';
 import {logger} from 'firebase-functions';
 
 initializeApp();
 
-const BOT_TOKEN = defineSecret('BOT_TOKEN');
 const db = getFirestore();
 const TELEGRAM_API = 'https://api.telegram.org';
 const MAX_BATCH = 200;
@@ -74,11 +72,14 @@ const processWithConcurrency = async <T>(
 export const sendDueReminders = onSchedule(
   {
     schedule: 'every 1 minutes',
-    secrets: [BOT_TOKEN]
   },
   async () => {
     const now = Timestamp.now();
-    const token = BOT_TOKEN.value();
+    const token = process.env.BOT_TOKEN;
+    if (!token) {
+      logger.error('BOT_TOKEN env var is not set');
+      return;
+    }
 
     const snapshot = await db
       .collection('reminders')
