@@ -59,19 +59,23 @@ export type Category = {
 export type Transaction = {
   id: string;
   type: 'income' | 'expense';
-  // Always stored in BASE currency (USD). Use convertAmount() to display in user's currency.
+  // Stored in the transaction's own currency (see `currency` field).
+  // Legacy records without a `currency` field are treated as base currency (RUB).
+  // Never apply convertToBase() before storing — amount is always the user-entered value.
   amount: number;
+  // Currency in which the amount is expressed. Defaults to base currency (RUB) for legacy records.
+  currency?: Currency;
   categoryId: string;
   description: string;
   date: string;
   // Set by new FinanceEditor – human-readable "🛒 Groceries" string.
   // Legacy transactions populated via categoryId lookup instead.
   category?: string;
-  // Set by Telegram bot — original amount before base-currency conversion.
+  // Set by Telegram bot — original amount before any conversion (kept for historical compat).
   originalAmount?: number;
   // Set by Telegram bot — user's selected currency at recording time.
   originalCurrency?: Currency;
-  // 'telegram-bot' for transactions created via Telegram chat.
+  // 'telegram-bot' for transactions created via Telegram chat; 'ai-chat' for web AI.
   source?: string;
   // Bank / payment method (e.g. "Тинькофф", "Наличные"). Optional.
   bank?: string;

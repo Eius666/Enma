@@ -1517,8 +1517,9 @@ const App: React.FC = () => {
     }
   }, [user, trialActivating]);
 
+  // Converts an amount from base currency (RUB) to the user's display currency.
+  // Used only for display — never call this before storing a transaction amount.
   const convertAmount = (amount: number) => amount * (rates[currency] ?? 1);
-  const convertToBase = (amount: number) => amount / (rates[currency] ?? 1);
 
   const telegramName =
     telegram?.initDataUnsafe?.user &&
@@ -1794,7 +1795,6 @@ const App: React.FC = () => {
             language={language}
             currency={currency}
             convertAmount={convertAmount}
-            convertToBase={convertToBase}
             banks={banks}
             subscription={subscription}
             onBack={() => {

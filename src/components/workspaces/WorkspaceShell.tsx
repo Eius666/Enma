@@ -24,7 +24,6 @@ type WorkspaceShellProps = {
   language: Language;
   currency: Currency;
   convertAmount: (amount: number) => number;
-  convertToBase: (amount: number) => number;
   tasks: CalendarTask[];
   onTasksChange: (tasks: CalendarTask[]) => void;
   notes: NotePage[];
@@ -105,7 +104,6 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ activeTab, ...pr
           language={props.language}
           currency={props.currency}
           convertAmount={props.convertAmount}
-          convertToBase={props.convertToBase}
           categories={props.categories}
           onCategoriesChange={props.onCategoriesChange}
           transactions={props.transactions}

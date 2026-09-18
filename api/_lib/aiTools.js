@@ -453,14 +453,25 @@ async function tool_createTransaction(uid, args, options = {}) {
   const catName = CATEGORY_NAMES[catId] || catId;
   const id      = options.docId || makeDocId();
 
+  // Resolve user's base currency (Firestore SDK caches within the process request).
+  let currency = options.currency || 'RUB';
+  if (!options.currency) {
+    try {
+      const userSnap = await db.collection('users').doc(uid).get();
+      currency = userSnap.exists ? (userSnap.data().currency || 'RUB') : 'RUB';
+    } catch { /* keep default RUB */ }
+  }
+
   const data = {
     id,
     type,
     amount:      Math.round(amount * 100) / 100,
+    currency,
     description: description.trim().slice(0, 200),
     date:        new Date(`${txDate}T12:00:00`).toISOString(),
     categoryId:  catId,
     category:    catName,
+    source:      'ai-chat',
     ...(bank ? { bank: String(bank).slice(0, 100) } : {}),
   };
 
@@ -472,6 +483,7 @@ async function tool_createTransaction(uid, args, options = {}) {
     id:          result.id,
     type,
     amount:      data.amount,
+    currency,
     description: data.description,
     date:        txDate,
     category:    catName,

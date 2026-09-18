@@ -24,7 +24,6 @@ interface FinanceEditorProps {
   language: 'en' | 'ru';
   currency: Currency;
   convertAmount: (amount: number) => number;
-  convertToBase: (amount: number) => number;
   banks: string[];
   subscription?: Subscription | null;
   onBack: () => void;
@@ -161,7 +160,6 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
   language,
   currency,
   convertAmount,
-  convertToBase,
   banks,
   subscription,
   onBack,
@@ -236,7 +234,8 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
         const data: Record<string, unknown> = {
           id,
           type:        txType,
-          amount:      convertToBase(amount),
+          amount,
+          currency,
           description: description.trim(),
           date:        dateInputToIso(date),
           categoryId:  preset?.id ?? '',
@@ -278,7 +277,8 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
         id,
         userId:      user.uid,
         type:        txType,
-        amount:      convertToBase(amount),
+        amount,
+        currency,
         description: description.trim(),
         date:        dateInputToIso(date),
         categoryId:  preset?.id ?? '',

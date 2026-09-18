@@ -12,7 +12,6 @@ type FinanceWorkspaceProps = {
   language: Language;
   currency: Currency;
   convertAmount: (amount: number) => number;
-  convertToBase: (amount: number) => number;
   categories: Category[];
   onCategoriesChange: (categories: Category[]) => void;
   transactions: Transaction[];
@@ -26,7 +25,6 @@ export const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
   language,
   currency,
   convertAmount,
-  convertToBase,
   categories,
   onCategoriesChange,
   transactions,
@@ -91,7 +89,8 @@ export const FinanceWorkspace: React.FC<FinanceWorkspaceProps> = ({
     const transaction: Transaction = {
       id: createId(),
       type: draft.type,
-      amount: convertToBase(amount),
+      amount,
+      currency,
       categoryId: draft.categoryId,
       description: draft.description.trim(),
       date: new Date().toISOString(),

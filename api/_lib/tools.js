@@ -788,6 +788,7 @@ async function createTransaction(args, userId, chatId, currency = 'RUB') {
     chatId,
     type,
     amount,
+    currency,
     description,
     categoryId: `cat-${category}`,
     date:       new Date().toISOString(),
