@@ -46,66 +46,6 @@ function teardown() {
 const RATES = { RUB: 1, USD: 100 / 9000 }; // 9000 RUB == 100 USD
 const M = new Date().toISOString().slice(0, 7);
 
-test('engine: mixed currency expenses convert-then-sum (9000 RUB + 100 USD = 200 USD)', async () => {
-  injectMockRates(RATES);
-  try {
-    const { runFinanceEngine } = require('../engine');
-    const financeData = {
-      transactions: [
-        { type: 'expense', amount: 9000, currency: 'RUB', date: `${M}-05`, description: 'A', categoryId: 'p-other-e' },
-        { type: 'expense', amount: 100,  currency: 'USD', date: `${M}-06`, description: 'B', categoryId: 'p-other-e' },
-      ],
-      goals: [],
-    };
-    const text = await runFinanceEngine({
-      skillIds: ['finance.month_review'], financeData, timezone: 'Europe/Moscow', currency: 'USD', message: '',
-    });
-    assert.ok(text.includes('Валюта расчёта: USD'), `must declare calculation currency, got: ${text}`);
-    // 200 USD expenses this month, formatted with 2 decimals since < 1000
-    assert.ok(text.includes('200.00'), `expected converted total 200.00, got: ${text}`);
-  } finally { teardown(); }
-});
-
-test('engine: affordability mixed currency — balance normalized to USD before scenario math', async () => {
-  injectMockRates(RATES);
-  try {
-    const { runFinanceEngine } = require('../engine');
-    const financeData = {
-      transactions: [
-        { type: 'income',  amount: 9_000_000, currency: 'RUB', date: `${M}-01`, description: 'Salary RUB', categoryId: 'p-salary' },
-        { type: 'income',  amount: 100_000,    currency: 'USD', date: `${M}-02`, description: 'Salary USD', categoryId: 'p-salary' },
-      ],
-      goals: [],
-    };
-    const text = await runFinanceEngine({
-      skillIds: ['finance.affordability'], financeData, timezone: 'Europe/Moscow', currency: 'USD',
-      message: 'куплю за 50000',
-    });
-    // 9,000,000 RUB -> 100,000 USD + 100,000 USD = 200,000 USD balance
-    // (formatter uses ru-RU grouping — space or narrow-no-break-space as thousands separator)
-    assert.ok(/200[\s  ]000/.test(text), `expected ~200 000 USD balance, got: ${text}`);
-  } finally { teardown(); }
-});
-
-test('engine: cashflow mixed currency uses a single USD basis for the whole timeline', async () => {
-  injectMockRates(RATES);
-  try {
-    const { runFinanceEngine } = require('../engine');
-    const financeData = {
-      transactions: [
-        { type: 'expense', amount: 9000, currency: 'RUB', date: `${M}-05`, description: 'Rent RUB', categoryId: 'p-housing' },
-        { type: 'income',  amount: 2000, currency: 'USD', date: `${M}-06`, description: 'Freelance USD', categoryId: 'p-freelance' },
-      ],
-      goals: [],
-    };
-    const text = await runFinanceEngine({
-      skillIds: ['finance.cashflow'], financeData, timezone: 'Europe/Moscow', currency: 'USD', message: '',
-    });
-    assert.ok(text.includes('Валюта расчёта: USD'));
-    assert.ok(!text.includes('RUB'), `cashflow section must not leak RUB units, got: ${text}`);
-  } finally { teardown(); }
-});
-
 test('engine: RUB-only dataset never calls exchangeRates module', async () => {
   const spy = { called: false };
   injectSpyRates(RATES, spy);
@@ -121,24 +61,6 @@ test('engine: RUB-only dataset never calls exchangeRates module', async () => {
       skillIds: ['finance.month_review'], financeData, timezone: 'Europe/Moscow', currency: 'RUB', message: '',
     });
     assert.equal(spy.called, false, 'RUB-only user must never trigger an FX fetch');
-  } finally { teardown(); }
-});
-
-test('engine: USD-only dataset never calls exchangeRates module', async () => {
-  const spy = { called: false };
-  injectSpyRates(RATES, spy);
-  try {
-    const { runFinanceEngine } = require('../engine');
-    const financeData = {
-      transactions: [
-        { type: 'expense', amount: 50, currency: 'USD', date: `${M}-05`, description: 'Coffee', categoryId: 'p-other-e' },
-      ],
-      goals: [],
-    };
-    await runFinanceEngine({
-      skillIds: ['finance.month_review'], financeData, timezone: 'Europe/Moscow', currency: 'USD', message: '',
-    });
-    assert.equal(spy.called, false, 'USD-only user must never trigger an FX fetch');
   } finally { teardown(); }
 });
 
@@ -160,47 +82,6 @@ test('engine: FX failure on mixed currency data → safe degradation, no fabrica
       `must not produce a numeric total when FX is unavailable, got: ${text}`);
     assert.ok(text.toLowerCase().includes('недостаточно') || text.toLowerCase().includes('недоступен'),
       `must explicitly signal insufficient currency data, got: ${text}`);
-  } finally { teardown(); }
-});
-
-test('engine: full_audit mixed currency stays on one currency across all sections', async () => {
-  injectMockRates(RATES);
-  try {
-    const { runFinanceEngine } = require('../engine');
-    const financeData = {
-      transactions: [
-        { type: 'expense', amount: 9000, currency: 'RUB', date: `${M}-05`, description: 'A', categoryId: 'p-groceries' },
-        { type: 'expense', amount: 100,  currency: 'USD', date: `${M}-06`, description: 'B', categoryId: 'p-groceries' },
-        { type: 'income',  amount: 900000, currency: 'RUB', date: `${M}-01`, description: 'Salary', categoryId: 'p-salary' },
-      ],
-      goals: [],
-    };
-    const text = await runFinanceEngine({
-      skillIds: ['finance.full_audit'], financeData, timezone: 'Europe/Moscow', currency: 'USD', message: '',
-    });
-    assert.ok(text.includes('Валюта расчёта: USD'));
-    assert.ok(!text.includes('₽'), `full_audit must not mix in RUB symbols, got: ${text}`);
-  } finally { teardown(); }
-});
-
-test('SPEC: old legacy USD balance (~2,000,000) stays ~2,000,000 USD, never rescaled to ~22,000', async () => {
-  // Fixture: a legacy Web income of 2,000,000 with no `currency` field, no
-  // `source`, timestamped inside the USD-bug window, user.currency = USD.
-  injectMockRates({ RUB: 1, USD: 0.0118 });
-  try {
-    const { runFinanceEngine } = require('../engine');
-    const financeData = {
-      transactions: [
-        { type: 'income', amount: 2000000, createdAt: { toMillis: () => Date.parse('2026-06-01T00:00:00Z') }, date: `${M}-01`, description: 'Legacy salary', categoryId: 'p-salary' },
-      ],
-      goals: [],
-    };
-    const text = await runFinanceEngine({
-      skillIds: ['finance.month_review'], financeData, timezone: 'Europe/Moscow', currency: 'USD', message: '',
-    });
-    // Must show 2,000,000-scale, NOT ~22,700 (which would be 2,000,000 RUB wrongly divided by ~88)
-    assert.ok(/2[\s  ]000[\s  ]000/.test(text), `expected exact 2,000,000 USD, got: ${text}`);
-    assert.ok(!/22[\s  ]7\d\d/.test(text), `must not show a ~22.7k mis-converted value, got: ${text}`);
   } finally { teardown(); }
 });
 
@@ -243,28 +124,6 @@ test('SPEC: goal currency stability — RUB goal stays 500000 RUB in the normali
     assert.equal(original.currency, 'RUB');
   } finally { teardown(); }
 });
-
-test('SPEC: mixed-currency goal — 9,000,000 RUB target converted to USD before calculateGoalPlan runs', async () => {
-  const RATES2 = { RUB: 1, USD: 100 / 9000 }; // 9000 RUB == 100 USD
-  injectMockRates(RATES2);
-  try {
-    const { runFinanceEngine } = require('../engine');
-    const financeData = {
-      transactions: [
-        { type: 'income', amount: 5000, currency: 'USD', date: `${M}-01`, description: 'Salary', categoryId: 'p-salary' },
-      ],
-      goals: [{ id: 'g1', title: 'Дом', targetAmount: 9000000, currentAmount: 0, currency: 'RUB', deadline: null }],
-    };
-    const text = await runFinanceEngine({
-      skillIds: ['finance.goal'], financeData, timezone: 'Europe/Moscow', currency: 'USD', message: '',
-    });
-    // 9,000,000 RUB -> 100,000 USD target — must appear USD-scale, not RUB-scale
-    assert.ok(/100[\s  ]000/.test(text), `expected ~100,000 USD goal target, got: ${text}`);
-  } finally { teardown(); }
-});
-
-
-// ---- what-if (finance.what_if) ----------------------------------------------
 
 test('SPEC: what-if base RUB plus "500 bolshe" -> +500 RUB applied to monthly expenses', async () => {
   injectMockRates({ RUB: 1, USD: 0.0118 });
@@ -310,28 +169,6 @@ test('SPEC: what-if base RUB plus explicit $500 more -> converted to RUB before 
   } finally { teardown(); }
 });
 
-test('SPEC: what-if base USD plus 20000 RUB more -> converted to USD before scenario arithmetic', async () => {
-  const RATES2 = { RUB: 1, USD: 0.0118 }; // 20000 RUB ~= 236 USD
-  injectMockRates(RATES2);
-  try {
-    const { runFinanceEngine } = require('../engine');
-    const financeData = {
-      transactions: [
-        { type: 'expense', amount: 100, currency: 'USD', date: `${M}-05`, description: 'A', categoryId: 'p-other-e' },
-        { type: 'income',  amount: 3000, currency: 'USD', date: `${M}-01`, description: 'Salary', categoryId: 'p-salary' },
-      ],
-      goals: [],
-    };
-    const text = await runFinanceEngine({
-      skillIds: ['finance.what_if'], financeData, timezone: 'Europe/Moscow', currency: 'USD',
-      message: 'А если буду откладывать на 20 000 ₽ больше?',
-    });
-    assert.ok(text.includes('Валюта расчёта: USD'));
-    // 20000 RUB -> ~236 USD extra saving; must not appear as a raw 20000-scale figure
-    assert.ok(!/20[\s  ]?000\.00/.test(text), 'must not leak raw 20000 RUB into a USD-labeled figure, got: ' + text);
-  } finally { teardown(); }
-});
-
 test('SPEC: what-if explicit foreign currency plus FX unavailable -> insufficient_data, not a fake calculation', async () => {
   injectFailingRates();
   try {
@@ -351,5 +188,147 @@ test('SPEC: what-if explicit foreign currency plus FX unavailable -> insufficien
       'must never treat unconvertible $500 as 500 RUB, got: ' + text);
     assert.ok(text.toLowerCase().includes('scenarios') && text.toLowerCase().includes('недостаточно'),
       'must signal insufficient data for the scenario calc specifically, got: ' + text);
+  } finally { teardown(); }
+});
+
+
+// ---- legacy conversion path ---------------------------------------------------
+
+test('SPEC: historical legacy USD (amount=2000000, currency=USD) displays ~170M in RUB, never 2M RUB', async () => {
+  const RATES2 = { RUB: 1, USD: 0.0118 };
+  injectMockRates(RATES2);
+  try {
+    const { runFinanceEngine } = require('../engine');
+    const financeData = {
+      transactions: [
+        { type: 'income', amount: 2000000, currency: 'USD', date: `${M}-01`, description: 'Legacy salary', categoryId: 'p-salary' },
+      ],
+      goals: [],
+    };
+    const textRUB = await runFinanceEngine({
+      skillIds: ['finance.month_review'], financeData, timezone: 'Europe/Moscow', currency: 'RUB', message: '',
+    });
+    assert.ok(/169[\s\u00a0\u202f]4\d\d[\s\u00a0\u202f]\d\d\d/.test(textRUB) || /170[\s\u00a0\u202f]/.test(textRUB),
+      'expected ~169-170M RUB, got: ' + textRUB);
+    assert.ok(!/2[\s\u00a0\u202f]000[\s\u00a0\u202f]000[\s\u00a0\u202f]?₽/.test(textRUB),
+      'must never show 2,000,000 RUB (that would be USD misread as RUB), got: ' + textRUB);
+  } finally { teardown(); }
+});
+
+// ---- Budget currency is fixed to RUB; schemaVersion 2 uses locked rubAmount ---
+
+const NB = '[\\s  ]';
+
+test('engine: budget is always RUB even if caller asks for another currency', async () => {
+  injectMockRates(RATES);
+  try {
+    const { runFinanceEngine } = require('../engine');
+    const financeData = {
+      transactions: [
+        { type: 'expense', amount: 5000, currency: 'RUB', date: `${M}-05`, description: 'A', categoryId: 'p-other-e' },
+      ],
+      goals: [],
+    };
+    const text = await runFinanceEngine({
+      skillIds: ['finance.month_review'], financeData, timezone: 'Europe/Moscow', currency: 'USD', message: '',
+    });
+    assert.ok(text.includes('Валюта расчёта: RUB'), `budget currency must be RUB, got: ${text}`);
+  } finally { teardown(); }
+});
+
+test('engine: mixed v2 budget sums locked rubAmount only (5000 RUB + $100 + €100 + ¥500 = 29 700), no FX fetch', async () => {
+  const spy = { called: false };
+  injectSpyRates({ RUB: 1, USD: 1 / 1000 }, spy); // absurd runtime rate — must be ignored
+  try {
+    const { runFinanceEngine } = require('../engine');
+    const v2 = (currency, amount, rubAmount) => ({
+      schemaVersion: 2, type: 'expense', amount, currency, rubAmount,
+      fx: currency === 'RUB' ? null : { rateToRub: rubAmount / amount },
+      date: `${M}-05`, description: 'x', categoryId: 'p-other-e',
+    });
+    const financeData = {
+      transactions: [v2('RUB', 5000, 5000), v2('USD', 100, 8600), v2('EUR', 100, 10100), v2('CNY', 500, 6000)],
+      goals: [],
+    };
+    const text = await runFinanceEngine({
+      skillIds: ['finance.month_review'], financeData, timezone: 'Europe/Moscow', message: '',
+    });
+    assert.ok(new RegExp(`29${NB}?700`).test(text), `expected 29 700 ₽ expenses, got: ${text}`);
+    assert.equal(spy.called, false, 'v2 data must never trigger runtime FX');
+  } finally { teardown(); }
+});
+
+test('engine: changing today\'s FX rate does not change a locked v2 total', async () => {
+  const mk = async (rates) => {
+    injectMockRates(rates);
+    const { runFinanceEngine } = require('../engine');
+    const financeData = {
+      transactions: [{ schemaVersion: 2, type: 'expense', amount: 100, currency: 'USD', rubAmount: 8600, fx: { rateToRub: 86 }, date: `${M}-05`, description: 'x', categoryId: 'p-other-e' }],
+      goals: [],
+    };
+    return runFinanceEngine({ skillIds: ['finance.month_review'], financeData, timezone: 'Europe/Moscow', message: '' });
+  };
+  try {
+    const a = await mk({ RUB: 1, USD: 1 / 86 });
+    const b = await mk({ RUB: 1, USD: 1 / 95 });
+    assert.equal(a, b);
+    assert.ok(new RegExp(`8${NB}?600`).test(a), `expected 8 600 ₽, got: ${a}`);
+  } finally { teardown(); }
+});
+
+test('engine: legacy transaction (no rubAmount) still converts via the legacy resolver path', async () => {
+  injectMockRates({ RUB: 1, USD: 0.0118 });
+  try {
+    const { runFinanceEngine } = require('../engine');
+    const financeData = {
+      transactions: [
+        { type: 'income', amount: 2000, currency: 'USD', date: `${M}-01`, description: 'Legacy', categoryId: 'p-salary' },
+      ],
+      goals: [],
+    };
+    const text = await runFinanceEngine({
+      skillIds: ['finance.month_review'], financeData, timezone: 'Europe/Moscow', message: '',
+    });
+    assert.ok(new RegExp(`169${NB}\\d{3}`).test(text), `expected ~169 4xx ₽ from legacy conversion, got: ${text}`);
+  } finally { teardown(); }
+});
+
+test('engine: implicit "5000" in what-if means user.currency (inputCurrency=USD → converted), explicit RUB stays RUB', async () => {
+  injectMockRates({ RUB: 1, USD: 0.0118 });
+  try {
+    const { runFinanceEngine } = require('../engine');
+    const financeData = {
+      transactions: [
+        { type: 'expense', amount: 10000, currency: 'RUB', date: `${M}-05`, description: 'A', categoryId: 'p-other-e' },
+        { type: 'income',  amount: 50000, currency: 'RUB', date: `${M}-01`, description: 'Salary', categoryId: 'p-salary' },
+      ],
+      goals: [],
+    };
+    const implicitUsd = await runFinanceEngine({
+      skillIds: ['finance.what_if'], financeData, timezone: 'Europe/Moscow', inputCurrency: 'USD',
+      message: 'А если буду тратить на 500 больше?',
+    });
+    assert.ok(!new RegExp(`10${NB}?500`).test(implicitUsd), `500 in USD input mode must not be 500 RUB, got: ${implicitUsd}`);
+    const implicitRub = await runFinanceEngine({
+      skillIds: ['finance.what_if'], financeData, timezone: 'Europe/Moscow', inputCurrency: 'RUB',
+      message: 'А если буду тратить на 500 больше?',
+    });
+    assert.ok(new RegExp(`10${NB}?500`).test(implicitRub), `expected 10 500 ₽, got: ${implicitRub}`);
+  } finally { teardown(); }
+});
+
+test('engine: affordability "за 5000" uses inputCurrency; explicit "5000 ₽" wins over inputCurrency', async () => {
+  injectMockRates({ RUB: 1, USD: 0.0118 });
+  try {
+    const { runFinanceEngine } = require('../engine');
+    const financeData = {
+      transactions: [{ type: 'income', amount: 300000, currency: 'RUB', date: `${M}-01`, description: 'Salary', categoryId: 'p-salary' }],
+      goals: [],
+    };
+    const base = { skillIds: ['finance.affordability'], financeData, timezone: 'Europe/Moscow', inputCurrency: 'USD' };
+    const implicit = await runFinanceEngine({ ...base, message: 'Могу купить за 5000?' });
+    assert.ok(new RegExp(`423${NB}?7\\d\\d|42[34]${NB}?\\d{3}`).test(implicit), `5000 USD ≈ 423 7xx ₽, got: ${implicit}`);
+    const explicit = await runFinanceEngine({ ...base, message: 'Могу купить за 5000 ₽?' });
+    assert.ok(new RegExp(`5${NB}?000`).test(explicit) && !new RegExp(`423${NB}?\\d{3}`).test(explicit), `explicit ₽ must stay 5000, got: ${explicit}`);
   } finally { teardown(); }
 });

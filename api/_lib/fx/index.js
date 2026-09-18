@@ -1,0 +1,139 @@
+'use strict';
+
+// ── FX service: getBankRateToRub ─────────────────────────────────────────────
+//
+// Chain:  Banki (aggregated bank quotes)  →  CBR official  →  market mid rate
+//
+// Rate side (client perspective — the user is the one exchanging money):
+//   expense  → user must BUY foreign currency  → bank SELLS  → `bank_sells`
+//   income   → user SELLS foreign currency     → bank BUYS   → `bank_buys`
+//
+// The snapshot is taken ONCE, when a transaction is created/edited, and stored
+// on the transaction. Nothing in ENMA re-fetches it for history, rendering or
+// balance calculation. The server-side cache below only lets two transactions
+// created minutes apart share one snapshot.
+//
+// If NO provider can produce a rate this throws FxUnavailableError: callers
+// must refuse to store a foreign transaction rather than invent a ruble value.
+
+const bankiProvider = require('./bankiProvider');
+const { cbrRate, marketRate } = require('./fallbackProviders');
+const { aggregateQuotes, MIN_BANK_SAMPLE } = require('./aggregate');
+
+const CACHE_TTL_MS = 10 * 60 * 1000;
+
+class FxUnavailableError extends Error {
+  constructor(currency, attempts) {
+    super(`No reliable FX rate for ${currency}`);
+    this.code = 'FX_UNAVAILABLE';
+    this.currency = currency;
+    this.attempts = attempts;
+  }
+}
+
+function sideFor(transactionType) {
+  return transactionType === 'income' ? 'bank_buys' : 'bank_sells';
+}
+
+function metric(name, fields) {
+  const kv = Object.entries(fields).map(([k, v]) => `${k}=${v}`).join(' ');
+  console.log(`[FX] metric=${name} ${kv}`);
+}
+
+function createFxService({
+  fetchBankQuotes = bankiProvider.fetchQuotes,
+  fallbackChain,
+  getMarketRates,
+  now = () => Date.now(),
+  minSample = MIN_BANK_SAMPLE,
+} = {}) {
+  const cache = new Map(); // `${currency}:${side}` → { snapshot, at }
+
+  const fallbacks = fallbackChain || [
+    ({ currency }) => cbrRate({ currency }),
+    ({ currency }) => marketRate({
+      currency,
+      getRates: getMarketRates || (() => require('../exchangeRates').getExchangeRates()),
+    }),
+  ];
+
+  async function getBankRateToRub({ currency, transactionType, timestamp } = {}) {
+    if (!currency || currency === 'RUB') {
+      throw new Error('getBankRateToRub is for foreign currencies only — RUB never needs FX');
+    }
+    const side = sideFor(transactionType);
+    const key = `${currency}:${side}`;
+
+    const hit = cache.get(key);
+    if (hit && now() - hit.at < CACHE_TTL_MS) return withRequestedDate(hit.snapshot, timestamp);
+
+    const attempts = [];
+
+    // 1) Banki bank quotes → outlier-filtered median
+    try {
+      const { quotes, provider, refreshedAt } = await fetchBankQuotes({ currency, side });
+      const agg = aggregateQuotes(quotes, { minSample });
+      if (!agg.ok) throw new bankiProvider.FxProviderError('banki', agg.reason, `n=${agg.sampleSize}`);
+      const snapshot = {
+        rateToRub:  Math.round(agg.rate * 10000) / 10000,
+        source:     'bank_average',
+        provider,
+        capturedAt: new Date(now()).toISOString(),
+        rateDate:   (refreshedAt || new Date(now()).toISOString()).slice(0, 10),
+        sampleSize: agg.sampleSize,
+        method:     agg.method,
+        rateSide:   side,
+      };
+      metric('fx_provider_success', { provider, currency, side, sample: agg.sampleSize, method: agg.method });
+      cache.set(key, { snapshot, at: now() });
+      return withRequestedDate(snapshot, timestamp);
+    } catch (err) {
+      attempts.push({ provider: err.provider || 'banki', reason: err.reason || err.message });
+      metric('fx_provider_failure', { provider: err.provider || 'banki', currency, reason: err.reason || 'error' });
+    }
+
+    // 2) Fallbacks — single-rate providers, honestly labelled
+    for (const attempt of fallbacks) {
+      try {
+        const r = await attempt({ currency });
+        const snapshot = {
+          rateToRub:  Math.round(r.rateToRub * 10000) / 10000,
+          source:     r.source,
+          provider:   r.provider,
+          capturedAt: new Date(now()).toISOString(),
+          rateDate:   r.rateDate,
+          sampleSize: 1,
+          method:     'single_rate',
+          rateSide:   'mid',
+        };
+        metric('fx_fallback_used', { provider: r.provider, currency, source: r.source });
+        cache.set(key, { snapshot, at: now() });
+        return withRequestedDate(snapshot, timestamp);
+      } catch (err) {
+        attempts.push({ provider: err.provider || 'fallback', reason: err.reason || err.message });
+        metric('fx_provider_failure', { provider: err.provider || 'fallback', currency, reason: err.reason || 'error' });
+      }
+    }
+
+    throw new FxUnavailableError(currency, attempts);
+  }
+
+  // Banki has no historical archive: a back-dated transaction gets today's
+  // quote. Say so explicitly instead of pretending it's a historical rate.
+  function withRequestedDate(snapshot, timestamp) {
+    if (!timestamp) return snapshot;
+    const requested = String(timestamp).slice(0, 10);
+    return { ...snapshot, requestedDate: requested, rateMatchesRequestedDate: requested === snapshot.rateDate };
+  }
+
+  return { getBankRateToRub, _cache: cache };
+}
+
+const defaultService = createFxService();
+
+module.exports = {
+  getBankRateToRub: (args) => defaultService.getBankRateToRub(args),
+  createFxService,
+  FxUnavailableError,
+  MIN_BANK_SAMPLE,
+};

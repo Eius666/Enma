@@ -12,8 +12,7 @@ import { FaSearch, FaCheck, FaCalendarDay } from 'react-icons/fa';
 import { db } from '../firebase';
 import WeekSummary from './WeekSummary';
 import { useWeekTasks } from '../hooks/useWeekTasks';
-import { convertCurrency } from '../utils/convertCurrency';
-import { resolveTransactionCurrency } from '../utils/resolveLegacyCurrency';
+import { getBudgetAmount } from '../utils/budgetAmount';
 import './Day.css';
 
 // ── Shared types & constants ──────────────────────────────────────────────────
@@ -164,11 +163,11 @@ const DayList: React.FC<DayListProps> = ({
       // — never sum raw amounts across currencies, never guess a legacy
       // record's currency (see FinanceList.tsx / resolveLegacyCurrency.ts).
       .reduce((sum, tx) => {
-        const resolved = resolveTransactionCurrency(tx);
-        if (resolved.currency === null) return sum; // unresolvable — excluded, not mis-summed
-        return sum + convertCurrency(tx.amount, resolved.currency, currency, rates);
+        // v2 → locked rubAmount; legacy → resolved + converted. Unresolvable → excluded.
+        const budget = getBudgetAmount(tx as Parameters<typeof getBudgetAmount>[0], rates);
+        return budget === null ? sum : sum + budget;
       }, 0);
-  }, [transactions, today, currency, rates]);
+  }, [transactions, today, rates]);
 
   const fmt = (n: number) =>
     n.toLocaleString(locale, { style: 'currency', currency: currency as 'USD' });

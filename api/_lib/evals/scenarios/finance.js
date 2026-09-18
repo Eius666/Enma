@@ -641,6 +641,45 @@ function teardownMockRates() {
   delete require.cache[require.resolve('../../aiTools')];
 }
 
+
+// Mocks the FX service (the eval suite never hits Banki/CBR).
+//   rates: { USD: 86 } → rateToRub per currency;  opts.fail → every lookup throws FxUnavailableError
+const { FxUnavailableError: _FxErr } = require('../../fx');
+const _FX_DEPENDENTS = ['../../tools', '../../aiTools', '../../transactions/financialTransaction'];
+function _clearFxDependents() {
+  for (const m of _FX_DEPENDENTS) {
+    try { delete require.cache[require.resolve(m)]; } catch (_) {}
+  }
+}
+function injectMockFx(rates, opts = {}) {
+  const table = { ...rates };
+  const calls = [];
+  const fxPath = require.resolve('../../fx');
+  delete require.cache[fxPath];
+  require.cache[fxPath] = {
+    id: fxPath, filename: fxPath, loaded: true,
+    exports: {
+      FxUnavailableError: _FxErr,
+      getBankRateToRub: async ({ currency, transactionType, timestamp }) => {
+        calls.push({ currency, transactionType, timestamp });
+        if (opts.fail || !table[currency]) throw new _FxErr(currency, [{ provider: 'mock', reason: 'down' }]);
+        const now = new Date().toISOString();
+        return {
+          rateToRub: table[currency], source: 'bank_average', provider: 'mock',
+          capturedAt: now, rateDate: now.slice(0, 10), sampleSize: 7,
+          method: 'median_mad_filtered', rateSide: transactionType === 'income' ? 'bank_buys' : 'bank_sells',
+        };
+      },
+    },
+  };
+  _clearFxDependents();
+  return { calls, setRate: (c, r) => { table[c] = r; } };
+}
+function teardownFx() {
+  delete require.cache[require.resolve('../../fx')];
+  _clearFxDependents();
+}
+
 const financeToolIntegrationScenarios = [
   {
     id:          'finance.tool.search_transactions.balance',
@@ -852,85 +891,6 @@ const currencyScenarios = [
   },
 
   {
-    id:          'finance.currency.screenshot_regression',
-    description: 'CRITICAL: user.currency=USD, single tx {amount:5000, currency:RUB} — balance must be the CONVERTED ~59 USD, not a raw-RUB-scale number mislabeled as USD',
-    domain:      'finance',
-    critical:    true,
-    snapshot:    {},
-    async run() {
-      const RATE = 0.0118; // 1 RUB = 0.0118 USD
-      const fixture = {
-        'users/u1': { currency: 'USD' },
-        'transactions/t1': { userId: 'u1', type: 'expense', amount: 5000, currency: 'RUB', date: `${thisMonthKey()}-05`, description: 'Ресторан' },
-      };
-      injectMockRates({ RUB: 1, USD: RATE });
-
-      const mockDb = createMockDb(fixture);
-      injectMockDb(mockDb);
-      let tgResult;
-      try {
-        const { getFinanceStats } = require('../../tools');
-        tgResult = await getFinanceStats({}, 'u1', 'USD');
-      } finally { teardownMockDb(); }
-
-      const mockDbWeb = createMockDb(fixture);
-      injectMockDbForAiTools(mockDbWeb);
-      let webResult;
-      try {
-        const { executeTool } = require('../../aiTools');
-        webResult = await executeTool('u1', 'search_transactions', {});
-      } finally { teardownMockDbForAiTools(); }
-
-      teardownMockRates();
-
-      const expected = -(5000 * RATE); // ≈ -59
-      a.numericClose(webResult.data.balance, expected, `Web AI balance must be ≈${expected} USD (converted), not -5000`, 0.01);
-      a.ok(String(tgResult.message).includes('-59') || String(tgResult.message).match(/-5[89]\.\d/),
-        `Telegram balance message must show converted ≈-59 USD, got: ${tgResult.message}`);
-      a.ok(!String(tgResult.message).includes('5000'), `Telegram balance must NOT show raw unconverted 5000, got: ${tgResult.message}`);
-
-      // The individual transaction returned to the AI must still carry ITS OWN
-      // currency (RUB) and raw amount (5000) — never silently relabeled as USD.
-      const tx = webResult.data.transactions.find(t => t.description === 'Ресторан');
-      a.ok(tx.currency === 'RUB', `transaction row must keep its own currency RUB, got: ${tx.currency}`);
-      a.numericEquals(tx.amount, 5000, `transaction row amount must stay 5000 (its own currency), got: ${tx.amount}`);
-
-      this.snapshot = { webBalance: webResult.data.balance, txCurrency: tx.currency, txAmount: tx.amount };
-    },
-  },
-
-  {
-    id:          'finance.currency.mixed_currency_aggregation',
-    description: 'user.currency=USD, transactions in RUB and USD — totals must convert-then-sum, never sum raw mixed currencies',
-    domain:      'finance',
-    critical:    true,
-    snapshot:    {},
-    async run() {
-      const rates = { RUB: 1, USD: 100 / 9000 }; // 9000 RUB == 100 USD
-      const fixture = {
-        'users/u1': { currency: 'USD' },
-        'transactions/t1': { userId: 'u1', type: 'expense', amount: 9000, currency: 'RUB', date: `${thisMonthKey()}-01`, description: 'A' },
-        'transactions/t2': { userId: 'u1', type: 'expense', amount:  100, currency: 'USD', date: `${thisMonthKey()}-02`, description: 'B' },
-      };
-      injectMockRates(rates);
-
-      const mockDbWeb = createMockDb(fixture);
-      injectMockDbForAiTools(mockDbWeb);
-      let webResult;
-      try {
-        const { executeTool } = require('../../aiTools');
-        webResult = await executeTool('u1', 'search_transactions', {});
-      } finally { teardownMockDbForAiTools(); }
-
-      teardownMockRates();
-
-      a.numericClose(webResult.data.totalExpense, 200, `mixed-currency expense total must be ≈200 USD (100+100), got: ${webResult.data.totalExpense}`, 0.01);
-
-      this.snapshot = { totalExpense: webResult.data.totalExpense };
-    },
-  },
-
-  {
     id:          'finance.currency.identity_no_fx_needed',
     description: 'RUB-only user must never depend on FX rates being available — offline FX API must not break the balance',
     domain:      'finance',
@@ -1013,6 +973,242 @@ const currencyScenarios = [
         const stored = goalsSnap.docs[0]?.data();
         a.ok(stored.currency === 'RUB', `no explicit currency named → must fall back to user.currency (RUB), got: ${stored?.currency}`);
 
+        this.snapshot = { currency: stored.currency };
+      } finally { teardownMockDb(); }
+    },
+  },
+
+  // ── Currency architecture v2: user.currency = INPUT currency, budget = RUB,
+  //    transactions carry a locked rubAmount + fx snapshot. ────────────────────
+
+  {
+    id:          'finance.currency.v2_input_currency_usd_creates_locked_snapshot',
+    description: 'SPEC: user.currency=USD, Telegram "потратил 100" (no currency named) → stored USD, rubAmount=8600 locked, fx snapshot present',
+    domain:      'finance',
+    critical:    true,
+    snapshot:    {},
+    async run() {
+      const mockDb = createMockDb({ 'users/u1': { currency: 'USD' } });
+      injectMockDb(mockDb);
+      const fx = injectMockFx({ USD: 86 });
+      try {
+        const { executeTool } = require('../../tools');
+        const result = await executeTool('create_transaction', { type: 'expense', amount: 100, description: 'Ресторан' }, 'u1', 'chat1', 'Europe/Moscow', 'USD');
+        a.ok(result.ok === true, `must succeed, got: ${JSON.stringify(result)}`);
+        const stored = (await mockDb.collection('transactions').get()).docs[0].data();
+        a.ok(stored.schemaVersion === 2, 'schemaVersion must be 2');
+        a.ok(stored.currency === 'USD' && stored.amount === 100, `stored ${stored.currency} ${stored.amount}`);
+        a.ok(stored.rubAmount === 8600, `rubAmount must be locked 8600, got: ${stored.rubAmount}`);
+        a.ok(stored.fx && stored.fx.rateToRub === 86 && stored.fx.source === 'bank_average', 'fx snapshot must be stored');
+        a.ok(fx.calls.length === 1 && fx.calls[0].transactionType === 'expense', 'exactly one FX call, expense side');
+        this.snapshot = { rubAmount: stored.rubAmount };
+      } finally { teardownFx(); teardownMockDb(); }
+    },
+  },
+
+  {
+    id:          'finance.currency.v2_rub_baseline_no_fx',
+    description: 'REGRESSION: user.currency=RUB, "ресторан 5000" → 5000 RUB, rubAmount=5000, fx=null, NO FX call (even if FX providers are down)',
+    domain:      'finance',
+    critical:    true,
+    snapshot:    {},
+    async run() {
+      const mockDb = createMockDb({ 'users/u1': { currency: 'RUB' } });
+      injectMockDb(mockDb);
+      const fx = injectMockFx({}, { fail: true });
+      try {
+        const { executeTool } = require('../../tools');
+        const result = await executeTool('create_transaction', { type: 'expense', amount: 5000, description: 'Ресторан' }, 'u1', 'chat1', 'Europe/Moscow', 'RUB');
+        a.ok(result.ok === true, `RUB must never depend on FX, got: ${JSON.stringify(result)}`);
+        const stored = (await mockDb.collection('transactions').get()).docs[0].data();
+        a.ok(stored.currency === 'RUB' && stored.amount === 5000 && stored.rubAmount === 5000 && stored.fx === null, `bad RUB doc: ${JSON.stringify(stored)}`);
+        a.ok(fx.calls.length === 0, 'RUB must not call the FX service');
+        this.snapshot = { ok: true };
+      } finally { teardownFx(); teardownMockDb(); }
+    },
+  },
+
+  {
+    id:          'finance.currency.v2_explicit_wins_over_input_currency',
+    description: 'SPEC: user.currency=USD, explicit "1000 руб" → RUB (no FX); explicit EUR/CNY get their own snapshots',
+    domain:      'finance',
+    critical:    true,
+    snapshot:    {},
+    async run() {
+      const mockDb = createMockDb({ 'users/u1': { currency: 'USD' } });
+      injectMockDb(mockDb);
+      const fx = injectMockFx({ USD: 86, EUR: 101, CNY: 12 });
+      try {
+        const { executeTool } = require('../../tools');
+        const run = (args) => executeTool('create_transaction', { type: 'expense', description: 'x', ...args }, 'u1', 'chat1', 'Europe/Moscow', 'USD');
+        await run({ amount: 1000, currency: 'RUB' });
+        await run({ amount: 100, currency: 'EUR' });
+        await run({ amount: 80, currency: 'CNY' });
+        const docs = (await mockDb.collection('transactions').get()).docs.map(d => d.data());
+        const by = (c) => docs.find(d => d.currency === c);
+        a.ok(by('RUB').rubAmount === 1000 && by('RUB').fx === null, 'explicit RUB stays RUB');
+        a.ok(by('EUR').rubAmount === 10100, `EUR rubAmount, got ${by('EUR').rubAmount}`);
+        a.ok(by('CNY').rubAmount === 960, `CNY rubAmount, got ${by('CNY').rubAmount}`);
+        a.ok(fx.calls.length === 2, 'FX only for EUR and CNY');
+        this.snapshot = { n: docs.length };
+      } finally { teardownFx(); teardownMockDb(); }
+    },
+  },
+
+  {
+    id:          'finance.currency.v2_fx_unavailable_writes_nothing',
+    description: 'SPEC: all FX providers fail → foreign transaction NOT saved (no invented rubAmount), controlled error; RUB still works',
+    domain:      'finance',
+    critical:    true,
+    snapshot:    {},
+    async run() {
+      const mockDb = createMockDb({ 'users/u1': { currency: 'USD' } });
+      injectMockDb(mockDb);
+      injectMockFx({}, { fail: true });
+      try {
+        const { executeTool } = require('../../tools');
+        const bad = await executeTool('create_transaction', { type: 'expense', amount: 50, description: 'Кофе' }, 'u1', 'chat1', 'Europe/Moscow', 'USD');
+        a.ok(bad.ok === false, `must fail cleanly, got: ${JSON.stringify(bad)}`);
+        a.ok((await mockDb.collection('transactions').get()).docs.length === 0, 'no transaction may be written');
+        const good = await executeTool('create_transaction', { type: 'expense', amount: 50, currency: 'RUB', description: 'Кофе' }, 'u1', 'chat1', 'Europe/Moscow', 'USD');
+        a.ok(good.ok === true, 'RUB still works');
+        this.snapshot = { ok: true };
+      } finally { teardownFx(); teardownMockDb(); }
+    },
+  },
+
+  {
+    id:          'finance.currency.v2_webai_same_semantics',
+    description: 'SPEC (Web AI): implicit amount → user.currency with locked rubAmount; explicit currency wins',
+    domain:      'finance',
+    critical:    true,
+    snapshot:    {},
+    async run() {
+      const mockDb = createMockDb({ 'users/u1': { currency: 'USD' } });
+      injectMockDbForAiTools(mockDb);
+      injectMockFx({ USD: 86, CNY: 12 });
+      try {
+        const { executeTool } = require('../../aiTools');
+        const r1 = await executeTool('u1', 'create_transaction', { type: 'expense', amount: 10, description: 'Кофе' });
+        a.ok(r1.success === true && r1.data.currency === 'USD' && r1.data.rubAmount === 860, `implicit → USD 860 ₽, got ${JSON.stringify(r1)}`);
+        const r2 = await executeTool('u1', 'create_transaction', { type: 'expense', amount: 80, currency: 'CNY', description: 'Такси' });
+        a.ok(r2.success === true && r2.data.currency === 'CNY' && r2.data.rubAmount === 960, `explicit CNY, got ${JSON.stringify(r2)}`);
+        const r3 = await executeTool('u1', 'create_transaction', { type: 'expense', amount: 1000, currency: 'RUB', description: 'Обед' });
+        a.ok(r3.success === true && r3.data.rubAmount === 1000, 'explicit RUB');
+        const docs = (await mockDb.collection('transactions').get()).docs.map(d => d.data());
+        a.ok(docs.every(d => d.schemaVersion === 2 && Number.isFinite(d.rubAmount)), 'all new docs are v2 with rubAmount');
+        this.snapshot = { n: docs.length };
+      } finally { teardownFx(); teardownMockDbForAiTools(); }
+    },
+  },
+
+  {
+    id:          'finance.currency.v2_idempotent_retry',
+    description: 'SPEC: retrying the same AI action (same docId) neither duplicates the document nor takes a second FX snapshot',
+    domain:      'finance',
+    critical:    true,
+    snapshot:    {},
+    async run() {
+      const mockDb = createMockDb({ 'users/u1': { currency: 'USD' } });
+      injectMockDbForAiTools(mockDb);
+      const fx = injectMockFx({ USD: 86 });
+      try {
+        const { executeTool } = require('../../aiTools');
+        const args = { type: 'expense', amount: 100, description: 'Кофе' };
+        const first = await executeTool('u1', 'create_transaction', args, { docId: 'tx-fixed-1' });
+        fx.setRate('USD', 95);
+        const retry = await executeTool('u1', 'create_transaction', args, { docId: 'tx-fixed-1' });
+        a.ok(first.success && retry.success, 'both attempts succeed');
+        const docs = (await mockDb.collection('transactions').get()).docs;
+        a.ok(docs.length === 1, `exactly one document, got ${docs.length}`);
+        a.ok(docs[0].data().rubAmount === 8600, 'first snapshot stays canonical (8600, not 9500)');
+        a.ok(fx.calls.length === 1, 'retry must not call FX again');
+        this.snapshot = { n: 1 };
+      } finally { teardownFx(); teardownMockDbForAiTools(); }
+    },
+  },
+
+  {
+    id:          'finance.currency.v2_budget_sums_locked_rub',
+    description: 'SPEC: mixed v2 budget — 5000 RUB + $100 (8600) + €100 (10100) + ¥500 (6000) → expenses 29 700 ₽ in both channels; runtime FX is ignored',
+    domain:      'finance',
+    critical:    true,
+    snapshot:    {},
+    async run() {
+      const m = `${thisMonthKey()}`;
+      const v2 = (id, currency, amount, rubAmount) => [`transactions/${id}`, { userId: 'u1', schemaVersion: 2, type: 'expense', amount, currency, rubAmount, fx: currency === 'RUB' ? null : { rateToRub: rubAmount / amount }, date: `${m}-05`, description: id }];
+      const fixture = { 'users/u1': { currency: 'USD' }, ...Object.fromEntries([v2('a', 'RUB', 5000, 5000), v2('b', 'USD', 100, 8600), v2('c', 'EUR', 100, 10100), v2('d', 'CNY', 500, 6000)]) };
+      injectMockRates({ RUB: 1, USD: 1 / 1000, EUR: 1 / 1000, CNY: 1 / 1000 }); // must be ignored
+
+      const mockDbWeb = createMockDb(fixture);
+      injectMockDbForAiTools(mockDbWeb);
+      let web;
+      try {
+        const { executeTool } = require('../../aiTools');
+        web = await executeTool('u1', 'search_transactions', {});
+      } finally { teardownMockDbForAiTools(); }
+
+      const mockDbTg = createMockDb(fixture);
+      injectMockDb(mockDbTg);
+      let tg;
+      try {
+        const { getFinanceStats } = require('../../tools');
+        tg = await getFinanceStats({}, 'u1', 'RUB');
+      } finally { teardownMockDb(); }
+      teardownMockRates();
+
+      a.numericEquals(web.data.totalExpense, 29700, `Web AI expenses, got ${web.data.totalExpense}`);
+      a.ok(String(tg.message).replace(/[\s  ]/g, '').includes('29700'), `Telegram stats must show 29700, got: ${tg.message}`);
+      this.snapshot = { totalExpense: web.data.totalExpense };
+    },
+  },
+
+  {
+    id:          'finance.currency.v2_history_immutable_across_switches',
+    description: 'SPEC: RUB→USD→CNY→RUB user.currency switches never rewrite historical transactions',
+    domain:      'finance',
+    critical:    true,
+    snapshot:    {},
+    async run() {
+      const fixture = {
+        'users/u1': { currency: 'RUB' },
+        'transactions/t1': { userId: 'u1', schemaVersion: 2, type: 'expense', amount: 5000, currency: 'RUB', rubAmount: 5000, fx: null, description: 'Ресторан' },
+      };
+      const mockDb = createMockDb(fixture);
+      injectMockDb(mockDb);
+      injectMockFx({ USD: 86, CNY: 12 });
+      try {
+        const before = JSON.stringify((await mockDb.collection('transactions').doc('t1').get()).data());
+        const { executeTool } = require('../../tools');
+        for (const cur of ['USD', 'CNY', 'RUB']) {
+          await mockDb.collection('users').doc('u1').set({ currency: cur }, { merge: true });
+          await executeTool('create_transaction', { type: 'expense', amount: 10, description: `tx ${cur}` }, 'u1', 'chat1', 'Europe/Moscow', cur);
+        }
+        const after = JSON.stringify((await mockDb.collection('transactions').doc('t1').get()).data());
+        a.ok(before === after, 'historical transaction must be byte-identical');
+        const all = (await mockDb.collection('transactions').get()).docs.map(d => d.data());
+        a.ok(all.length === 4, `4 docs expected, got ${all.length}`);
+        a.ok(['USD', 'CNY', 'RUB'].every((c) => all.some(d => d.currency === c && d.description === `tx ${c}`)), 'each new tx uses the input currency at its time');
+        this.snapshot = { unchanged: true };
+      } finally { teardownFx(); teardownMockDb(); }
+    },
+  },
+
+  {
+    id:          'finance.currency.goal_uses_user_currency_when_implicit',
+    description: 'SPEC: user.currency=USD, "Хочу накопить 500" (implicit) → goal.currency=USD',
+    domain:      'finance',
+    critical:    false,
+    snapshot:    {},
+    async run() {
+      const mockDb = createMockDb({ 'users/u1': { currency: 'USD' } });
+      injectMockDb(mockDb);
+      try {
+        const { executeTool } = require('../../tools');
+        const r = await executeTool('create_goal', { title: 'Отпуск', targetAmount: 500 }, 'u1', 'chat1', 'Europe/Moscow', 'USD');
+        a.ok(r.ok === true, `create_goal must succeed, got: ${JSON.stringify(r)}`);
+        const stored = (await mockDb.collection('goals').get()).docs[0].data();
+        a.ok(stored.currency === 'USD', `implicit goal currency → user.currency, got ${stored.currency}`);
         this.snapshot = { currency: stored.currency };
       } finally { teardownMockDb(); }
     },

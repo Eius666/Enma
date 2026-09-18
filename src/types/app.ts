@@ -84,6 +84,21 @@ export type Transaction = {
   createdAt?: { toMillis?: () => number; toDate?: () => Date } | number | null;
   // Bank / payment method (e.g. "Тинькофф", "Наличные"). Optional.
   bank?: string;
+  // schemaVersion 2: `rubAmount` is the ruble value LOCKED at creation time
+  // and `fx` the snapshot it was computed from (null for RUB). The client
+  // never writes these — the server decides them.
+  schemaVersion?: number;
+  rubAmount?: number;
+  fx?: {
+    rateToRub: number;
+    source: 'bank_average' | 'official_fallback' | 'market_fallback' | string;
+    provider?: string;
+    capturedAt?: string;
+    method?: string;
+    sampleSize?: number;
+    rateSide?: string;
+    rateDate?: string;
+  } | null;
 };
 
 // Client-side habit shape: history keyed by YYYY-MM-DD date strings.

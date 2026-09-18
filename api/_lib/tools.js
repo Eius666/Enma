@@ -6,12 +6,17 @@ const tasksRepo     = require('./repositories/tasks');
 const remindersRepo = require('./repositories/reminders');
 const { getExchangeRates } = require('./exchangeRates');
 const { normalizeTransactionsCurrency, needsFx } = require('./finance/normalizeCurrency');
+const { HOME_BUDGET_CURRENCY } = require('./config');
+const { hasLockedRub } = require('./finance/lockedAmount');
+const { resolveTransactionCurrency } = require('./finance/resolveLegacyCurrency');
+const { createFinancialTransaction, TransactionValidationError } = require('./transactions/financialTransaction');
+const { FxUnavailableError } = require('./fx');
 
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 const DEFAULT_TZ = 'Europe/Warsaw';
 
-const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', RUB: '₽', BYN: 'Br', CNY: '¥' };
+const CURRENCY_SYMBOLS = { USD: '$', EUR: '€', RUB: '₽', BYN: 'Br', CNY: '¥', GBP: '£', KZT: '₸', TRY: '₺', AED: 'AED', JPY: '¥', CHF: 'CHF' };
 
 // ── Timezone helpers ──────────────────────────────────────────────────────────
 
@@ -39,6 +44,9 @@ async function getUserTimezone(userId) {
   } catch { return DEFAULT_TZ; }
 }
 
+// The user's CURRENT INPUT currency (user.currency): what a new operation is
+// recorded in when the user doesn't name a currency. It is NOT the budget
+// currency — budget/analytics are always HOME_BUDGET_CURRENCY (RUB).
 async function getUserCurrency(userId) {
   try {
     const doc = await db.collection('users').doc(userId).get();
@@ -350,6 +358,7 @@ const TOOL_DEFINITIONS = [
         type: 'object',
         properties: {
           amount:      { type: 'number', description: 'Сумма' },
+          currency:    { type: 'string', enum: ['RUB', 'USD', 'EUR', 'CNY', 'BYN', 'GBP', 'KZT', 'TRY', 'AED', 'JPY', 'CHF'], description: 'Валюта операции, ТОЛЬКО если пользователь явно её назвал ("$5000", "80 юаней" → CNY, "1000 руб" → RUB). Если не названа — не указывай: сервер подставит текущую валюту ввода пользователя.' },
           description: { type: 'string', description: 'Описание' },
           type:        { type: 'string', enum: ['expense', 'income'] },
           category:    { type: 'string', description: 'Категория (еда, транспорт, зарплата, etc.)' },
@@ -781,28 +790,34 @@ function autoCategorize(description) {
   return 'other';
 }
 
-async function createTransaction(args, userId, chatId, currency = 'RUB') {
+async function createTransaction(args, userId, chatId, userCurrency) {
   const { amount, description, type, bank, goalId } = args;
   const category = args.category || autoCategorize(description);
-  const id = createId();
 
-  const txData = {
-    userId,
-    chatId,
-    type,
-    amount,
-    currency,
-    description,
-    categoryId: `cat-${category}`,
-    date:       new Date().toISOString(),
-    source:     'telegram-bot',
-    createdAt:  admin.firestore.FieldValue.serverTimestamp(),
-  };
-  if (bank)   txData.bank   = bank;
-  if (goalId) txData.goalId = goalId;
+  let created;
+  try {
+    // Money fields (currency precedence, rubAmount, FX snapshot) are decided
+    // by the shared service — never here.
+    created = await createFinancialTransaction({
+      uid: userId,
+      type, amount,
+      currency: args.currency,
+      userCurrency,
+      description,
+      categoryId: `cat-${category}`,
+      bank, goalId,
+      source: 'telegram-bot',
+      extra: { chatId },
+    });
+  } catch (err) {
+    if (err instanceof FxUnavailableError) {
+      return { ok: false, error: `Не удалось получить надёжный курс ${args.currency || userCurrency} — операция не сохранена. Попробуйте позже или укажите сумму в рублях.` };
+    }
+    if (err instanceof TransactionValidationError) return { ok: false, error: err.message };
+    throw err;
+  }
 
-  await db.collection('transactions').doc(id).set(txData);
-
+  const tx = created.transaction;
   if (bank) {
     await db.collection('users').doc(userId).update({
       banks: admin.firestore.FieldValue.arrayUnion(bank),
@@ -814,7 +829,8 @@ async function createTransaction(args, userId, chatId, currency = 'RUB') {
     const goalSnap = await goalRef.get().catch(() => null);
     if (goalSnap?.exists && goalSnap.data().userId === userId) {
       const current = goalSnap.data().currentAmount || 0;
-      const delta   = type === 'income' ? amount : -amount;
+      // Goals are tracked in the budget currency (RUB)
+      const delta   = type === 'income' ? tx.rubAmount : -tx.rubAmount;
       await goalRef.update({
         currentAmount: Math.max(0, current + delta),
         updatedAt:     admin.firestore.FieldValue.serverTimestamp(),
@@ -824,9 +840,12 @@ async function createTransaction(args, userId, chatId, currency = 'RUB') {
 
   const emoji    = type === 'income' ? '💰' : '💸';
   const verb     = type === 'income' ? 'Доход' : 'Расход';
-  const sym      = CURRENCY_SYMBOLS[currency] || currency;
+  const sym      = CURRENCY_SYMBOLS[tx.currency] || tx.currency;
   const bankStr  = bank ? ` [${bank}]` : '';
-  return { ok: true, message: `${emoji} ${verb}: ${description} — ${amount} ${sym} [${category}]${bankStr}` };
+  const approx   = tx.currency !== HOME_BUDGET_CURRENCY
+    ? ` (≈ ${Math.round(tx.rubAmount).toLocaleString('ru-RU')} ₽${tx.fx && tx.fx.source !== 'bank_average' ? ', оценочный курс' : ''})`
+    : '';
+  return { ok: true, message: `${emoji} ${verb}: ${description} — ${tx.amount} ${sym}${approx} [${category}]${bankStr}` };
 }
 
 async function queryReminders(args, userId, timezone) {
@@ -880,7 +899,7 @@ async function queryTasks(args, userId) {
   return { ok: true, message: `📋 Задачи:\n${lines.join('\n')}` };
 }
 
-async function queryTransactions(args, userId, currency = 'RUB') {
+async function queryTransactions(args, userId) {
   const { type = 'all', limit = 10, bank } = args || {};
 
   let txs;
@@ -896,11 +915,16 @@ async function queryTransactions(args, userId, currency = 'RUB') {
 
   if (!txs.length) return { ok: true, message: 'Нет транзакций.' };
 
-  const sym   = CURRENCY_SYMBOLS[currency] || currency;
   const lines = txs.map(t => {
     const emoji     = t.type === 'income' ? '💰' : '💸';
     const bankLabel = t.bank ? ` [${t.bank}]` : '';
-    return `${emoji} ${t.description} — ${t.amount} ${sym}${bankLabel}`;
+    // v2 rows show their real currency (+ locked ₽ value); legacy rows keep
+    // the resolver-derived currency.
+    const cur = hasLockedRub(t) ? t.currency : (resolveTransactionCurrency(t).currency || HOME_BUDGET_CURRENCY);
+    const sym = CURRENCY_SYMBOLS[cur] || cur;
+    const rub = hasLockedRub(t) && cur !== HOME_BUDGET_CURRENCY
+      ? ` (≈ ${Math.round(t.rubAmount).toLocaleString('ru-RU')} ₽)` : '';
+    return `${emoji} ${t.description} — ${t.amount} ${sym}${rub}${bankLabel}`;
   });
   return { ok: true, message: `💳 История:\n${lines.join('\n')}` };
 }
@@ -1405,17 +1429,20 @@ async function deleteGoal(args, userId) {
 
 // ── Dispatcher ────────────────────────────────────────────────────────────────
 
+// `currency` = user.currency = the current INPUT currency. Reads/analytics are
+// always in HOME_BUDGET_CURRENCY (RUB) regardless of it.
 async function executeTool(name, args, userId, chatId, timezone, currency = 'RUB') {
   switch (name) {
     case 'create_reminder':    return createReminder(args, userId, chatId, timezone);
     case 'create_task':        return createTask(args, userId, chatId, timezone);
     case 'create_transaction': return createTransaction(args, userId, chatId, currency);
+    case 'create_goal':        return createGoal(args, userId, currency);
     case 'query_reminders':    return queryReminders(args, userId, timezone);
     case 'query_tasks':        return queryTasks(args, userId);
-    case 'query_transactions': return queryTransactions(args, userId, currency);
+    case 'query_transactions': return queryTransactions(args, userId);
     case 'set_timezone':       return setTimezone(args, userId);
     case 'generate_image':     return generateImage(args, chatId);
-    case 'get_finance_stats':  return getFinanceStats(args, userId, currency);
+    case 'get_finance_stats':  return getFinanceStats(args, userId, HOME_BUDGET_CURRENCY);
     case 'send_message':        return sendBotMessage(args);
     case 'forward_message':     return forwardBotMessage(args, chatId);
     case 'create_automation':   return createAutomation(args, userId, chatId, timezone);
@@ -1424,7 +1451,6 @@ async function executeTool(name, args, userId, chatId, timezone, currency = 'RUB
     case 'pause_automation':    return pauseAutomation(args, userId, timezone);
     case 'set_banks':           return setBanks(args, userId);
     case 'get_banks':           return getBanks(userId);
-    case 'create_goal':         return createGoal(args, userId, currency);
     case 'deposit_to_goal':     return depositToGoal(args, userId, chatId, currency);
     case 'withdraw_from_goal':  return withdrawFromGoal(args, userId, chatId, currency);
     case 'list_goals':          return listGoals(userId, currency);

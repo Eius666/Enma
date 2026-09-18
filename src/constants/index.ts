@@ -4,6 +4,9 @@ import type { Currency } from '../types';
 // Currency
 // ---------------------------------------------------------------------------
 
+// Budget / analytics currency is FIXED. `user.currency` (the selector in
+// Settings) is only the currency NEW operations are entered in.
+export const HOME_BUDGET_CURRENCY: Currency = 'RUB';
 export const BASE_CURRENCY: Currency = 'RUB';
 export const DEFAULT_CURRENCY: Currency = 'RUB';
 export const SUPPORTED_CURRENCIES: Currency[] = ['RUB', 'USD', 'EUR', 'BYN', 'CNY'];

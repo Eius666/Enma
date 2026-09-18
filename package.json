@@ -31,7 +31,7 @@
     "dev": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "test:unit": "node --test api/_lib/__tests__/conversationState.test.js api/_lib/__tests__/skillRouter.test.js api/_lib/__tests__/insights.test.js api/_lib/finance/__tests__/engine.test.js api/_lib/finance/__tests__/normalizeCurrency.test.js api/_lib/finance/__tests__/engineCurrency.test.js api/_lib/finance/__tests__/resolveLegacyCurrency.test.js api/_lib/finance/__tests__/extractMoneyAmount.test.js api/_lib/finance/__tests__/scenarioModification.test.js api/_lib/insights/__tests__/detectorsCurrency.test.js api/_lib/insights/__tests__/cashGapThreshold.test.js",
+    "test:unit": "node --test api/_lib/__tests__/conversationState.test.js api/_lib/__tests__/skillRouter.test.js api/_lib/__tests__/insights.test.js api/_lib/finance/__tests__/engine.test.js api/_lib/finance/__tests__/normalizeCurrency.test.js api/_lib/finance/__tests__/engineCurrency.test.js api/_lib/finance/__tests__/resolveLegacyCurrency.test.js api/_lib/finance/__tests__/extractMoneyAmount.test.js api/_lib/finance/__tests__/scenarioModification.test.js api/_lib/insights/__tests__/detectorsCurrency.test.js api/_lib/insights/__tests__/cashGapThreshold.test.js api/_lib/finance/__tests__/lockedAmount.test.js api/_lib/fx/__tests__/fx.test.js api/_lib/transactions/__tests__/financialTransaction.test.js api/_lib/insights/__tests__/proactiveRub.test.js",
     "test:brain": "node api/_lib/evals/runner.js",
     "test:brain:finance": "node api/_lib/evals/runner.js --domain finance",
     "test:brain:security": "node api/_lib/evals/runner.js --domain security",

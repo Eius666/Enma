@@ -2,7 +2,10 @@
 
 const { db, admin, getBucket } = require('../_lib/firebaseAdmin');
 const { rateLimit }  = require('../_lib/rateLimit');
-const { TOOL_DEFINITIONS, executeTool } = require('../_lib/aiTools');
+const { TOOL_DEFINITIONS, executeTool, createEntityInFirestore } = require('../_lib/aiTools');
+const { HOME_BUDGET_CURRENCY } = require('../_lib/config');
+const { createFinancialTransaction, buildTransactionUpdate, TransactionValidationError } = require('../_lib/transactions/financialTransaction');
+const { FxUnavailableError } = require('../_lib/fx');
 const { routeByRules, getToolsForDomains } = require('../_lib/contextRouter');
 const { routeSkill, resolveSkills, mergeContextDomains, getToolsForSkills, composeSystemPrompt } = require('../_lib/skillRouter');
 const {
@@ -548,14 +551,16 @@ async function _buildFinanceSection(userId, today, monthKey, currency = 'RUB') {
 
       if (recentTx.length < 5) {
         const sign = tx.type === 'income' ? '+' : '-';
-        // Each transaction keeps its OWN real currency label — it must never
-        // be implied to be in the user's display currency without conversion.
-        recentTx.push(`${sign}${tx.originalAmount} ${tx.originalCurrency} (${tx.description || 'транзакция'}) ${(tx.date || '').slice(0, 10)}`);
+        // Each transaction keeps its OWN real currency label; foreign v2 rows
+        // also show their locked ruble value.
+        const rubNote = (tx.currencyConfidence === 'locked' && tx.originalCurrency !== currency)
+          ? ` ≈ ${Math.round(tx.amount)} ${currency}` : '';
+        recentTx.push(`${sign}${tx.originalAmount} ${tx.originalCurrency}${rubNote} (${tx.description || 'транзакция'}) ${(tx.date || '').slice(0, 10)}`);
       }
     }
 
     const lines = [
-      `Валюта пользователя: ${currency}`,
+      `Валюта бюджета: ${currency}`,
       `Общий баланс (все время): ${currentBalance >= 0 ? '+' : ''}${currentBalance.toFixed(0)} ${currency}`,
       `Текущий месяц (${monthKey}):`,
       `  Доходы: ${monthIncome.toFixed(0)} ${currency}`,
@@ -713,7 +718,7 @@ async function buildUserContext(userId, sections) {
     resolvedCurrency = ud.currency || 'RUB';
     const banks    = Array.isArray(ud.banks) ? ud.banks : [];
 
-    const profileLines = [`Валюта: ${resolvedCurrency}`, `Часовой пояс: ${timezone}`];
+    const profileLines = [`Валюта бюджета: ${HOME_BUDGET_CURRENCY}`, `Текущая валюта ввода новых операций: ${resolvedCurrency}`, `Часовой пояс: ${timezone}`];
     if (banks.length) profileLines.push(`Банки: ${banks.join(', ')}`);
     profileText = `[ПРОФИЛЬ]\n${profileLines.join('\n')}`;
     console.log('[FINANCE_CURRENCY] resolvedCurrency=%s source=%s', resolvedCurrency, ud.currency ? 'user_profile' : 'default');
@@ -723,7 +728,7 @@ async function buildUserContext(userId, sections) {
 
   // Launch all requested section builders in parallel
   const loaders = [];
-  if (domainSet.has('finance'))   loaders.push(_buildFinanceSection(userId, today, monthKey, resolvedCurrency));
+  if (domainSet.has('finance'))   loaders.push(_buildFinanceSection(userId, today, monthKey, HOME_BUDGET_CURRENCY));
   if (domainSet.has('tasks'))     loaders.push(_buildTasksSection(userId, today));
   if (domainSet.has('habits'))    loaders.push(_buildHabitsSection(userId, today));
   if (domainSet.has('reminders')) loaders.push(_buildRemindersSection(userId, timezone));
@@ -906,7 +911,9 @@ async function handleChat(req, res) {
         const userSnap  = await db.collection('users').doc(verifiedUid).get();
         const ud        = userSnap.exists ? userSnap.data() : {};
         const timezone  = ud.timezone || 'Europe/Moscow';
-        const currency  = ud.currency || 'RUB';
+        // Budget/analytics are always RUB; user.currency is only the INPUT
+        // currency used to interpret bare amounts in affordability/what-if text.
+        const inputCurrency = ud.currency || 'RUB';
 
         const rawFinance = await loadRawFinanceData(verifiedUid);
         const skillIds   = activeFinanceSkills.map(s => s.id);
@@ -915,7 +922,8 @@ async function handleChat(req, res) {
           skillIds,
           financeData: rawFinance,
           timezone,
-          currency,
+          inputCurrency,
+          currency: HOME_BUDGET_CURRENCY,
           message,
           // Follow-up what-if ("А если на $300?") reuses the previous turn's
           // scenario type/direction/currency, replacing only the amount.
@@ -1323,6 +1331,49 @@ async function handleEntityCreate(req, res) {
     return res.status(400).json({ error: `Unknown entityType: ${entityType}` });
   }
 
+  // Transactions: money fields are decided server-side by the shared service
+  // (client-sent rubAmount / fx / schemaVersion are ignored — never trusted).
+  if (entityType === 'transaction') {
+    try {
+      const created = await createFinancialTransaction({
+        uid: userId,
+        docId: docId ? String(docId) : undefined,
+        type: data.type,
+        amount: data.amount,
+        currency: data.currency,
+        description: data.description,
+        date: typeof data.date === 'string' ? data.date : undefined,
+        categoryId: data.categoryId,
+        category: data.category,
+        bank: data.bank,
+        goalId: data.goalId,
+        source: 'web-app',
+      }, {
+        persist: (uid, doc, id) => createEntityInFirestore(uid, 'transaction', doc, id),
+      });
+      if (!created.ok) {
+        return res.status(429).json({
+          error: 'Limit exceeded', code: 'free_limit',
+          limit: created.limit, current: created.current,
+        });
+      }
+      const t = created.transaction;
+      return res.status(200).json({
+        ok: true, id: created.id,
+        transaction: { amount: t.amount, currency: t.currency, rubAmount: t.rubAmount, fx: t.fx, schemaVersion: t.schemaVersion },
+      });
+    } catch (err) {
+      if (err instanceof FxUnavailableError) {
+        return res.status(503).json({ error: 'FX unavailable', code: 'fx_unavailable', currency: err.currency });
+      }
+      if (err instanceof TransactionValidationError) {
+        return res.status(400).json({ error: err.message, code: err.code });
+      }
+      console.error('[ai/entityCreate] transaction error:', err.message);
+      return res.status(500).json({ error: 'Failed to create entity' });
+    }
+  }
+
   const cfg       = FREE_ENTITY_CONFIG[entityType];
   const entityRef = docId
     ? db.collection(collection).doc(String(docId))
@@ -1413,6 +1464,47 @@ async function handleEntityCreate(req, res) {
   } catch (err) {
     console.error('[ai/entityCreate] error:', err.message);
     return res.status(500).json({ error: 'Failed to create entity' });
+  }
+}
+
+// Transaction edit — the only path that may change money fields of an
+// existing transaction. Semantics live in buildTransactionUpdate.
+async function handleTransactionUpdate(req, res) {
+  const verifiedUid = await requireAuth(req, res);
+  if (!verifiedUid) return;
+
+  const { id, patch } = req.body ?? {};
+  if (!id || typeof id !== 'string' || !patch || typeof patch !== 'object') {
+    return res.status(400).json({ error: 'Missing id or patch' });
+  }
+
+  try {
+    const ref  = db.collection('transactions').doc(id);
+    const snap = await ref.get();
+    if (!snap.exists || snap.data().userId !== verifiedUid) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+    const userSnap = await db.collection('users').doc(verifiedUid).get();
+    const userCurrency = userSnap.exists ? userSnap.data().currency : null;
+
+    const updates = await buildTransactionUpdate({ existing: snap.data(), patch, userCurrency });
+    if (Object.keys(updates).length) {
+      await ref.update({ ...updates, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    }
+    const merged = { ...snap.data(), ...updates };
+    return res.status(200).json({
+      ok: true, id,
+      transaction: { amount: merged.amount, currency: merged.currency, rubAmount: merged.rubAmount, fx: merged.fx || null, schemaVersion: merged.schemaVersion },
+    });
+  } catch (err) {
+    if (err instanceof FxUnavailableError) {
+      return res.status(503).json({ error: 'FX unavailable', code: 'fx_unavailable', currency: err.currency });
+    }
+    if (err instanceof TransactionValidationError) {
+      return res.status(400).json({ error: err.message, code: err.code });
+    }
+    console.error('[ai/transactionUpdate] error:', err.message);
+    return res.status(500).json({ error: 'Failed to update transaction' });
   }
 }
 
@@ -2304,6 +2396,7 @@ module.exports = async (req, res) => {
       case 'report':           return await handleReport(req, res);
       case 'categorize':       return await handleCategorize(req, res);
       case 'entityCreate':     return await handleEntityCreate(req, res);
+      case 'transactionUpdate': return await handleTransactionUpdate(req, res);
       case 'referralValidate':      return await handleReferralValidate(req, res);
       case 'referralInfo':          return await handleReferralInfo(req, res);
       case 'referralPayout':        return await handleReferralPayout(req, res);

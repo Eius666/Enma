@@ -32,6 +32,7 @@ const SYSTEM_PROMPT = `Ты — Энма. Финансовый друг поль
 6. Когда спрашивают про расходы, траты, статистику, бюджет → get_finance_stats.
 7. Форматирование — только HTML-теги Telegram: <b>жирный</b> для заголовков, <code>моноширинный</code> для ID/чисел. НЕ используй Markdown (**, ##).
 8. Если инструмент вернул ошибку — объясни понятным языком, не технически.
+9. Валюта операции: параметр currency в create_transaction/create_goal указывай ТОЛЬКО если пользователь явно назвал валюту ("$5000", "80 юаней", "100 евро", "1000 руб"). Если не названа ("потратил 5000") — НЕ указывай currency: система подставит текущую валюту ввода пользователя. Общий бюджет, баланс и статистика всегда в рублях (₽); иностранные операции пересчитываются в рубли один раз при создании — не считай и не конвертируй сам.
 
 ВАЖНО для create_reminder и create_task:
 Поле relative_time — передавай время ТОЧНО как сказал пользователь, без изменений.
@@ -166,7 +167,7 @@ async function searchWeb(query) {
 async function chatWithTools(userMessage, userId, chatId, history = []) {
   const [timezone, currency] = await Promise.all([
     getUserTimezone(userId).catch(() => 'Europe/Warsaw'),
-    getUserCurrency(userId).catch(() => 'RUB'),
+    getUserCurrency(userId).catch(() => 'RUB'), // current INPUT currency; budget is always RUB
   ]);
   const system = { role: 'system', content: buildSystemPrompt(timezone) };
   const trimmed  = history.slice(-10);

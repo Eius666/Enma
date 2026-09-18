@@ -17,6 +17,8 @@
 // capturing groups (the digits) below, and a capturing group here would
 // shift those groups' indices and silently break mBefore[1]/mAfter[1].
 const CURRENCY_PATTERNS = [
+  // BYN first: "белорусских рублей" must not be read as RUB
+  { currency: 'BYN', re: /(?:\bBYN\b|белорусск\S*\s+руб\S*)/i },
   // RUB: ₽, руб/рублей/рубля/рубль, RUB
   { currency: 'RUB', re: /(?:руб(?:лей|ля|ь)?\.?|₽|\bRUB\b)/i },
   // USD: $, доллар(ов), USD — $ as a character class so .source round-trips
@@ -25,6 +27,15 @@ const CURRENCY_PATTERNS = [
   { currency: 'USD', re: /(?:долларов|доллара|доллар|[$]|\bUSD\b)/i },
   // EUR: €, евро, EUR
   { currency: 'EUR', re: /(?:евро|€|\bEUR\b)/i },
+  // CNY: юань/юаней, ¥, CNY, RMB
+  { currency: 'CNY', re: /(?:юан(?:ь|я|ей|ями)?|¥|\bCNY\b|\bRMB\b)/i },
+  // Other currencies — by ISO code (plus a few unambiguous symbols/words)
+  { currency: 'GBP', re: /(?:фунт(?:ов|а)?\s+стерлингов|£|\bGBP\b)/i },
+  { currency: 'KZT', re: /(?:тенге|₸|\bKZT\b)/i },
+  { currency: 'TRY', re: /(?:турецк\S*\s+лир\S*|₺|\bTRY\b)/i },
+  { currency: 'AED', re: /(?:дирхам\S*|\bAED\b)/i },
+  { currency: 'JPY', re: /(?:\bJPY\b|иен\S*)/i },
+  { currency: 'CHF', re: /(?:швейцарск\S*\s+франк\S*|\bCHF\b)/i },
 ];
 
 // Matches "<number><optional space><currency token>" OR "<currency symbol><number>"

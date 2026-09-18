@@ -686,7 +686,7 @@ module.exports = async (req, res) => {
         if (!result.ok) {
           await sendMessage(token, chatId, '📊 Не удалось загрузить статистику. Попробуй чуть позже.');
         } else {
-          const sym  = { USD: '$', EUR: '€', RUB: '₽', BYN: 'Br', CNY: '¥' }[cur] || cur;
+          const sym  = '₽'; // budget is always RUB
           const inc  = result.income  ?? 0;
           const exp  = result.expenses ?? 0;
           const bal  = inc - exp;
@@ -726,7 +726,11 @@ module.exports = async (req, res) => {
             const cat  = t.category || t.categoryId || '';
             const bank = t.bank ? ` · ${t.bank}` : '';
             const desc = t.description || cat || '—';
-            return `${date} ${sign}${t.amount} ${sym}  ${desc}${bank}`;
+            const SYM  = { USD: '$', EUR: '€', RUB: '₽', BYN: 'Br', CNY: '¥' };
+            const v2   = t.schemaVersion === 2 && Number.isFinite(t.rubAmount);
+            const tsym = v2 ? (SYM[t.currency] || t.currency) : sym;
+            const rub  = v2 && t.currency !== 'RUB' ? ` ≈${Math.round(t.rubAmount)} ₽` : '';
+            return `${date} ${sign}${t.amount} ${tsym}${rub}  ${desc}${bank}`;
           });
           await sendMessage(token, chatId,
             `<b>Последние ${lines.length} транзакций:</b>\n\n<code>${lines.join('\n')}</code>`

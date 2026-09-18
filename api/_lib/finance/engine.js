@@ -12,6 +12,7 @@ const { calculateScenario }      = require('./scenarios');
 const { round, ROUNDING }        = require('./constants');
 const { normalizeTransactionsCurrency, needsFx, normalizeGoalsCurrency, goalsNeedFx } = require('./normalizeCurrency');
 const { getExchangeRates }       = require('../exchangeRates');
+const { HOME_BUDGET_CURRENCY }   = require('../config');
 const { extractMoneyAmount }     = require('./extractMoneyAmount');
 const { parseScenarioModification } = require('./scenarioModification');
 const { convertCurrency }        = require('../convertCurrency');
@@ -36,7 +37,7 @@ const SKILL_CALCULATIONS = {
 
 // ── Runner ────────────────────────────────────────────────────────────────────
 
-function runCalc(name, { transactions, goals, timezone, message, currency, rates, scenarioModification }) {
+function runCalc(name, { transactions, goals, timezone, message, currency, inputCurrency, rates, scenarioModification }) {
   switch (name) {
     case 'metrics':      return calculateMetrics({ transactions, timezone });
     case 'monthReview':  return calculateMonthReview({ transactions, timezone });
@@ -51,7 +52,9 @@ function runCalc(name, { transactions, goals, timezone, message, currency, rates
 
       // Conversion happens BEFORE scenario arithmetic, once, here — never
       // treat "500 USD" as "500 RUB" just because no rate was available.
-      const modCurrency = scenarioModification.currency ?? currency;
+      // An implicit (no currency named) modification resolves against the
+      // user's current input currency (user.currency), like a bare "5000".
+      const modCurrency = scenarioModification.currency ?? inputCurrency;
       let delta;
       if (modCurrency === currency) {
         delta = scenarioModification.delta;
@@ -79,19 +82,20 @@ function runCalc(name, { transactions, goals, timezone, message, currency, rates
       return calculateGoalPlan({ goals, transactions, timezone });
     }
     case 'affordability': {
-      // "Могу купить за 5000 USD?" must be parsed as $5000, not 5000 of the
-      // calculation currency — explicit currency in the message always wins
-      // over the implicit calculation-currency default.
-      const parsed = extractMoneyAmount(message, currency);
+      // "Могу купить за 5000 USD?" must be parsed as $5000. When no currency
+      // is named ("Могу купить за 5000?"), the amount is assumed to be in
+      // the user's current input currency (user.currency), like a bare "5000".
+      const parsed = extractMoneyAmount(message, inputCurrency);
       let purchaseAmount = null;
       if (parsed) {
-        if (!parsed.explicitCurrency || parsed.currency === currency) {
+        if (parsed.currency === currency) {
           purchaseAmount = parsed.amount;
         } else if (rates) {
           purchaseAmount = convertCurrency(parsed.amount, parsed.currency, currency, rates);
         }
-        // else: explicit foreign currency named but FX unavailable — leave
-        // purchaseAmount null rather than silently treat it as `currency`.
+        // else: needs FX to reach the reporting currency but it's
+        // unavailable — leave purchaseAmount null rather than silently
+        // treat it as already being in `currency`.
       }
       return calculateAffordability({ purchaseAmount, transactions, goals, timezone });
     }
@@ -106,7 +110,7 @@ function runCalc(name, { transactions, goals, timezone, message, currency, rates
 
 function fmt(value, currency) {
   if (value === null || value === undefined) return '—';
-  const sym = { RUB: '₽', USD: '$', EUR: '€' }[currency] || currency || '₽';
+  const sym = { RUB: '₽', USD: '$', EUR: '€', CNY: '¥' }[currency] || currency || '₽';
   const n = Number(value);
   if (isNaN(n)) return String(value);
   const abs = Math.abs(n);
@@ -325,15 +329,20 @@ function serializeResults(calcs, currency, skillIds) {
 //
 // financeData = { transactions: [], goals: [] }
 
-async function runFinanceEngine({ skillIds, financeData, timezone, currency, message, previousScenarioModification }) {
+async function runFinanceEngine({ skillIds, financeData, timezone, currency, inputCurrency, message, previousScenarioModification }) {
   const { transactions: rawTransactions = [], goals: rawGoals = [] } = financeData || {};
 
   if (!Array.isArray(rawTransactions) || rawTransactions.length === 0) {
     return '[CALCULATED FINANCIAL METRICS]\nДанные транзакций недоступны для расчёта.\n';
   }
 
-  // Explicit calculation currency — never an implicit/hidden global default.
-  const baseCurrency = currency || 'RUB';
+  // Budget/analytics currency is FIXED (RUB) — the `currency` argument is
+  // accepted for call-site compatibility but never overrides it.
+  const baseCurrency = HOME_BUDGET_CURRENCY;
+  // user.currency = the currency the user currently ENTERS things in: what a
+  // bare amount in a purchase question / what-if means when no currency is
+  // named. Falls back to RUB, never to anything derived from reporting.
+  const inputDefaultCurrency = inputCurrency || HOME_BUDGET_CURRENCY;
 
   // Collect the union of required calculation names for active skills
   const calcNames = new Set();
@@ -343,13 +352,13 @@ async function runFinanceEngine({ skillIds, financeData, timezone, currency, mes
     }
   }
 
-  // An explicit-currency purchase amount ("за 5000 USD") needs FX to convert
-  // into baseCurrency even when every transaction/goal is already
-  // single-currency — check for it before deciding whether to fetch rates.
+  // A purchase amount ("за 5000 USD" or implicit "за 5000") needs FX to
+  // convert into baseCurrency whenever its resolved currency differs —
+  // check for it before deciding whether to fetch rates.
   let purchaseNeedsFx = false;
   if (calcNames.has('affordability')) {
-    const parsed = extractMoneyAmount(message, baseCurrency);
-    purchaseNeedsFx = !!(parsed && parsed.explicitCurrency && parsed.currency !== baseCurrency);
+    const parsed = extractMoneyAmount(message, inputDefaultCurrency);
+    purchaseNeedsFx = !!(parsed && parsed.currency !== baseCurrency);
   }
 
   // What-if modification ("буду тратить на $500 больше") — parsed here, once,
@@ -360,7 +369,7 @@ async function runFinanceEngine({ skillIds, financeData, timezone, currency, mes
     scenarioModification = parseScenarioModification(message, previousScenarioModification || null);
   }
   const scenarioNeedsFx = !!(
-    scenarioModification && scenarioModification.currency && scenarioModification.currency !== baseCurrency
+    scenarioModification && (scenarioModification.currency ?? inputDefaultCurrency) !== baseCurrency
   );
 
   // Normalize ONCE, before any calculator runs: convert every transaction (and
@@ -386,7 +395,7 @@ async function runFinanceEngine({ skillIds, financeData, timezone, currency, mes
 
   if (calcNames.size === 0) return null; // no calculations needed
 
-  const ctx   = { transactions, goals, timezone, currency: baseCurrency, message, rates, scenarioModification };
+  const ctx   = { transactions, goals, timezone, currency: baseCurrency, inputCurrency: inputDefaultCurrency, message, rates, scenarioModification };
   const results = {};
   const t0    = Date.now();
 

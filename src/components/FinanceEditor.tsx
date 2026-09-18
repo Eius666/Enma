@@ -1,17 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import {
   doc,
-  setDoc,
   getDoc,
   deleteDoc,
-  serverTimestamp,
 } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 import { FaArrowLeft, FaArrowUp, FaArrowDown, FaTrash } from 'react-icons/fa';
 import { db } from '../firebase';
 import type { Currency, Transaction } from '../types/app';
-import { getCurrencySymbol } from '../utils/formatCurrency';
+import { getCurrencySymbol, formatCurrency } from '../utils/formatCurrency';
 import { resolveTransactionCurrency } from '../utils/resolveLegacyCurrency';
+import { hasLockedRub, isEstimatedRate } from '../utils/budgetAmount';
 import type { Subscription } from '../subscription';
 import { getActivePlan, FREE_LIMITS } from '../subscription';
 import { subscribeFreeUsage } from '../lib/usageCounters';
@@ -23,7 +22,9 @@ interface FinanceEditorProps {
   initialTransaction?: Transaction | null;
   user: User | null;
   language: 'en' | 'ru';
-  currency: Currency;
+  // user.currency — the currency NEW operations are entered in. Not the
+  // budget currency (always RUB) and never applied to existing history.
+  inputCurrency: Currency;
   banks: string[];
   subscription?: Subscription | null;
   onBack: () => void;
@@ -101,6 +102,15 @@ const T = {
     save: 'Save Transaction',
     confirmDelete: 'Delete this transaction?',
     saving: 'Saving…',
+    detailsAmount: 'Amount',
+    detailsInBudget: 'In budget',
+    detailsRate: 'Rate',
+    detailsSource: 'Source',
+    detailsCaptured: 'Locked at',
+    sourceBank: 'average bank rate',
+    sourceEstimate: 'estimated rate',
+    fxUnavailable: 'Could not get a reliable exchange rate. The transaction was not saved — try again later or enter it in rubles.',
+    saveFailed: 'Could not save the transaction. Try again.',
   },
   ru: {
     back: 'Финансы',
@@ -116,6 +126,15 @@ const T = {
     save: 'Сохранить',
     confirmDelete: 'Удалить эту транзакцию?',
     saving: 'Сохранение…',
+    detailsAmount: 'Сумма',
+    detailsInBudget: 'В бюджете',
+    detailsRate: 'Курс',
+    detailsSource: 'Источник',
+    detailsCaptured: 'Зафиксирован',
+    sourceBank: 'средний банковский курс',
+    sourceEstimate: 'оценочный курс',
+    fxUnavailable: 'Не удалось получить надёжный курс. Операция не сохранена — попробуйте позже или введите сумму в рублях.',
+    saveFailed: 'Не удалось сохранить операцию. Попробуйте ещё раз.',
   },
 };
 
@@ -149,9 +168,9 @@ function applyTxData(
   // Legacy records without a currency field are resolved via their real
   // historical write-path semantics — never guessed as a blanket default.
   // A genuinely unresolvable record (rare — see resolveLegacyCurrency.ts)
-  // falls back to the app's current display currency purely so the editor
-  // has something to show; this is a last-resort UI default, not a claim
-  // about the record's real history.
+  // falls back to the current input currency purely so the editor has
+  // something to show; this is a last-resort UI default, not a claim about
+  // the record's real history.
   const resolved = resolveTransactionCurrency(tx);
   setTxCurrency((resolved.currency as Currency) || fallbackCurrency);
   setDescription(tx.description ?? '');
@@ -174,7 +193,7 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
   initialTransaction,
   user,
   language,
-  currency,
+  inputCurrency,
   banks,
   subscription,
   onBack,
@@ -184,11 +203,14 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
 
   const [txType, setTxType] = useState<'income' | 'expense'>('expense');
   const [amountStr, setAmountStr] = useState('');
-  // The currency THIS transaction is denominated in. New transactions default
-  // to the app's current display currency (that's what the user is typing
-  // in); existing transactions preserve their own stored currency regardless
-  // of what the user's display currency happens to be right now.
-  const [txCurrency, setTxCurrency] = useState<Currency>(currency);
+  // The currency THIS transaction is denominated in. New transactions use the
+  // user's current input currency (user.currency); existing transactions keep
+  // their own stored currency — switching the input currency never touches
+  // history.
+  const [txCurrency, setTxCurrency] = useState<Currency>(inputCurrency);
+  // Raw stored doc of an existing transaction — drives the details block.
+  const [existingTx, setExistingTx] = useState<Transaction | null>(initialTransaction ?? null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const sym = getCurrencySymbol(txCurrency);
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(todayStr());
@@ -214,14 +236,15 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
   // ── Load existing transaction ─────────────────────────────────────────────
   useEffect(() => {
     if (initialTransaction) {
-      applyTxData(initialTransaction, setTxType, setAmountStr, setTxCurrency, setDescription, setDate, setSelectedCatId, setSelectedBank, currency);
+      applyTxData(initialTransaction, setTxType, setAmountStr, setTxCurrency, setDescription, setDate, setSelectedCatId, setSelectedBank, inputCurrency);
       return;
     }
     if (!transactionId) return;
     getDoc(doc(db, 'transactions', transactionId))
       .then(snap => {
         if (snap.exists()) {
-          applyTxData(snap.data() as Parameters<typeof applyTxData>[0], setTxType, setAmountStr, setTxCurrency, setDescription, setDate, setSelectedCatId, setSelectedBank, currency);
+          setExistingTx({ id: snap.id, ...snap.data() } as Transaction);
+          applyTxData(snap.data() as Parameters<typeof applyTxData>[0], setTxType, setAmountStr, setTxCurrency, setDescription, setDate, setSelectedCatId, setSelectedBank, inputCurrency);
         }
         setLoaded(true);
       })
@@ -246,6 +269,7 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
     }
 
     setSaving(true);
+    setErrorMsg(null);
     const preset = PRESET_CATS.find(p => p.id === selectedCatId);
     const id = transactionId ?? makeId();
 
@@ -276,7 +300,9 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
           return;
         }
         if (!resp.ok) {
+          const body = await resp.json().catch(() => ({}));
           console.error('FinanceEditor create error', resp.status);
+          setErrorMsg(body?.code === 'fx_unavailable' ? t.fxUnavailable : t.saveFailed);
           setSaving(false);
           return;
         }
@@ -291,28 +317,39 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
       return;
     }
 
-    // Update existing transaction
+    // Update existing transaction — through the server, which owns the money
+    // fields. Metadata-only edits keep rubAmount/fx; an amount edit reprices
+    // with the ORIGINAL rate. The client never sends rubAmount or fx.
     try {
-      const payload: Record<string, unknown> = {
-        id,
-        userId:      user.uid,
+      const patch: Record<string, unknown> = {
         type:        txType,
         amount,
-        currency:    txCurrency,
         description: description.trim(),
         date:        dateInputToIso(date),
         categoryId:  preset?.id ?? '',
         category:    preset ? catDisplayName(preset) : '',
-        updatedAt:   serverTimestamp(),
       };
-      if (selectedBank) payload.bank = selectedBank;
-      await setDoc(doc(db, 'transactions', id), payload, { merge: true });
+      if (selectedBank) patch.bank = selectedBank;
+      const token = await user.getIdToken();
+      const resp = await fetch('/api/ai/transactionUpdate', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ id, patch }),
+      });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        console.error('FinanceEditor save error', resp.status);
+        setErrorMsg(body?.code === 'fx_unavailable' ? t.fxUnavailable : t.saveFailed);
+        setSaving(false);
+        return;
+      }
       if (selectedBank) {
         try { localStorage.setItem(LAST_BANK_KEY, selectedBank); } catch { /* ignore */ }
       }
       onBack();
     } catch (err) {
       console.error('FinanceEditor save error', err);
+      setErrorMsg(t.saveFailed);
       setSaving(false);
     }
   };
@@ -407,6 +444,21 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
           step="0.01"
         />
       </div>
+
+      {/* ── Details of a locked foreign-currency transaction ── */}
+      {existingTx && hasLockedRub(existingTx) && existingTx.currency && existingTx.currency !== 'RUB' && existingTx.fx && (
+        <div className="fin-editor__fx-details">
+          <div><span>{t.detailsAmount}</span><b>{formatCurrency(existingTx.amount, existingTx.currency, language)}</b></div>
+          <div><span>{t.detailsInBudget}</span><b>≈ {formatCurrency(existingTx.rubAmount as number, 'RUB', language)}</b></div>
+          <div><span>{t.detailsRate}</span><b>1 {getCurrencySymbol(existingTx.currency)} = {existingTx.fx.rateToRub.toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US', { maximumFractionDigits: 4 })} ₽</b></div>
+          <div><span>{t.detailsSource}</span><b>{isEstimatedRate(existingTx) ? t.sourceEstimate : t.sourceBank}</b></div>
+          {existingTx.fx.capturedAt && (
+            <div><span>{t.detailsCaptured}</span><b>{new Date(existingTx.fx.capturedAt).toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US')}</b></div>
+          )}
+        </div>
+      )}
+
+      {errorMsg && <div className="fin-editor__error" role="alert">{errorMsg}</div>}
 
       {/* ── Category — colored dot chips ── */}
       <div className="fin-editor__section-label">{t.catLabel}</div>

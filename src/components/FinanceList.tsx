@@ -4,8 +4,7 @@ import { isToday, isYesterday, format } from 'date-fns';
 import { ru as ruLocale, enUS } from 'date-fns/locale';
 import type { Transaction, Category, Currency } from '../types/app';
 import { PRESET_COLOR_BY_ID } from './FinanceEditor';
-import { convertCurrency } from '../utils/convertCurrency';
-import { resolveTransactionCurrency } from '../utils/resolveLegacyCurrency';
+import { getBudgetAmount, getOriginalCurrency } from '../utils/budgetAmount';
 import './Finance.css';
 
 interface FinanceListProps {
@@ -152,30 +151,34 @@ const FinanceList: React.FC<FinanceListProps> = ({
     return transactions.filter(tx => new Date(tx.date) >= start);
   }, [transactions, period]);
 
-  // Single shared conversion pipeline (spec: rows and aggregates must never disagree).
-  // Every transaction's currency is resolved via resolveTransactionCurrency
-  // (never guessed as a blanket default for legacy records — see that module
-  // for the historical write-path evidence), then converted into the display
-  // currency individually, before any summing happens — never sum raw amounts
-  // across currencies and never blanket-convert an already-summed total.
-  // Returns null when the real currency can't be determined at all — such a
-  // transaction is excluded from totals rather than mis-summed.
+  // Budget is always RUB. Every transaction contributes its budget amount:
+  // v2 rows → the ruble value LOCKED at creation (never re-priced with today's
+  // FX); legacy rows → resolved currency converted at read time. Rows and
+  // aggregates share this one function so they can never disagree. Returns
+  // null when a legacy record's currency can't be determined — excluded from
+  // totals rather than mis-summed.
   const getDisplayAmount = React.useCallback(
-    (tx: Transaction): number | null => {
-      const resolved = resolveTransactionCurrency(tx);
-      if (resolved.currency === null) return null;
-      return convertCurrency(tx.amount, resolved.currency, currency, rates);
-    },
-    [currency, rates],
+    (tx: Transaction): number | null => getBudgetAmount(tx, rates),
+    [rates],
   );
 
-  const formatMoney = (amount: number) =>
-    amount.toLocaleString(locale, { style: 'currency', currency });
+  const formatMoney = (amount: number, cur: string = currency) =>
+    amount.toLocaleString(locale, { style: 'currency', currency: cur });
 
   const fmt = (amount: number) => formatMoney(amount);
-  const fmtTx = (tx: Transaction) => {
-    const amount = getDisplayAmount(tx);
-    return amount === null ? '—' : formatMoney(amount);
+
+  // Row amount: the operation's REAL currency first ("− $50"), with the
+  // budget value as a secondary "≈ 4 300 ₽" for foreign operations. RUB rows
+  // show a single figure.
+  const txAmountParts = (tx: Transaction): { primary: string; secondary: string | null } => {
+    const budget = getDisplayAmount(tx);
+    const orig = getOriginalCurrency(tx);
+    if (orig === null || budget === null) return { primary: '—', secondary: null };
+    if (orig === currency) return { primary: formatMoney(tx.amount, orig), secondary: null };
+    return {
+      primary: formatMoney(tx.amount, orig),
+      secondary: `≈ ${formatMoney(budget)}`,
+    };
   };
 
   // ── Summary (for selected period) ─────────────────────────────────────────
@@ -386,8 +389,11 @@ const FinanceList: React.FC<FinanceListProps> = ({
                   </span>
                   <span className="fin-list__item-right">
                     <span className={`fin-list__item-amount fin-list__item-amount--${tx.type}`}>
-                      {isIncome ? '+' : '−'}{fmtTx(tx)}
+                      {isIncome ? '+' : '−'}{txAmountParts(tx).primary}
                     </span>
+                    {txAmountParts(tx).secondary && (
+                      <span className="fin-list__item-approx">{txAmountParts(tx).secondary}</span>
+                    )}
                     <span className="fin-list__item-date">{txTimeLabel(tx.date)}</span>
                   </span>
                 </button>

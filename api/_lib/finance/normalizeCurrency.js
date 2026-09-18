@@ -2,6 +2,8 @@
 
 const { convertCurrency } = require('../convertCurrency');
 const { resolveTransactionCurrency } = require('./resolveLegacyCurrency');
+const { hasLockedRub } = require('./lockedAmount');
+const { HOME_BUDGET_CURRENCY } = require('../config');
 
 // True when at least one transaction is denominated in something other than
 // targetCurrency (or its currency cannot be resolved at all) — i.e. FX rates
@@ -10,6 +12,7 @@ const { resolveTransactionCurrency } = require('./resolveLegacyCurrency');
 // needs rates, so callers must not fetch FX unless this returns true.
 function needsFx(transactions, targetCurrency) {
   return transactions.some(tx => {
+    if (hasLockedRub(tx) && targetCurrency === HOME_BUDGET_CURRENCY) return false; // locked ₽ value — never needs FX
     const resolved = resolveTransactionCurrency(tx);
     return resolved.currency !== targetCurrency; // null !== targetCurrency is also true — forces the ok:false path below
   });
@@ -38,6 +41,20 @@ function needsFx(transactions, targetCurrency) {
 function normalizeTransactionsCurrency(transactions, targetCurrency, rates) {
   const normalized = [];
   for (const tx of transactions) {
+    // schemaVersion 2: the ruble value was locked at creation. Budget is RUB,
+    // so it is used as-is — history is never re-priced with today's FX.
+    if (hasLockedRub(tx) && targetCurrency === HOME_BUDGET_CURRENCY) {
+      normalized.push({
+        ...tx,
+        amount:           tx.rubAmount,
+        currency:         targetCurrency,
+        originalAmount:   tx.amount,
+        originalCurrency: tx.currency,
+        currencyConfidence: 'locked',
+      });
+      continue;
+    }
+
     const resolved = resolveTransactionCurrency(tx);
 
     if (resolved.currency === null) {

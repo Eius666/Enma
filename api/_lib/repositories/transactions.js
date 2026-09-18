@@ -3,6 +3,7 @@
 const { db } = require('../firebaseAdmin');
 const { convertCurrency } = require('../convertCurrency');
 const { resolveTransactionCurrency } = require('../finance/resolveLegacyCurrency');
+const { hasLockedRub } = require('../finance/lockedAmount');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared sort helpers (pure, exported for tests)
@@ -39,6 +40,12 @@ function normalizeTransaction(doc) {
     bank:        d.bank        || '',
     date:        typeof d.date === 'string' ? d.date : (d.date ? new Date(d.date).toISOString() : ''),
     createdAt:   d.createdAt,
+    // schemaVersion 2: locked ruble value + FX snapshot (budget math reads rubAmount)
+    ...(d.schemaVersion === 2 ? {
+      schemaVersion: 2,
+      rubAmount: Number.isFinite(d.rubAmount) ? d.rubAmount : undefined,
+      fx: d.fx || null,
+    } : {}),
   };
 }
 
@@ -78,6 +85,11 @@ async function getAllTransactions(uid) {
 function calculateCurrentBalance(transactions, targetCurrency = 'RUB', rates = null) {
   let balance = 0;
   for (const t of transactions) {
+    if (hasLockedRub(t) && targetCurrency === 'RUB') {
+      if (t.type === 'income')  balance += t.rubAmount;
+      if (t.type === 'expense') balance -= t.rubAmount;
+      continue;
+    }
     const resolved = resolveTransactionCurrency(t);
     if (resolved.currency === null) continue; // unresolvable — never guessed
     let amount = t.amount;

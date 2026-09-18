@@ -643,3 +643,34 @@ body.theme-light .fin-editor__date {
   line-height: 1.4;
   flex-shrink: 0;
 }
+
+/* — Locked FX details (foreign-currency transaction) — */
+.fin-editor__fx-details {
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  border-radius: 14px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.fin-editor__fx-details > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+}
+.fin-editor__fx-details span { color: var(--notes-text-muted); }
+.fin-editor__fx-details b { font-weight: 600; color: var(--notes-text); text-align: right; }
+
+.fin-editor__error {
+  color: var(--fin-expense);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.fin-list__item-approx {
+  display: block;
+  font-size: 11px;
+  color: var(--notes-text-muted);
+  text-align: right;
+}

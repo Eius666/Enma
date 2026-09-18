@@ -52,6 +52,8 @@ const T = {
     groupPrefs: 'Preferences',
     rowLanguage: 'Language',
     rowCurrency: 'Currency',
+    currencyHint: 'Used for new operations with no currency specified',
+    currencyConfirm: (c: string) => `New operations with no currency specified will be recorded in ${c}. History and the overall budget stay in rubles.`,
     rowTheme: 'Theme',
     themeDark: 'Dark',
     themeLight: 'Light',
@@ -101,6 +103,8 @@ const T = {
     groupPrefs: 'Предпочтения',
     rowLanguage: 'Язык',
     rowCurrency: 'Валюта',
+    currencyHint: 'Используется для новых операций без указанной валюты',
+    currencyConfirm: (c: string) => `Новые операции без указанной валюты будут записываться в ${c}. История и общий бюджет останутся в рублях.`,
     rowTheme: 'Тема',
     themeDark: 'Тёмная',
     themeLight: 'Светлая',
@@ -345,13 +349,20 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <FaChevronRight className="sett-row__chevron" />
         </button>
 
+        <div className="sett-row__hint">{t.currencyHint}</div>
+
         {currencyOpen && (
           <div className="sett-picker">
             {CURRENCIES.map(c => (
               <button
                 key={c}
                 className={`sett-picker__option${currency === c ? ' sett-picker__option--active' : ''}`}
-                onClick={() => { onCurrencyChange(c); setCurrencyOpen(false); }}
+                onClick={() => {
+                  setCurrencyOpen(false);
+                  if (c === currency) return;
+                  // Changing the input currency never alters history or the RUB budget — say so first.
+                  if (window.confirm(t.currencyConfirm(c))) onCurrencyChange(c);
+                }}
                 type="button"
               >
                 <span>{c}</span>

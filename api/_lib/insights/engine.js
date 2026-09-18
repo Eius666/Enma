@@ -13,6 +13,7 @@ const txRepo                  = require('../repositories/transactions');
 const goalsRepo               = require('../repositories/goals');
 const tasksRepo               = require('../repositories/tasks');
 const { INSIGHTS_CONFIG }     = require('./config');
+const { HOME_BUDGET_CURRENCY } = require('../config');
 const { normalizeTransactionsCurrency, needsFx, normalizeGoalsCurrency, goalsNeedFx } = require('../finance/normalizeCurrency');
 const { getExchangeRates }    = require('../exchangeRates');
 const {
@@ -69,7 +70,8 @@ async function runDetectorsForUser(uid, { domains } = {}) {
 
   const tz       = userData.timezone || 'Europe/Moscow';
   const lang     = userData.language || 'ru';
-  const currency = userData.currency || 'RUB';
+  // Budget/analytics are always RUB; user.currency is only the input currency.
+  const currency = HOME_BUDGET_CURRENCY;
 
   // Proactive monetary thresholds (category_spike.minIncreaseAmount,
   // payment_cluster.minTotalAmount, cash_gap.substantialChangeAmount) are

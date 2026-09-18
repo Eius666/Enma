@@ -626,3 +626,14 @@ body.theme-light .sett-referral-link-row__text {
   opacity: 0.4;
   cursor: default;
 }
+
+.sett-row__hint {
+  padding: 0 16px 10px 62px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.theme-light .sett-row__hint {
+  color: rgba(0, 0, 0, 0.5);
+}

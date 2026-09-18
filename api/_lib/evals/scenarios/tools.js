@@ -131,8 +131,11 @@ const toolScenarios = [
         const txResult = await executeTool('user_a', 'create_transaction', {
           type: 'expense', amount: 1500, description: 'Бензин', category: 'p-transport',
         });
+        // Relative date (tomorrow) — an absolute date goes stale and the
+        // reminder tool correctly rejects times in the past.
+        const tomorrow = new Date(Date.now() + 24 * 3600 * 1000).toISOString().slice(0, 10);
         const remResult = await executeTool('user_a', 'create_reminder', {
-          title: 'Проверить давление', date: '2026-09-18', time: '18:00',
+          title: 'Проверить давление', date: tomorrow, time: '18:00',
         });
         a.toolSuccess(txResult, 'create_transaction');
         a.toolSuccess(remResult, 'create_reminder');

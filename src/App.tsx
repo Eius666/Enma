@@ -107,6 +107,10 @@ type Transaction = {
   originalAmount?: number;
   originalCurrency?: Currency;
   source?: string;
+  currency?: Currency;
+  schemaVersion?: number;
+  rubAmount?: number;
+  fx?: { rateToRub: number; source: string; [k: string]: unknown } | null;
 };
 
 type Habit = {
@@ -640,6 +644,8 @@ const App: React.FC = () => {
   const [hasManualLanguage, setHasManualLanguage] = useState<boolean>(
     () => readStoredLanguage() !== null
   );
+  // `currency` = user.currency = the currency NEW operations are entered in
+  // (Settings selector). Budget/analytics are always BASE_CURRENCY (RUB).
   const [currency, setCurrency] = useState<Currency>(
     () => readStoredCurrency() ?? BASE_CURRENCY
   );
@@ -974,22 +980,6 @@ const App: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid]);
 
-  const persistTransactionToFirestore = useCallback(
-    async (transaction: Transaction) => {
-      if (!user) return;
-      try {
-        await setDoc(doc(db, 'transactions', transaction.id), {
-          ...transaction,
-          userId: user.uid,
-          updatedAt: serverTimestamp()
-        }, { merge: true });
-      } catch (error) {
-        console.warn('Failed to sync transaction', error);
-      }
-    },
-    [user]
-  );
-
   const persistReminderToFirestore = useCallback(
     async (reminder: Reminder, options?: { isNew?: boolean; status?: 'pending' | 'done' }) => {
       if (!user) return;
@@ -1024,7 +1014,6 @@ const App: React.FC = () => {
   );
 
   const remindersBackfillRef = useRef(false);
-  const transactionsBackfillRef = useRef(false);
   const notesLsMigrationRef = useRef(false);
 
   useEffect(() => {
@@ -1045,13 +1034,18 @@ const App: React.FC = () => {
         where('userId', '==', uid)
       );
 
+      let receivedFirstSnapshot = false;
       try {
         unsubscribe = onSnapshot(
           q,
           snapshot => {
             if (!mounted) return;
+            const isFirst = !receivedFirstSnapshot;
+            receivedFirstSnapshot = true;
             setTransactions(prev => {
-              const updated = new Map(prev.map(t => [t.id, t]));
+              // Firestore is the source of truth: the first snapshot REPLACES
+              // the localStorage cache so deleted transactions never linger.
+              const updated = new Map((isFirst ? [] : prev).map(t => [t.id, t]));
               snapshot.docChanges().forEach(change => {
                 if (change.type === 'removed') {
                   updated.delete(change.doc.id);
@@ -1252,16 +1246,9 @@ const App: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid ?? null]);
 
-  useEffect(() => {
-    if (!user) return;
-    if (transactionsBackfillRef.current) return;
-    if (transactions.length === 0) {
-      transactionsBackfillRef.current = true;
-      return;
-    }
-    transactionsBackfillRef.current = true;
-    transactions.forEach(tx => persistTransactionToFirestore(tx));
-  }, [transactions, persistTransactionToFirestore, user]);
+  // NOTE: there is deliberately no client-side backfill of transactions to
+  // Firestore any more. Money fields (rubAmount/fx) are server-owned, and a
+  // stale localStorage cache must never resurrect deleted transactions.
 
   useEffect(() => {
     if (!user || notes.length === 0) return;
@@ -1683,7 +1670,7 @@ const App: React.FC = () => {
           <DayList
             language={language}
             user={user}
-            currency={currency}
+            currency={BASE_CURRENCY}
             rates={rates}
             firestoreHabits={firestoreHabits}
             transactions={transactions}
@@ -1769,7 +1756,7 @@ const App: React.FC = () => {
         {activeTab === 'finance' && financeView === 'list' && (
           <FinanceList
             language={language}
-            currency={currency}
+            currency={BASE_CURRENCY}
             rates={rates}
             categories={categories}
             transactions={transactions}
@@ -1790,7 +1777,7 @@ const App: React.FC = () => {
             }
             user={user}
             language={language}
-            currency={currency}
+            inputCurrency={currency}
             banks={banks}
             subscription={subscription}
             onBack={() => {

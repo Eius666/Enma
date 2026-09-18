@@ -8,18 +8,13 @@ const notesRepo     = require('./repositories/notes');
 const habitsRepo    = require('./repositories/habits');
 const { getExchangeRates } = require('./exchangeRates');
 const { normalizeTransactionsCurrency, needsFx } = require('./finance/normalizeCurrency');
+const { HOME_BUDGET_CURRENCY } = require('./config');
+const { createFinancialTransaction, TransactionValidationError } = require('./transactions/financialTransaction');
+const { FxUnavailableError } = require('./fx');
 
-// explicit > user's stored preference > RUB fallback (never forced RUB for an
-// existing user — RUB is a fallback for the absent case only).
-async function resolveUserCurrency(uid, options = {}) {
-  if (options.currency) return options.currency;
-  try {
-    const userSnap = await db.collection('users').doc(uid).get();
-    return userSnap.exists ? (userSnap.data().currency || 'RUB') : 'RUB';
-  } catch {
-    return 'RUB';
-  }
-}
+// Budget/analytics currency is fixed (HOME_BUDGET_CURRENCY = RUB). The user's
+// own `currency` is the INPUT currency for new operations and is resolved
+// inside the shared createFinancialTransaction service.
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -467,33 +462,48 @@ async function tool_createTransaction(uid, args, options = {}) {
   const catName = CATEGORY_NAMES[catId] || catId;
   const id      = options.docId || makeDocId();
 
-  const currency = await resolveUserCurrency(uid, options);
-
-  const data = {
-    id,
-    type,
-    amount:      Math.round(amount * 100) / 100,
-    currency,
-    description: description.trim().slice(0, 200),
-    date:        new Date(`${txDate}T12:00:00`).toISOString(),
-    categoryId:  catId,
-    category:    catName,
-    source:      'ai-chat',
-    ...(bank ? { bank: String(bank).slice(0, 100) } : {}),
-  };
-
-  const result = await createEntityInFirestore(uid, 'transaction', data, id);
-  if (!result.ok) {
-    return err('LIMIT_REACHED', `Лимит транзакций (${result.limit}/месяц) исчерпан. Нужен Pro или Premium.`);
+  let created;
+  try {
+    // Money fields (currency precedence explicit → user.currency → RUB,
+    // rubAmount, FX snapshot) come from the shared service. The free-plan
+    // limit transaction stays here as the persist step.
+    created = await createFinancialTransaction({
+      uid, docId: id,
+      type, amount,
+      currency: args.currency,
+      description,
+      date: new Date(`${txDate}T12:00:00`).toISOString(),
+      categoryId: catId,
+      category: catName,
+      bank,
+      source: 'ai-chat',
+      extra: { id },
+    }, {
+      persist: (userId, doc, docId) => createEntityInFirestore(userId, 'transaction', doc, docId),
+    });
+  } catch (e) {
+    if (e instanceof FxUnavailableError) {
+      return err('FX_UNAVAILABLE', `Не удалось получить надёжный курс ${e.currency} — операция не сохранена. Попробуйте позже или укажите сумму в рублях.`);
+    }
+    if (e instanceof TransactionValidationError) return err('VALIDATION_ERROR', e.message);
+    throw e;
   }
+
+  if (!created.ok) {
+    return err('LIMIT_REACHED', `Лимит транзакций (${created.limit}/месяц) исчерпан. Нужен Pro или Premium.`);
+  }
+  const tx = created.transaction;
   return ok({
-    id:          result.id,
+    id:          created.id,
     type,
-    amount:      data.amount,
-    currency,
-    description: data.description,
+    amount:      tx.amount,
+    currency:    tx.currency,
+    rubAmount:   tx.rubAmount,
+    fxSource:    tx.fx ? tx.fx.source : null,
+    description: tx.description,
     date:        txDate,
     category:    catName,
+    ...(created.duplicate ? { duplicate: true } : {}),
   });
 }
 
@@ -704,9 +714,8 @@ async function tool_searchTransactions(uid, args, options = {}) {
 
   // Aggregate in the user's own currency — never sum raw amounts across
   // different transaction currencies, and never guess a legacy record's
-  // currency as a blanket default (see resolveUserCurrency precedence for
-  // the USER currency; resolveTransactionCurrency handles each TRANSACTION).
-  const currency = await resolveUserCurrency(uid, options);
+  // currency as a blanket default (budget currency is fixed to RUB).
+  const currency = HOME_BUDGET_CURRENCY; // budget is always RUB
   const rates = needsFx(txs, currency) ? await getExchangeRates() : null;
   const normalized = normalizeTransactionsCurrency(txs, currency, rates);
 
@@ -954,6 +963,7 @@ const TOOL_DEFINITIONS = [
         properties: {
           type:        { type: 'string', enum: ['income', 'expense'], description: 'income — доход, expense — расход. Обязательно.' },
           amount:      { type: 'number', description: 'Сумма (положительное число). Обязательно.' },
+          currency:    { type: 'string', enum: ['RUB', 'USD', 'EUR', 'CNY', 'BYN', 'GBP', 'KZT', 'TRY', 'AED', 'JPY', 'CHF'], description: 'Валюта операции, ТОЛЬКО если пользователь явно её назвал ("$5000", "80 юаней" → CNY, "1000 руб" → RUB). Если не названа — не указывай: сервер подставит текущую валюту ввода пользователя.' },
           description: { type: 'string', description: 'Описание операции. Обязательно.' },
           date:        { type: 'string', description: 'Дата YYYY-MM-DD. По умолчанию сегодня.' },
           categoryId:  {
@@ -1114,4 +1124,4 @@ const TOOL_DEFINITIONS = [
   },
 ];
 
-module.exports = { TOOL_DEFINITIONS, executeTool };
+module.exports = { TOOL_DEFINITIONS, executeTool, createEntityInFirestore };
