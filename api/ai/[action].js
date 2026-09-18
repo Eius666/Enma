@@ -506,7 +506,7 @@ async function handleAnalyze(req, res) {
 // All run in parallel inside buildUserContext.
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function _buildFinanceSection(userId, today, monthKey) {
+async function _buildFinanceSection(userId, today, monthKey, currency = 'RUB') {
   try {
     const allTx = await txRepo.getAllTransactions(userId);
     console.log('[CHAT_TRACE] financeLoader=ok docs=' + allTx.length);
@@ -537,24 +537,28 @@ async function _buildFinanceSection(userId, today, monthKey) {
       }
     }
 
+    const sym = { RUB: '₽', USD: '$', EUR: '€', BYN: 'Br', CNY: '¥' }[currency] || currency;
+
     const lines = [
-      `Общий баланс (все время): ${currentBalance >= 0 ? '+' : ''}${currentBalance.toFixed(0)}`,
+      `Валюта пользователя: ${currency}`,
+      `Общий баланс (все время): ${currentBalance >= 0 ? '+' : ''}${currentBalance.toFixed(0)} ${currency}`,
       `Текущий месяц (${monthKey}):`,
-      `  Доходы: ${monthIncome.toFixed(0)}`,
-      `  Расходы: ${monthExpenses.toFixed(0)}`,
-      `  Разница: ${(monthIncome - monthExpenses) >= 0 ? '+' : ''}${(monthIncome - monthExpenses).toFixed(0)}`,
+      `  Доходы: ${monthIncome.toFixed(0)} ${currency}`,
+      `  Расходы: ${monthExpenses.toFixed(0)} ${currency}`,
+      `  Разница: ${(monthIncome - monthExpenses) >= 0 ? '+' : ''}${(monthIncome - monthExpenses).toFixed(0)} ${currency}`,
     ];
 
     const topCats = Object.entries(cats).sort((a, b) => b[1] - a[1]).slice(0, 5);
     if (topCats.length) {
       lines.push('  Основные категории расходов:');
-      for (const [cat, amt] of topCats) lines.push(`    - ${cat}: ${Number(amt).toFixed(0)}`);
+      for (const [cat, amt] of topCats) lines.push(`    - ${cat}: ${Number(amt).toFixed(0)} ${currency}`);
     }
     if (recentTx.length) {
       lines.push('Последние операции:');
-      for (const t of recentTx) lines.push(`  ${t}`);
+      for (const t of recentTx) lines.push(`  ${t} ${currency}`);
     }
 
+    console.log('[AI_FINANCE_CONTEXT] currency=%s balance=%s', currency, currentBalance.toFixed(0));
     return `[ФИНАНСЫ]\n${lines.join('\n')}`;
   } catch (e) {
     console.error('[CHAT_TRACE] financeLoader=FAILED code=%s msg=%s', e.code, e.message);
@@ -683,24 +687,26 @@ async function buildUserContext(userId, sections) {
   // Profile is always fetched for any personal domain (single get, cheap, provides timezone/currency)
   let profileText = null;
   let timezone    = 'Europe/Moscow';
+  let resolvedCurrency = 'RUB';
 
   try {
     const userSnap = await db.collection('users').doc(userId).get();
     const ud       = userSnap.exists ? userSnap.data() : {};
-    timezone       = ud.timezone || 'Europe/Moscow';
-    const currency = ud.currency || 'RUB';
+    timezone         = ud.timezone || 'Europe/Moscow';
+    resolvedCurrency = ud.currency || 'RUB';
     const banks    = Array.isArray(ud.banks) ? ud.banks : [];
 
-    const profileLines = [`Валюта: ${currency}`, `Часовой пояс: ${timezone}`];
+    const profileLines = [`Валюта: ${resolvedCurrency}`, `Часовой пояс: ${timezone}`];
     if (banks.length) profileLines.push(`Банки: ${banks.join(', ')}`);
     profileText = `[ПРОФИЛЬ]\n${profileLines.join('\n')}`;
+    console.log('[FINANCE_CURRENCY] resolvedCurrency=%s source=%s', resolvedCurrency, ud.currency ? 'user_profile' : 'default');
   } catch (e) {
     console.warn('[AI_CONTEXT] profile:', e.message);
   }
 
   // Launch all requested section builders in parallel
   const loaders = [];
-  if (domainSet.has('finance'))   loaders.push(_buildFinanceSection(userId, today, monthKey));
+  if (domainSet.has('finance'))   loaders.push(_buildFinanceSection(userId, today, monthKey, resolvedCurrency));
   if (domainSet.has('tasks'))     loaders.push(_buildTasksSection(userId, today));
   if (domainSet.has('habits'))    loaders.push(_buildHabitsSection(userId, today));
   if (domainSet.has('reminders')) loaders.push(_buildRemindersSection(userId, timezone));

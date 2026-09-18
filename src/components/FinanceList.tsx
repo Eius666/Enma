@@ -150,12 +150,12 @@ const FinanceList: React.FC<FinanceListProps> = ({
     return transactions.filter(tx => new Date(tx.date) >= start);
   }, [transactions, period]);
 
-  // For summary totals (always in USD base).
+  // For summary totals (stored in BASE_CURRENCY = RUB; convertAmount converts to display currency).
   const fmt = (amount: number) =>
     convertAmount(amount).toLocaleString(locale, { style: 'currency', currency });
 
   // For individual transactions: prefer originalAmount when currencies match to avoid
-  // precision loss from the USD roundtrip (e.g. 500 RUB → 5.56 USD → 499.7 RUB).
+  // precision loss from the base-currency roundtrip.
   const fmtTx = (tx: Transaction) => {
     if (tx.originalCurrency === currency && tx.originalAmount != null) {
       return tx.originalAmount.toLocaleString(locale, { style: 'currency', currency });

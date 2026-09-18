@@ -4,9 +4,9 @@ import type { Currency } from '../types';
 // Currency
 // ---------------------------------------------------------------------------
 
-export const BASE_CURRENCY: Currency = 'USD';
+export const BASE_CURRENCY: Currency = 'RUB';
 export const DEFAULT_CURRENCY: Currency = 'RUB';
-export const SUPPORTED_CURRENCIES: Currency[] = ['USD', 'EUR', 'BYN', 'CNY', 'RUB'];
+export const SUPPORTED_CURRENCIES: Currency[] = ['RUB', 'USD', 'EUR', 'BYN', 'CNY'];
 
 // ---------------------------------------------------------------------------
 // Exchange rates cache

@@ -40,19 +40,19 @@
     "skillRouter": "v3",
     "conversationState": "v2"
   },
-  "runAt": "2026-09-18T08:32:03.426Z",
-  "durationMs": 43,
+  "runAt": "2026-09-18T09:12:42.237Z",
+  "durationMs": 46,
   "summary": {
-    "total": 94,
-    "passed": 94,
+    "total": 98,
+    "passed": 98,
     "failed": 0,
     "critical": 0
   },
   "domains": {
     "finance": {
-      "total": 26,
-      "critical": 19,
-      "passed": 26,
+      "total": 30,
+      "critical": 22,
+      "passed": 30,
       "failed": []
     },
     "tasks": {
@@ -391,7 +391,7 @@
       "domain": "finance",
       "critical": true,
       "pass": true,
-      "duration": 0,
+      "duration": 1,
       "description": "SPEC §22: balance query succeeds even if categories throw; returns balance, not error",
       "snapshot": {
         "balance": 34350,
@@ -404,7 +404,7 @@
       "domain": "finance",
       "critical": false,
       "pass": true,
-      "duration": 1,
+      "duration": 0,
       "description": "SPEC §22: expenses sum for current month is correct in response",
       "snapshot": {
         "monthExpenses": 4500,
@@ -443,7 +443,7 @@
       "domain": "finance",
       "critical": true,
       "pass": true,
-      "duration": 1,
+      "duration": 0,
       "description": "CRITICAL: search_transactions (aiTools.js) returns correct balance without orderBy — this is the tool the LLM calls via POST /api/ai/chat",
       "snapshot": {
         "balance": 130000,
@@ -466,6 +466,56 @@
       "error": null
     },
     {
+      "id": "finance.currency.rub_default",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "CRITICAL: getUserCurrency returns RUB for users with no currency field — never USD",
+      "snapshot": {
+        "currency": "RUB"
+      },
+      "error": null
+    },
+    {
+      "id": "finance.currency.balance_rub",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 1,
+      "description": "CRITICAL: getFinanceStats returns balance with RUB currency label — not USD",
+      "snapshot": {
+        "containsRUB": true,
+        "noUSD": true
+      },
+      "error": null
+    },
+    {
+      "id": "finance.currency.no_implicit_conversion",
+      "domain": "finance",
+      "critical": true,
+      "pass": true,
+      "duration": 0,
+      "description": "CRITICAL: calculateCurrentBalance returns the raw RUB amount — no division by exchange rate",
+      "snapshot": {
+        "balance": 170000000
+      },
+      "error": null
+    },
+    {
+      "id": "finance.currency.web_telegram_consistency",
+      "domain": "finance",
+      "critical": false,
+      "pass": true,
+      "duration": 1,
+      "description": "Same fixture: Web AI (aiTools) and Telegram (tools.js) return the same balance value",
+      "snapshot": {
+        "webBalance": 170000000,
+        "tgHas170": true
+      },
+      "error": null
+    },
+    {
       "id": "tasks.create.basic",
       "domain": "tasks",
       "critical": true,
@@ -473,7 +523,7 @@
       "duration": 2,
       "description": "SPEC §14: create_task called once, verifiedUid used, entity written to DB",
       "snapshot": {
-        "id": "1789720323409-acec986a3f54",
+        "id": "1789722762220-ced475df3113",
         "title": "Купить билеты",
         "userId": "user_a"
       },
@@ -508,7 +558,7 @@
       "domain": "tasks",
       "critical": true,
       "pass": true,
-      "duration": 1,
+      "duration": 0,
       "description": "SPEC §61: unknown tool name → UNKNOWN_TOOL error, not executed",
       "snapshot": {
         "errorCode": "UNKNOWN_TOOL"
@@ -520,7 +570,7 @@
       "domain": "tasks",
       "critical": false,
       "pass": true,
-      "duration": 0,
+      "duration": 1,
       "description": "SPEC §54: free plan at daily limit → LIMIT_REACHED, no entity created",
       "snapshot": {
         "errorCode": "LIMIT_REACHED"
@@ -633,7 +683,7 @@
       "domain": "habits",
       "critical": false,
       "pass": true,
-      "duration": 0,
+      "duration": 1,
       "description": "SPEC §29: habits query → only habits tools, not all 17",
       "snapshot": {
         "tools": [
@@ -751,7 +801,7 @@
       "duration": 1,
       "description": "create_note with valid args → success, entity written",
       "snapshot": {
-        "id": "1789720323413-a0f08fd0f088",
+        "id": "1789722762224-284c57b092c9",
         "userId": "user_n"
       },
       "error": null
@@ -815,7 +865,7 @@
       "description": "SPEC §26: expired pending action (TTL=0) should not execute",
       "snapshot": {
         "expired": true,
-        "expiresAt": 1789720322413
+        "expiresAt": 1789722761224
       },
       "error": null
     },
@@ -929,7 +979,7 @@
       "domain": "conversation",
       "critical": false,
       "pass": true,
-      "duration": 1,
+      "duration": 0,
       "description": "SPEC §63 Conversation E: \"Запиши расход и поставь задачу\" → both domains",
       "snapshot": {
         "domains": [
@@ -947,7 +997,7 @@
       "duration": 0,
       "description": "SPEC §22: tool returns success=false → response must NOT say \"Готово\" or \"Добавил\"",
       "snapshot": {
-        "corePromptLength": 2024
+        "corePromptLength": 2432
       },
       "error": null
     },
@@ -956,7 +1006,7 @@
       "domain": "conversation",
       "critical": true,
       "pass": true,
-      "duration": 0,
+      "duration": 1,
       "description": "SPEC §86: CORE_PROMPT must instruct not to ask for info already in context",
       "snapshot": {
         "checked": true
@@ -994,7 +1044,7 @@
       "domain": "tools",
       "critical": true,
       "pass": true,
-      "duration": 1,
+      "duration": 0,
       "description": "SPEC §62: create_transaction amount=-500 → VALIDATION_ERROR, 0 writes",
       "snapshot": {
         "errorCode": "VALIDATION_ERROR"
@@ -1006,10 +1056,10 @@
       "domain": "tools",
       "critical": true,
       "pass": true,
-      "duration": 0,
+      "duration": 1,
       "description": "SPEC §14: valid create_transaction → success, entity in DB with correct userId",
       "snapshot": {
-        "id": "1789720323415-29cea7a254aa",
+        "id": "1789722762226-b5e60fdc5da9",
         "amount": 1500,
         "userId": "user_a"
       },
@@ -1023,8 +1073,8 @@
       "duration": 1,
       "description": "SPEC §17: create_transaction + create_reminder each called once",
       "snapshot": {
-        "txId": "1789720323415-31db078268b4",
-        "remId": "1789720323416-4db8c8be9cf6"
+        "txId": "1789722762226-e1910f4201f4",
+        "remId": "1789722762227-462a3f1deff9"
       },
       "error": null
     },
@@ -1049,7 +1099,7 @@
       "domain": "tools",
       "critical": true,
       "pass": true,
-      "duration": 1,
+      "duration": 0,
       "description": "SPEC §61: unknown tool name → UNKNOWN_TOOL, nothing written to DB",
       "snapshot": {
         "errorCode": "UNKNOWN_TOOL"
@@ -1061,7 +1111,7 @@
       "domain": "tools",
       "critical": false,
       "pass": true,
-      "duration": 0,
+      "duration": 1,
       "description": "SPEC §79: \"Что такое инфляция?\" → general domain → 0 tools available",
       "snapshot": {
         "toolCount": 0
@@ -1178,7 +1228,7 @@
       "domain": "proactive",
       "critical": true,
       "pass": true,
-      "duration": 0,
+      "duration": 1,
       "description": "SPEC §36: 100→250 (+150%, but +150 ₽ absolute < 1000 threshold) → NO event",
       "snapshot": {
         "events": []
@@ -1202,7 +1252,7 @@
       "domain": "proactive",
       "critical": true,
       "pass": true,
-      "duration": 1,
+      "duration": 0,
       "description": "SPEC §37: required >> actual savings capacity → goal_off_track event",
       "snapshot": {
         "events": [
@@ -1294,7 +1344,7 @@
       "domain": "proactive",
       "critical": true,
       "pass": true,
-      "duration": 0,
+      "duration": 1,
       "description": "SPEC §39: cash_gap CTA → finance.cashflow",
       "snapshot": {
         "cta": {
@@ -1310,7 +1360,7 @@
       "domain": "proactive",
       "critical": true,
       "pass": true,
-      "duration": 1,
+      "duration": 0,
       "description": "SPEC §39: overdue task CTA → tasks.prioritize",
       "snapshot": {
         "cta": {
@@ -1367,7 +1417,7 @@
       "domain": "security",
       "critical": true,
       "pass": true,
-      "duration": 1,
+      "duration": 0,
       "description": "SPEC §19 IDOR: user_a tries to update user_b task → NOT_FOUND",
       "snapshot": {
         "errorCode": "NOT_FOUND",
@@ -1469,7 +1519,7 @@
       "description": "SPEC §21: CORE_PROMPT must explicitly warn against executing instructions from user content",
       "snapshot": {
         "checked": true,
-        "coreLen": 2024
+        "coreLen": 2432
       },
       "error": null
     }

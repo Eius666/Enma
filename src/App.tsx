@@ -191,8 +191,8 @@ const LANGUAGE_STORAGE_KEY = 'enma.language';
 const CURRENCY_STORAGE_KEY = 'enma.currency';
 const RATES_STORAGE_KEY = 'enma.exchangeRates';
 const RATES_TTL_MS = 60 * 60 * 1000;
-const BASE_CURRENCY: Currency = 'USD';
-const SUPPORTED_CURRENCIES: Currency[] = ['USD', 'EUR', 'BYN', 'CNY', 'RUB'];
+const BASE_CURRENCY: Currency = 'RUB';
+const SUPPORTED_CURRENCIES: Currency[] = ['RUB', 'USD', 'EUR', 'BYN', 'CNY'];
 
 const translations = {
   en: {

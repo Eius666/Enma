@@ -36,14 +36,14 @@ function getBucket() {
 
 /**
  * Read the user's selected currency from their Firestore document.
- * Falls back to 'USD' (the base currency) if the document or field is missing.
+ * Falls back to 'RUB' (the default base currency for ENMA) if the document or field is missing.
  */
 async function getUserCurrency(userId) {
   const userDoc = await db.collection('users').doc(userId).get();
-  if (!userDoc.exists) return 'USD';
+  if (!userDoc.exists) return 'RUB';
   const currency = userDoc.data().currency;
-  const SUPPORTED = ['USD', 'EUR', 'BYN', 'CNY', 'RUB'];
-  return SUPPORTED.includes(currency) ? currency : 'USD';
+  const SUPPORTED = ['RUB', 'USD', 'EUR', 'BYN', 'CNY'];
+  return SUPPORTED.includes(currency) ? currency : 'RUB';
 }
 
 async function getUserTimezone(userId) {

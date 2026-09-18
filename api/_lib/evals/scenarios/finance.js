@@ -711,6 +711,124 @@ const financeToolIntegrationScenarios = [
   },
 ];
 
+// ── Currency regression suite ─────────────────────────────────────────────────
+// These tests guard against re-introduction of USD as default base currency
+// (the original bug: getUserCurrency() returned 'USD', amounts appeared as $2M).
+
+const currencyScenarios = [
+  {
+    id:          'finance.currency.rub_default',
+    description: 'CRITICAL: getUserCurrency returns RUB for users with no currency field — never USD',
+    domain:      'finance',
+    critical:    true,
+    snapshot:    {},
+    async run() {
+      const { getUserCurrency } = require('../../firebaseAdmin');
+      const mockDb = createMockDb({});                 // user doc does not exist
+      injectMockDb(mockDb);
+      try {
+        const currency = await getUserCurrency('nonexistent_user');
+        a.ok(currency === 'RUB', `getUserCurrency must default to RUB, got: ${currency}`);
+        a.ok(currency !== 'USD', 'must NOT default to USD');
+        this.snapshot = { currency };
+      } finally { teardownMockDb(); }
+    },
+  },
+
+  {
+    id:          'finance.currency.balance_rub',
+    description: 'CRITICAL: getFinanceStats returns balance with RUB currency label — not USD',
+    domain:      'finance',
+    critical:    true,
+    snapshot:    {},
+    async run() {
+      const M = thisMonthKey();
+      const mockDb = createMockDb({
+        'users/u1': { currency: 'RUB' },
+        'transactions/t1': { userId: 'u1', type: 'income',  amount: 175000000, date: `${M}-01`, description: 'Зарплата' },
+        'transactions/t2': { userId: 'u1', type: 'expense', amount:   5000000, date: `${M}-15`, description: 'Ресторан' },
+      });
+      injectMockDb(mockDb);
+      try {
+        const { getFinanceStats } = require('../../tools');
+        const result = await getFinanceStats({}, 'u1', 'RUB');
+
+        a.ok(result.ok === true, 'getFinanceStats must succeed');
+        const msg = result.message || '';
+        a.ok(msg.includes('₽') || msg.includes('RUB'), `balance message must contain ₽ or RUB, got: ${msg}`);
+        a.ok(!msg.includes('$'), `balance message must NOT contain $, got: ${msg}`);
+        a.ok(!msg.toLowerCase().includes('usd'), `balance message must NOT contain USD, got: ${msg}`);
+
+        this.snapshot = { containsRUB: msg.includes('₽') || msg.includes('RUB'), noUSD: !msg.includes('$') };
+      } finally { teardownMockDb(); }
+    },
+  },
+
+  {
+    id:          'finance.currency.no_implicit_conversion',
+    description: 'CRITICAL: calculateCurrentBalance returns the raw RUB amount — no division by exchange rate',
+    domain:      'finance',
+    critical:    true,
+    snapshot:    {},
+    async run() {
+      const txRepo = require('../../repositories/transactions');
+      const transactions = [
+        { type: 'income',  amount: 175000000 },
+        { type: 'expense', amount:   5000000 },
+      ];
+      const balance = txRepo.calculateCurrentBalance(transactions);
+      // Must be 170,000,000 — NOT ~1,935,227 (÷88) or any USD-converted value
+      a.numericEquals(balance, 170000000, `balance must be 170000000 RUB, got: ${balance}`);
+      a.ok(balance > 1000000, 'balance must be in RUB scale (> 1M), not USD scale (~2M)');
+      this.snapshot = { balance };
+    },
+  },
+
+  {
+    id:          'finance.currency.web_telegram_consistency',
+    description: 'Same fixture: Web AI (aiTools) and Telegram (tools.js) return the same balance value',
+    domain:      'finance',
+    critical:    false,
+    snapshot:    {},
+    async run() {
+      const M = thisMonthKey();
+      const fixture = {
+        'users/u1': { currency: 'RUB' },
+        'transactions/t1': { userId: 'u1', type: 'income',  amount: 175000000, date: `${M}-01`, description: 'Salary' },
+        'transactions/t2': { userId: 'u1', type: 'expense', amount:   5000000, date: `${M}-15`, description: 'Food' },
+      };
+
+      // Telegram path
+      const mockDbTg = createMockDb(fixture);
+      injectMockDb(mockDbTg);
+      let tgBalance;
+      try {
+        const { getFinanceStats } = require('../../tools');
+        const result = await getFinanceStats({}, 'u1', 'RUB');
+        a.ok(result.ok === true, 'Telegram getFinanceStats must succeed');
+        tgBalance = result.message;
+      } finally { teardownMockDb(); }
+
+      // Web AI path
+      const mockDbWeb = createMockDb(fixture);
+      injectMockDbForAiTools(mockDbWeb);
+      let webBalance;
+      try {
+        const { executeTool } = require('../../aiTools');
+        const result = await executeTool('u1', 'search_transactions', {});
+        a.ok(result.success === true, 'Web AI search_transactions must succeed');
+        webBalance = result.data.balance;
+      } finally { teardownMockDbForAiTools(); }
+
+      // Both paths must agree: income 175M - expense 5M = 170M
+      a.numericEquals(webBalance, 170000000, `Web AI balance must be 170000000, got: ${webBalance}`);
+      a.ok(String(tgBalance).replace(/\s/g, '').includes('170'), `Telegram balance must contain 170, got: ${tgBalance}`);
+
+      this.snapshot = { webBalance, tgHas170: String(tgBalance).includes('170') };
+    },
+  },
+];
+
 module.exports = [
   ...routingScenarios,
   ...calculationScenarios,
@@ -720,4 +838,5 @@ module.exports = [
   ...dataQualityScenarios,
   ...financeStatsScenarios,
   ...financeToolIntegrationScenarios,
+  ...currencyScenarios,
 ];
