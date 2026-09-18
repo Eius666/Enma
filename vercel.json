@@ -7,10 +7,8 @@
     "api/cron/maintenance.js":      { "maxDuration": 30 },
     "api/cron/insights.js":         { "maxDuration": 30 },
     "api/ai/[action].js":           { "maxDuration": 30 },
-    "api/insights/list.js":         { "maxDuration": 15 },
-    "api/insights/dismiss.js":      { "maxDuration": 10 },
-    "api/payment/create.js":        { "maxDuration": 15 },
-    "api/payment/callback.js":      { "maxDuration": 15 }
+    "api/insights/[action].js":     { "maxDuration": 15 },
+    "api/payment/[action].js":      { "maxDuration": 30 }
   },
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
