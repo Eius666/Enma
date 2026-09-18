@@ -11,6 +11,7 @@ import { FaArrowLeft, FaArrowUp, FaArrowDown, FaTrash } from 'react-icons/fa';
 import { db } from '../firebase';
 import type { Currency, Transaction } from '../types/app';
 import { getCurrencySymbol } from '../utils/formatCurrency';
+import { resolveTransactionCurrency } from '../utils/resolveLegacyCurrency';
 import type { Subscription } from '../subscription';
 import { getActivePlan, FREE_LIMITS } from '../subscription';
 import { subscribeFreeUsage } from '../lib/usageCounters';
@@ -23,7 +24,6 @@ interface FinanceEditorProps {
   user: User | null;
   language: 'en' | 'ru';
   currency: Currency;
-  convertAmount: (amount: number) => number;
   banks: string[];
   subscription?: Subscription | null;
   onBack: () => void;
@@ -125,19 +125,35 @@ const LAST_BANK_KEY = 'enma.lastBank';
 
 /** Populate form fields from a transaction data object. */
 function applyTxData(
-  tx: { type?: 'income' | 'expense'; amount?: number; description?: string; date?: string; categoryId?: string; category?: string; bank?: string },
-  convertAmount: (n: number) => number,
+  tx: {
+    type?: 'income' | 'expense'; amount?: number; currency?: string; source?: string;
+    createdAt?: { toMillis?: () => number; toDate?: () => Date } | number | null;
+    description?: string; date?: string; categoryId?: string; category?: string; bank?: string;
+  },
   setTxType: (v: 'income' | 'expense') => void,
   setAmountStr: (v: string) => void,
+  setTxCurrency: (v: Currency) => void,
   setDescription: (v: string) => void,
   setDate: (v: string) => void,
   setSelectedCatId: (v: string) => void,
-  setSelectedBank: (v: string) => void
+  setSelectedBank: (v: string) => void,
+  fallbackCurrency: Currency,
 ) {
   if (tx.type) setTxType(tx.type);
   if (tx.amount !== undefined) {
-    setAmountStr(String(Math.round(convertAmount(tx.amount) * 100) / 100));
+    // Edit the amount in the transaction's OWN currency — never convert it
+    // into the app's current display currency. Converting here would silently
+    // re-denominate stored history the moment the user hits Save.
+    setAmountStr(String(Math.round(tx.amount * 100) / 100));
   }
+  // Legacy records without a currency field are resolved via their real
+  // historical write-path semantics — never guessed as a blanket default.
+  // A genuinely unresolvable record (rare — see resolveLegacyCurrency.ts)
+  // falls back to the app's current display currency purely so the editor
+  // has something to show; this is a last-resort UI default, not a claim
+  // about the record's real history.
+  const resolved = resolveTransactionCurrency(tx);
+  setTxCurrency((resolved.currency as Currency) || fallbackCurrency);
   setDescription(tx.description ?? '');
   if (tx.date) setDate(isoToDateInput(tx.date));
   // Match by ID (new-style) or by name (legacy with emoji stripped from category string)
@@ -159,17 +175,21 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
   user,
   language,
   currency,
-  convertAmount,
   banks,
   subscription,
   onBack,
 }) => {
   const t = T[language];
-  const sym = getCurrencySymbol(currency);
   const isNew = !transactionId;
 
   const [txType, setTxType] = useState<'income' | 'expense'>('expense');
   const [amountStr, setAmountStr] = useState('');
+  // The currency THIS transaction is denominated in. New transactions default
+  // to the app's current display currency (that's what the user is typing
+  // in); existing transactions preserve their own stored currency regardless
+  // of what the user's display currency happens to be right now.
+  const [txCurrency, setTxCurrency] = useState<Currency>(currency);
+  const sym = getCurrencySymbol(txCurrency);
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(todayStr());
   const [selectedCatId, setSelectedCatId] = useState<string>('');
@@ -194,14 +214,14 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
   // ── Load existing transaction ─────────────────────────────────────────────
   useEffect(() => {
     if (initialTransaction) {
-      applyTxData(initialTransaction, convertAmount, setTxType, setAmountStr, setDescription, setDate, setSelectedCatId, setSelectedBank);
+      applyTxData(initialTransaction, setTxType, setAmountStr, setTxCurrency, setDescription, setDate, setSelectedCatId, setSelectedBank, currency);
       return;
     }
     if (!transactionId) return;
     getDoc(doc(db, 'transactions', transactionId))
       .then(snap => {
         if (snap.exists()) {
-          applyTxData(snap.data() as Parameters<typeof applyTxData>[0], convertAmount, setTxType, setAmountStr, setDescription, setDate, setSelectedCatId, setSelectedBank);
+          applyTxData(snap.data() as Parameters<typeof applyTxData>[0], setTxType, setAmountStr, setTxCurrency, setDescription, setDate, setSelectedCatId, setSelectedBank, currency);
         }
         setLoaded(true);
       })
@@ -235,7 +255,7 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
           id,
           type:        txType,
           amount,
-          currency,
+          currency:    txCurrency,
           description: description.trim(),
           date:        dateInputToIso(date),
           categoryId:  preset?.id ?? '',
@@ -278,7 +298,7 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
         userId:      user.uid,
         type:        txType,
         amount,
-        currency,
+        currency:    txCurrency,
         description: description.trim(),
         date:        dateInputToIso(date),
         categoryId:  preset?.id ?? '',

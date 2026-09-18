@@ -14,6 +14,11 @@ function normalizeGoal(doc) {
     title:         d.title         || '',
     targetAmount:  d.targetAmount  || 0,
     currentAmount: d.currentAmount || 0,
+    // Every goal has carried this field since the feature's first commit
+    // (Telegram's createGoal — the only write path; there is no Web UI or
+    // AI-chat goal-creation tool). 'RUB' here is a true "field absent"
+    // fallback, not a legacy-guess for a known-corrupted population.
+    currency:      d.currency      || 'RUB',
     deadline:      d.deadline      || '',
     createdAt:     d.createdAt,
     updatedAt:     d.updatedAt,

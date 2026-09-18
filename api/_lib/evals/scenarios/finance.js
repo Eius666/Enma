@@ -433,11 +433,11 @@ const financeStatsScenarios = [
         return dt.toISOString().split('T')[0];
       };
       const db = createMockDb({
-        'transactions/t1': { userId: 'u1', type: 'income',  amount: 100000, date: dateStr(30), categoryId: 'cat-salary' },
-        'transactions/t2': { userId: 'u1', type: 'income',  amount: 50000,  date: dateStr(15), categoryId: 'cat-salary' },
-        'transactions/t3': { userId: 'u1', type: 'expense', amount: 45000,  date: dateStr(10), categoryId: 'cat-food' },
-        'transactions/t4': { userId: 'u1', type: 'expense', amount: 20000,  date: dateStr(5),  categoryId: 'cat-transport' },
-        'transactions/t5': { userId: 'u1', type: 'income',  amount: 350,    date: dateStr(1),  categoryId: 'cat-other' },
+        'transactions/t1': { userId: 'u1', type: 'income',  amount: 100000, currency: 'RUB', date: dateStr(30), categoryId: 'cat-salary' },
+        'transactions/t2': { userId: 'u1', type: 'income',  amount: 50000,  currency: 'RUB', date: dateStr(15), categoryId: 'cat-salary' },
+        'transactions/t3': { userId: 'u1', type: 'expense', amount: 45000,  currency: 'RUB', date: dateStr(10), categoryId: 'cat-food' },
+        'transactions/t4': { userId: 'u1', type: 'expense', amount: 20000,  currency: 'RUB', date: dateStr(5),  categoryId: 'cat-transport' },
+        'transactions/t5': { userId: 'u1', type: 'income',  amount: 350,    currency: 'RUB', date: dateStr(1),  categoryId: 'cat-other' },
       });
       injectMockDb(db);
       try {
@@ -473,8 +473,8 @@ const financeStatsScenarios = [
       // In our fixed implementation the categories section is in a try/catch, so it should still return balance
       const dateStr = new Date(Date.now() - 5 * 86_400_000).toISOString().split('T')[0];
       const db = createMockDb({
-        'transactions/t1': { userId: 'u1', type: 'income',  amount: 50000, date: dateStr, categoryId: 'cat-salary' },
-        'transactions/t2': { userId: 'u1', type: 'expense', amount: 15650, date: dateStr, categoryId: 'cat-food' },
+        'transactions/t1': { userId: 'u1', type: 'income',  amount: 50000, currency: 'RUB', date: dateStr, categoryId: 'cat-salary' },
+        'transactions/t2': { userId: 'u1', type: 'expense', amount: 15650, currency: 'RUB', date: dateStr, categoryId: 'cat-food' },
       });
       injectMockDb(db);
       try {
@@ -503,10 +503,10 @@ const financeStatsScenarios = [
       const thisMonth = new Date(now.getFullYear(), now.getMonth(), 15).toISOString().split('T')[0];
       const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 15).toISOString().split('T')[0];
       const db = createMockDb({
-        'transactions/e1': { userId: 'u1', type: 'expense', amount: 3000,  date: thisMonth, categoryId: 'cat-food' },
-        'transactions/e2': { userId: 'u1', type: 'expense', amount: 1500,  date: thisMonth, categoryId: 'cat-transport' },
-        'transactions/e3': { userId: 'u1', type: 'expense', amount: 99999, date: lastMonth, categoryId: 'cat-other' },
-        'transactions/i1': { userId: 'u1', type: 'income',  amount: 80000, date: thisMonth, categoryId: 'cat-salary' },
+        'transactions/e1': { userId: 'u1', type: 'expense', amount: 3000,  currency: 'RUB', date: thisMonth, categoryId: 'cat-food' },
+        'transactions/e2': { userId: 'u1', type: 'expense', amount: 1500,  currency: 'RUB', date: thisMonth, categoryId: 'cat-transport' },
+        'transactions/e3': { userId: 'u1', type: 'expense', amount: 99999, currency: 'RUB', date: lastMonth, categoryId: 'cat-other' },
+        'transactions/i1': { userId: 'u1', type: 'income',  amount: 80000, currency: 'RUB', date: thisMonth, categoryId: 'cat-salary' },
       });
       injectMockDb(db);
       try {
@@ -533,9 +533,9 @@ const financeStatsScenarios = [
       const now = new Date();
       const thisMonth = new Date(now.getFullYear(), now.getMonth(), 10).toISOString().split('T')[0];
       const db = createMockDb({
-        'transactions/i1': { userId: 'u1', type: 'income',  amount: 120000, date: thisMonth, categoryId: 'cat-salary' },
-        'transactions/i2': { userId: 'u1', type: 'income',  amount: 5000,   date: thisMonth, categoryId: 'cat-freelance' },
-        'transactions/e1': { userId: 'u1', type: 'expense', amount: 30000,  date: thisMonth, categoryId: 'cat-rent' },
+        'transactions/i1': { userId: 'u1', type: 'income',  amount: 120000, currency: 'RUB', date: thisMonth, categoryId: 'cat-salary' },
+        'transactions/i2': { userId: 'u1', type: 'income',  amount: 5000,   currency: 'RUB', date: thisMonth, categoryId: 'cat-freelance' },
+        'transactions/e1': { userId: 'u1', type: 'expense', amount: 30000,  currency: 'RUB', date: thisMonth, categoryId: 'cat-rent' },
       });
       injectMockDb(db);
       try {
@@ -623,6 +623,24 @@ function teardownMockDbForAiTools() {
   delete require.cache[require.resolve('../../aiTools')];
 }
 
+// Mocks the FX rates module so multi-currency aggregation tests are
+// deterministic and offline — no real network fetch happens in the eval suite.
+function injectMockRates(rates) {
+  const er = require.resolve('../../exchangeRates');
+  delete require.cache[er];
+  require.cache[er] = {
+    id: er, filename: er, loaded: true,
+    exports: { getExchangeRates: async () => rates },
+  };
+  delete require.cache[require.resolve('../../tools')];
+  delete require.cache[require.resolve('../../aiTools')];
+}
+function teardownMockRates() {
+  delete require.cache[require.resolve('../../exchangeRates')];
+  delete require.cache[require.resolve('../../tools')];
+  delete require.cache[require.resolve('../../aiTools')];
+}
+
 const financeToolIntegrationScenarios = [
   {
     id:          'finance.tool.search_transactions.balance',
@@ -633,9 +651,9 @@ const financeToolIntegrationScenarios = [
     async run() {
       const M = thisMonthKey();
       const mockDb = createMockDb({
-        [`transactions/t1`]: { userId: 'u1', type: 'income',  amount: 100000, date: `${M}-01`, description: 'Зарплата' },
-        [`transactions/t2`]: { userId: 'u1', type: 'expense', amount:  20000, date: `${M}-05`, description: 'Аренда' },
-        [`transactions/t3`]: { userId: 'u1', type: 'income',  amount:  50000, date: `${M}-10`, description: 'Фриланс' },
+        [`transactions/t1`]: { userId: 'u1', type: 'income',  amount: 100000, currency: 'RUB', date: `${M}-01`, description: 'Зарплата' },
+        [`transactions/t2`]: { userId: 'u1', type: 'expense', amount:  20000, currency: 'RUB', date: `${M}-05`, description: 'Аренда' },
+        [`transactions/t3`]: { userId: 'u1', type: 'income',  amount:  50000, currency: 'RUB', date: `${M}-10`, description: 'Фриланс' },
       });
       injectMockDbForAiTools(mockDb);
       try {
@@ -745,8 +763,8 @@ const currencyScenarios = [
       const M = thisMonthKey();
       const mockDb = createMockDb({
         'users/u1': { currency: 'RUB' },
-        'transactions/t1': { userId: 'u1', type: 'income',  amount: 175000000, date: `${M}-01`, description: 'Зарплата' },
-        'transactions/t2': { userId: 'u1', type: 'expense', amount:   5000000, date: `${M}-15`, description: 'Ресторан' },
+        'transactions/t1': { userId: 'u1', type: 'income',  amount: 175000000, currency: 'RUB', date: `${M}-01`, description: 'Зарплата' },
+        'transactions/t2': { userId: 'u1', type: 'expense', amount:   5000000, currency: 'RUB', date: `${M}-15`, description: 'Ресторан' },
       });
       injectMockDb(mockDb);
       try {
@@ -773,10 +791,10 @@ const currencyScenarios = [
     async run() {
       const txRepo = require('../../repositories/transactions');
       const transactions = [
-        { type: 'income',  amount: 175000000 },
-        { type: 'expense', amount:   5000000 },
+        { type: 'income',  amount: 175000000, currency: 'RUB' },
+        { type: 'expense', amount:   5000000, currency: 'RUB' },
       ];
-      const balance = txRepo.calculateCurrentBalance(transactions);
+      const balance = txRepo.calculateCurrentBalance(transactions, 'RUB');
       // Must be 170,000,000 — NOT ~1,935,227 (÷88) or any USD-converted value
       a.numericEquals(balance, 170000000, `balance must be 170000000 RUB, got: ${balance}`);
       a.ok(balance > 1000000, 'balance must be in RUB scale (> 1M), not USD scale (~2M)');
@@ -794,8 +812,8 @@ const currencyScenarios = [
       const M = thisMonthKey();
       const fixture = {
         'users/u1': { currency: 'RUB' },
-        'transactions/t1': { userId: 'u1', type: 'income',  amount: 175000000, date: `${M}-01`, description: 'Salary' },
-        'transactions/t2': { userId: 'u1', type: 'expense', amount:   5000000, date: `${M}-15`, description: 'Food' },
+        'transactions/t1': { userId: 'u1', type: 'income',  amount: 175000000, currency: 'RUB', date: `${M}-01`, description: 'Salary' },
+        'transactions/t2': { userId: 'u1', type: 'expense', amount:   5000000, currency: 'RUB', date: `${M}-15`, description: 'Food' },
       };
 
       // Telegram path
@@ -822,9 +840,181 @@ const currencyScenarios = [
 
       // Both paths must agree: income 175M - expense 5M = 170M
       a.numericEquals(webBalance, 170000000, `Web AI balance must be 170000000, got: ${webBalance}`);
-      a.ok(String(tgBalance).replace(/\s/g, '').includes('170'), `Telegram balance must contain 170, got: ${tgBalance}`);
+      // Match the "Баланс:" line specifically — a loose substring check would
+      // also pass if only the period breakdown showed 170M while the actual
+      // all-time balance figure was wrong (this happened during development).
+      const balanceLine = String(tgBalance).split('\n').find(l => l.includes('Баланс')) || '';
+      a.ok(balanceLine.replace(/\s/g, '').includes('170000000') || balanceLine.replace(/[\s  ]/g, '').includes('170000000'),
+        `Telegram "Баланс:" line must contain 170000000, got: ${balanceLine}`);
 
       this.snapshot = { webBalance, tgHas170: String(tgBalance).includes('170') };
+    },
+  },
+
+  {
+    id:          'finance.currency.screenshot_regression',
+    description: 'CRITICAL: user.currency=USD, single tx {amount:5000, currency:RUB} — balance must be the CONVERTED ~59 USD, not a raw-RUB-scale number mislabeled as USD',
+    domain:      'finance',
+    critical:    true,
+    snapshot:    {},
+    async run() {
+      const RATE = 0.0118; // 1 RUB = 0.0118 USD
+      const fixture = {
+        'users/u1': { currency: 'USD' },
+        'transactions/t1': { userId: 'u1', type: 'expense', amount: 5000, currency: 'RUB', date: `${thisMonthKey()}-05`, description: 'Ресторан' },
+      };
+      injectMockRates({ RUB: 1, USD: RATE });
+
+      const mockDb = createMockDb(fixture);
+      injectMockDb(mockDb);
+      let tgResult;
+      try {
+        const { getFinanceStats } = require('../../tools');
+        tgResult = await getFinanceStats({}, 'u1', 'USD');
+      } finally { teardownMockDb(); }
+
+      const mockDbWeb = createMockDb(fixture);
+      injectMockDbForAiTools(mockDbWeb);
+      let webResult;
+      try {
+        const { executeTool } = require('../../aiTools');
+        webResult = await executeTool('u1', 'search_transactions', {});
+      } finally { teardownMockDbForAiTools(); }
+
+      teardownMockRates();
+
+      const expected = -(5000 * RATE); // ≈ -59
+      a.numericClose(webResult.data.balance, expected, `Web AI balance must be ≈${expected} USD (converted), not -5000`, 0.01);
+      a.ok(String(tgResult.message).includes('-59') || String(tgResult.message).match(/-5[89]\.\d/),
+        `Telegram balance message must show converted ≈-59 USD, got: ${tgResult.message}`);
+      a.ok(!String(tgResult.message).includes('5000'), `Telegram balance must NOT show raw unconverted 5000, got: ${tgResult.message}`);
+
+      // The individual transaction returned to the AI must still carry ITS OWN
+      // currency (RUB) and raw amount (5000) — never silently relabeled as USD.
+      const tx = webResult.data.transactions.find(t => t.description === 'Ресторан');
+      a.ok(tx.currency === 'RUB', `transaction row must keep its own currency RUB, got: ${tx.currency}`);
+      a.numericEquals(tx.amount, 5000, `transaction row amount must stay 5000 (its own currency), got: ${tx.amount}`);
+
+      this.snapshot = { webBalance: webResult.data.balance, txCurrency: tx.currency, txAmount: tx.amount };
+    },
+  },
+
+  {
+    id:          'finance.currency.mixed_currency_aggregation',
+    description: 'user.currency=USD, transactions in RUB and USD — totals must convert-then-sum, never sum raw mixed currencies',
+    domain:      'finance',
+    critical:    true,
+    snapshot:    {},
+    async run() {
+      const rates = { RUB: 1, USD: 100 / 9000 }; // 9000 RUB == 100 USD
+      const fixture = {
+        'users/u1': { currency: 'USD' },
+        'transactions/t1': { userId: 'u1', type: 'expense', amount: 9000, currency: 'RUB', date: `${thisMonthKey()}-01`, description: 'A' },
+        'transactions/t2': { userId: 'u1', type: 'expense', amount:  100, currency: 'USD', date: `${thisMonthKey()}-02`, description: 'B' },
+      };
+      injectMockRates(rates);
+
+      const mockDbWeb = createMockDb(fixture);
+      injectMockDbForAiTools(mockDbWeb);
+      let webResult;
+      try {
+        const { executeTool } = require('../../aiTools');
+        webResult = await executeTool('u1', 'search_transactions', {});
+      } finally { teardownMockDbForAiTools(); }
+
+      teardownMockRates();
+
+      a.numericClose(webResult.data.totalExpense, 200, `mixed-currency expense total must be ≈200 USD (100+100), got: ${webResult.data.totalExpense}`, 0.01);
+
+      this.snapshot = { totalExpense: webResult.data.totalExpense };
+    },
+  },
+
+  {
+    id:          'finance.currency.identity_no_fx_needed',
+    description: 'RUB-only user must never depend on FX rates being available — offline FX API must not break the balance',
+    domain:      'finance',
+    critical:    true,
+    snapshot:    {},
+    async run() {
+      // No injectMockRates() call — getExchangeRates would hit the real network
+      // and fail/hang in this sandbox. A RUB-only user must never trigger that call.
+      const fixture = {
+        'users/u1': { currency: 'RUB' },
+        'transactions/t1': { userId: 'u1', type: 'expense', amount: 5000, currency: 'RUB', date: `${thisMonthKey()}-05`, description: 'Ресторан' },
+      };
+      const mockDb = createMockDb(fixture);
+      injectMockDb(mockDb);
+      let result;
+      try {
+        const { getFinanceStats } = require('../../tools');
+        result = await getFinanceStats({}, 'u1', 'RUB');
+      } finally { teardownMockDb(); }
+
+      a.ok(result.ok === true, `RUB-only balance must succeed without any FX call, got: ${JSON.stringify(result)}`);
+      a.ok(String(result.message).includes('5000'), `balance must show exact 5000 RUB with no conversion drift, got: ${result.message}`);
+
+      this.snapshot = { message: result.message };
+    },
+  },
+
+  {
+    id:          'finance.currency.goal_explicit_currency',
+    description: 'SPEC: "Хочу накопить $20000" → goal.currency=USD, overriding the user\'s RUB display currency',
+    domain:      'finance',
+    critical:    true,
+    snapshot:    {},
+    async run() {
+      const fixture = { 'users/u1': { currency: 'RUB' } };
+      const mockDb = createMockDb(fixture);
+      injectMockDb(mockDb);
+      try {
+        const { executeTool } = require('../../tools');
+        // Simulates the LLM having parsed "$20000" and filled the optional
+        // `currency` tool arg — explicit currency must win over user.currency.
+        const result = await executeTool(
+          'create_goal',
+          { title: 'Новый ноутбук', targetAmount: 20000, currency: 'USD' },
+          'u1', 'chat1', 'Europe/Moscow', 'RUB',
+        );
+        a.ok(result.ok === true, `create_goal must succeed, got: ${JSON.stringify(result)}`);
+
+        const goalsSnap = await mockDb.collection('goals').get();
+        const stored = goalsSnap.docs[0]?.data();
+        a.ok(stored, 'goal document must have been written');
+        a.ok(stored.currency === 'USD', `stored goal.currency must be USD (explicit), got: ${stored?.currency}`);
+        a.ok(stored.targetAmount === 20000, `stored targetAmount must stay 20000 (no conversion on write), got: ${stored?.targetAmount}`);
+
+        this.snapshot = { currency: stored.currency, targetAmount: stored.targetAmount };
+      } finally { teardownMockDb(); }
+    },
+  },
+
+  {
+    id:          'finance.currency.goal_default_currency',
+    description: '"Хочу накопить 500000" (no explicit currency) → falls back to user.currency',
+    domain:      'finance',
+    critical:    false,
+    snapshot:    {},
+    async run() {
+      const fixture = { 'users/u1': { currency: 'RUB' } };
+      const mockDb = createMockDb(fixture);
+      injectMockDb(mockDb);
+      try {
+        const { executeTool } = require('../../tools');
+        const result = await executeTool(
+          'create_goal',
+          { title: 'Отпуск', targetAmount: 500000 },
+          'u1', 'chat1', 'Europe/Moscow', 'RUB',
+        );
+        a.ok(result.ok === true, `create_goal must succeed, got: ${JSON.stringify(result)}`);
+
+        const goalsSnap = await mockDb.collection('goals').get();
+        const stored = goalsSnap.docs[0]?.data();
+        a.ok(stored.currency === 'RUB', `no explicit currency named → must fall back to user.currency (RUB), got: ${stored?.currency}`);
+
+        this.snapshot = { currency: stored.currency };
+      } finally { teardownMockDb(); }
     },
   },
 ];

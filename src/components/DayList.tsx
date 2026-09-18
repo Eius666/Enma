@@ -12,6 +12,8 @@ import { FaSearch, FaCheck, FaCalendarDay } from 'react-icons/fa';
 import { db } from '../firebase';
 import WeekSummary from './WeekSummary';
 import { useWeekTasks } from '../hooks/useWeekTasks';
+import { convertCurrency } from '../utils/convertCurrency';
+import { resolveTransactionCurrency } from '../utils/resolveLegacyCurrency';
 import './Day.css';
 
 // ── Shared types & constants ──────────────────────────────────────────────────
@@ -46,6 +48,9 @@ interface HabitSummary {
 interface TxSummary {
   type: 'income' | 'expense';
   amount: number;
+  currency?: string;
+  source?: string;
+  createdAt?: { toMillis?: () => number; toDate?: () => Date } | number | null;
   date: string;
 }
 
@@ -53,7 +58,7 @@ interface DayListProps {
   language: 'en' | 'ru';
   user: User | null;
   currency: string;
-  convertAmount: (n: number) => number;
+  rates: Record<string, number>;
   firestoreHabits: HabitSummary[];
   transactions: TxSummary[];
   tasks: DayTask[];                            // All user tasks; filtered by today inside
@@ -110,7 +115,7 @@ const DayList: React.FC<DayListProps> = ({
   language,
   user,
   currency,
-  convertAmount,
+  rates,
   firestoreHabits,
   transactions,
   tasks,
@@ -155,11 +160,18 @@ const DayList: React.FC<DayListProps> = ({
           return false;
         }
       })
-      .reduce((sum, tx) => sum + tx.amount, 0);
-  }, [transactions, today]);
+      // Convert each transaction from ITS OWN (resolved) currency before summing
+      // — never sum raw amounts across currencies, never guess a legacy
+      // record's currency (see FinanceList.tsx / resolveLegacyCurrency.ts).
+      .reduce((sum, tx) => {
+        const resolved = resolveTransactionCurrency(tx);
+        if (resolved.currency === null) return sum; // unresolvable — excluded, not mis-summed
+        return sum + convertCurrency(tx.amount, resolved.currency, currency, rates);
+      }, 0);
+  }, [transactions, today, currency, rates]);
 
   const fmt = (n: number) =>
-    convertAmount(n).toLocaleString(locale, { style: 'currency', currency: currency as 'USD' });
+    n.toLocaleString(locale, { style: 'currency', currency: currency as 'USD' });
 
   // ── Date header label ────────────────────────────────────────────────────────
 

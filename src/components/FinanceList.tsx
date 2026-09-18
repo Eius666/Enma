@@ -4,12 +4,14 @@ import { isToday, isYesterday, format } from 'date-fns';
 import { ru as ruLocale, enUS } from 'date-fns/locale';
 import type { Transaction, Category, Currency } from '../types/app';
 import { PRESET_COLOR_BY_ID } from './FinanceEditor';
+import { convertCurrency } from '../utils/convertCurrency';
+import { resolveTransactionCurrency } from '../utils/resolveLegacyCurrency';
 import './Finance.css';
 
 interface FinanceListProps {
   language: 'en' | 'ru';
   currency: Currency;
-  convertAmount: (amount: number) => number;
+  rates: Record<string, number>;
   categories: Category[];
   transactions: Transaction[];
   onOpenEditor: (txId: string | null) => void;
@@ -120,7 +122,7 @@ const T = {
 const FinanceList: React.FC<FinanceListProps> = ({
   language,
   currency,
-  convertAmount,
+  rates,
   categories,
   transactions,
   onOpenEditor,
@@ -150,35 +152,42 @@ const FinanceList: React.FC<FinanceListProps> = ({
     return transactions.filter(tx => new Date(tx.date) >= start);
   }, [transactions, period]);
 
-  // For summary totals: amounts are stored in base currency (RUB for RUB users).
-  // convertAmount converts to the user's selected display currency.
-  const fmt = (amount: number) =>
-    convertAmount(amount).toLocaleString(locale, { style: 'currency', currency });
+  // Single shared conversion pipeline (spec: rows and aggregates must never disagree).
+  // Every transaction's currency is resolved via resolveTransactionCurrency
+  // (never guessed as a blanket default for legacy records — see that module
+  // for the historical write-path evidence), then converted into the display
+  // currency individually, before any summing happens — never sum raw amounts
+  // across currencies and never blanket-convert an already-summed total.
+  // Returns null when the real currency can't be determined at all — such a
+  // transaction is excluded from totals rather than mis-summed.
+  const getDisplayAmount = React.useCallback(
+    (tx: Transaction): number | null => {
+      const resolved = resolveTransactionCurrency(tx);
+      if (resolved.currency === null) return null;
+      return convertCurrency(tx.amount, resolved.currency, currency, rates);
+    },
+    [currency, rates],
+  );
 
-  // For individual transactions:
-  // 1. If tx.currency matches the display currency, show tx.amount directly (no conversion).
-  // 2. Else if originalCurrency matches, use originalAmount (legacy Telegram field).
-  // 3. Otherwise fall back to fmt() which assumes amount is in base currency.
+  const formatMoney = (amount: number) =>
+    amount.toLocaleString(locale, { style: 'currency', currency });
+
+  const fmt = (amount: number) => formatMoney(amount);
   const fmtTx = (tx: Transaction) => {
-    if (tx.currency === currency) {
-      return tx.amount.toLocaleString(locale, { style: 'currency', currency });
-    }
-    if (tx.originalCurrency === currency && tx.originalAmount != null) {
-      return tx.originalAmount.toLocaleString(locale, { style: 'currency', currency });
-    }
-    return fmt(tx.amount);
+    const amount = getDisplayAmount(tx);
+    return amount === null ? '—' : formatMoney(amount);
   };
 
   // ── Summary (for selected period) ─────────────────────────────────────────
   const summary = useMemo(() => {
     const income = periodFiltered
       .filter(tx => tx.type === 'income')
-      .reduce((s, tx) => s + tx.amount, 0);
+      .reduce((s, tx) => s + (getDisplayAmount(tx) ?? 0), 0);
     const expense = periodFiltered
       .filter(tx => tx.type === 'expense')
-      .reduce((s, tx) => s + tx.amount, 0);
+      .reduce((s, tx) => s + (getDisplayAmount(tx) ?? 0), 0);
     return { income, expense, balance: income - expense };
-  }, [periodFiltered]);
+  }, [periodFiltered, getDisplayAmount]);
 
   // ── Category chips (derived from period-filtered transactions) ─────────────
   const chips = useMemo(() => {

@@ -8,6 +8,7 @@
 
 const { db, admin }                   = require('../firebaseAdmin');
 const { INSIGHTS_CONFIG, computeInsightScore } = require('./config');
+const { convertCurrency }             = require('../convertCurrency');
 
 const TS = () => admin.firestore.FieldValue.serverTimestamp();
 
@@ -24,7 +25,8 @@ function insightsRef(uid) {
 // - dismissed (stale) → re-activate
 // - resolved          → re-activate if event recurs
 
-async function upsertEvent(uid, eventData) {
+async function upsertEvent(uid, eventData, opts = {}) {
+  const { currency = 'RUB', rates = null } = opts;
   const ref = insightsRef(uid).doc(eventData.fingerprint);
 
   return db.runTransaction(async (tx) => {
@@ -43,7 +45,11 @@ async function upsertEvent(uid, eventData) {
         }
       }
 
-      const needsRenotify = checkSubstantialChange(existing, eventData);
+      // Event detection/update itself never depends on this — only whether a
+      // FRESH Telegram re-notification is warranted. If the threshold can't
+      // be safely converted, we simply don't re-notify; the event patch
+      // below still applies (facts/severity stay current either way).
+      const needsRenotify = checkSubstantialChange(existing, eventData, currency, rates);
 
       const patch = {
         severity:        eventData.severity,
@@ -153,12 +159,27 @@ function rankInsights(insights) {
 
 // ── checkSubstantialChange — determines if re-notification is warranted ───────
 
-function checkSubstantialChange(existing, updated) {
+function checkSubstantialChange(existing, updated, currency = 'RUB', rates = null) {
   if (existing.type !== updated.eventType) return false;
   if (existing.type === 'finance.cash_gap') {
-    const threshold = INSIGHTS_CONFIG['finance.cash_gap'].substantialChangeAmount || 5000;
-    const oldGap    = existing.facts?.gapAmount || 0;
-    const newGap    = updated.facts?.gapAmount  || 0;
+    const cfg = INSIGHTS_CONFIG['finance.cash_gap'];
+    const rawThreshold     = cfg.substantialChangeAmount   || 5000;
+    const thresholdCurrency = cfg.substantialChangeCurrency || 'RUB';
+
+    let threshold;
+    if (thresholdCurrency === currency) {
+      threshold = rawThreshold;
+    } else if (rates) {
+      threshold = convertCurrency(rawThreshold, thresholdCurrency, currency, rates);
+    } else {
+      // Can't safely convert the RUB-denominated threshold into `currency`
+      // — never guess "no conversion needed." Skip re-notification only;
+      // the event itself (facts/severity) is still updated by the caller.
+      return false;
+    }
+
+    const oldGap = existing.facts?.gapAmount || 0;
+    const newGap = updated.facts?.gapAmount  || 0;
     return Math.abs(newGap - oldGap) >= threshold;
   }
   return false;

@@ -1,7 +1,7 @@
 'use strict';
 
 const { calculateMetrics }       = require('./metrics');
-const { calculateAffordability, extractPurchaseAmount } = require('./affordability');
+const { calculateAffordability } = require('./affordability');
 const { calculateGoalPlan }      = require('./goals');
 const { calculateCashflow }      = require('./cashflow');
 const { calculateLeakSignals }   = require('./leaks');
@@ -10,6 +10,11 @@ const { calculateStressTest }    = require('./stressTest');
 const { calculateDebtStrategy }  = require('./debt');
 const { calculateScenario }      = require('./scenarios');
 const { round, ROUNDING }        = require('./constants');
+const { normalizeTransactionsCurrency, needsFx, normalizeGoalsCurrency, goalsNeedFx } = require('./normalizeCurrency');
+const { getExchangeRates }       = require('../exchangeRates');
+const { extractMoneyAmount }     = require('./extractMoneyAmount');
+const { parseScenarioModification } = require('./scenarioModification');
+const { convertCurrency }        = require('../convertCurrency');
 
 // ── Skill → calculations mapping ─────────────────────────────────────────────
 // Each skill declares which calculators to run before the LLM sees the prompt.
@@ -31,14 +36,42 @@ const SKILL_CALCULATIONS = {
 
 // ── Runner ────────────────────────────────────────────────────────────────────
 
-function runCalc(name, { transactions, goals, timezone, message }) {
+function runCalc(name, { transactions, goals, timezone, message, currency, rates, scenarioModification }) {
   switch (name) {
     case 'metrics':      return calculateMetrics({ transactions, timezone });
     case 'monthReview':  return calculateMonthReview({ transactions, timezone });
     case 'cashflow':     return calculateCashflow({ transactions, timezone });
     case 'leaks':        return calculateLeakSignals({ transactions, timezone });
     case 'stressTest':   return calculateStressTest({ transactions, timezone });
-    case 'scenarios':    return calculateScenario({ transactions, timezone });
+    case 'scenarios': {
+      if (!scenarioModification) {
+        // No modification detected in this message — plain baseline projection.
+        return calculateScenario({ transactions, timezone });
+      }
+
+      // Conversion happens BEFORE scenario arithmetic, once, here — never
+      // treat "500 USD" as "500 RUB" just because no rate was available.
+      const modCurrency = scenarioModification.currency ?? currency;
+      let delta;
+      if (modCurrency === currency) {
+        delta = scenarioModification.delta;
+      } else if (rates) {
+        delta = convertCurrency(scenarioModification.delta, modCurrency, currency, rates);
+      } else {
+        return {
+          status:  'insufficient_data',
+          missing: ['fx_rate'],
+          note:    `modification named in ${modCurrency} but FX to ${currency} is unavailable`,
+        };
+      }
+
+      const modifications = {};
+      if (scenarioModification.type === 'income_change')   modifications.incomeChange = delta;
+      if (scenarioModification.type === 'expense_change')  modifications.expenseChange = delta;
+      if (scenarioModification.type === 'savings_change')  modifications.monthlySavingExtra = delta;
+
+      return calculateScenario({ transactions, modifications, timezone });
+    }
     case 'goals': {
       if (!Array.isArray(goals) || goals.length === 0) {
         return { status: 'insufficient_data', missing: ['goals'] };
@@ -46,7 +79,20 @@ function runCalc(name, { transactions, goals, timezone, message }) {
       return calculateGoalPlan({ goals, transactions, timezone });
     }
     case 'affordability': {
-      const purchaseAmount = extractPurchaseAmount(message);
+      // "Могу купить за 5000 USD?" must be parsed as $5000, not 5000 of the
+      // calculation currency — explicit currency in the message always wins
+      // over the implicit calculation-currency default.
+      const parsed = extractMoneyAmount(message, currency);
+      let purchaseAmount = null;
+      if (parsed) {
+        if (!parsed.explicitCurrency || parsed.currency === currency) {
+          purchaseAmount = parsed.amount;
+        } else if (rates) {
+          purchaseAmount = convertCurrency(parsed.amount, parsed.currency, currency, rates);
+        }
+        // else: explicit foreign currency named but FX unavailable — leave
+        // purchaseAmount null rather than silently treat it as `currency`.
+      }
       return calculateAffordability({ purchaseAmount, transactions, goals, timezone });
     }
     case 'debt':
@@ -80,6 +126,7 @@ function fmtPct(v) {
 function serializeResults(calcs, currency, skillIds) {
   const c = currency || 'RUB';
   const lines = ['[CALCULATED FINANCIAL METRICS]',
+    `Валюта расчёта: ${c}`,
     'Рассчитано детерминистически backend-движком. Используй эти числа как источник истины — не пересчитывай самостоятельно.',
     ''];
 
@@ -278,12 +325,15 @@ function serializeResults(calcs, currency, skillIds) {
 //
 // financeData = { transactions: [], goals: [] }
 
-function runFinanceEngine({ skillIds, financeData, timezone, currency, message }) {
-  const { transactions = [], goals = [] } = financeData || {};
+async function runFinanceEngine({ skillIds, financeData, timezone, currency, message, previousScenarioModification }) {
+  const { transactions: rawTransactions = [], goals: rawGoals = [] } = financeData || {};
 
-  if (!Array.isArray(transactions) || transactions.length === 0) {
+  if (!Array.isArray(rawTransactions) || rawTransactions.length === 0) {
     return '[CALCULATED FINANCIAL METRICS]\nДанные транзакций недоступны для расчёта.\n';
   }
+
+  // Explicit calculation currency — never an implicit/hidden global default.
+  const baseCurrency = currency || 'RUB';
 
   // Collect the union of required calculation names for active skills
   const calcNames = new Set();
@@ -293,9 +343,50 @@ function runFinanceEngine({ skillIds, financeData, timezone, currency, message }
     }
   }
 
+  // An explicit-currency purchase amount ("за 5000 USD") needs FX to convert
+  // into baseCurrency even when every transaction/goal is already
+  // single-currency — check for it before deciding whether to fetch rates.
+  let purchaseNeedsFx = false;
+  if (calcNames.has('affordability')) {
+    const parsed = extractMoneyAmount(message, baseCurrency);
+    purchaseNeedsFx = !!(parsed && parsed.explicitCurrency && parsed.currency !== baseCurrency);
+  }
+
+  // What-if modification ("буду тратить на $500 больше") — parsed here, once,
+  // from the current message plus the previous turn's modification (for
+  // follow-ups like "А если на $300?" that only restate the amount).
+  let scenarioModification = null;
+  if (calcNames.has('scenarios')) {
+    scenarioModification = parseScenarioModification(message, previousScenarioModification || null);
+  }
+  const scenarioNeedsFx = !!(
+    scenarioModification && scenarioModification.currency && scenarioModification.currency !== baseCurrency
+  );
+
+  // Normalize ONCE, before any calculator runs: convert every transaction (and
+  // every goal) from its own currency into baseCurrency. Calculators below
+  // then just read `amount`/`targetAmount`/`currentAmount` — they never need
+  // to know about currency at all. FX is only fetched if something actually
+  // differs from baseCurrency, so a RUB-only or USD-only user never depends
+  // on the FX API. Transaction currency is resolved via
+  // resolveTransactionCurrency — a record whose real historical currency
+  // cannot be proven makes the whole batch unsafe to compute exactly.
+  const rates = (needsFx(rawTransactions, baseCurrency) || goalsNeedFx(rawGoals, baseCurrency) || purchaseNeedsFx || scenarioNeedsFx)
+    ? await getExchangeRates()
+    : null;
+  const { transactions, ok: txCurrencyOk } = normalizeTransactionsCurrency(rawTransactions, baseCurrency, rates);
+  const { goals, ok: goalsCurrencyOk }     = normalizeGoalsCurrency(rawGoals, baseCurrency, rates);
+
+  if (!txCurrencyOk || !goalsCurrencyOk) {
+    console.warn(`[FINANCE_ENGINE] insufficient_currency_data baseCurrency=${baseCurrency}`);
+    return '[CALCULATED FINANCIAL METRICS]\n' +
+      'Недостаточно данных о курсе валют: часть операций в другой валюте, а курс обмена сейчас недоступен. ' +
+      'Точный расчёт невозможен — не используй эти данные для числовых выводов.\n';
+  }
+
   if (calcNames.size === 0) return null; // no calculations needed
 
-  const ctx   = { transactions, goals, timezone, currency, message };
+  const ctx   = { transactions, goals, timezone, currency: baseCurrency, message, rates, scenarioModification };
   const results = {};
   const t0    = Date.now();
 
@@ -311,14 +402,13 @@ function runFinanceEngine({ skillIds, financeData, timezone, currency, message }
   const durMs = Date.now() - t0;
   console.log(`[FINANCE_ENGINE] skills=${[...skillIds||[]].join(',')} calcs=${[...calcNames].join(',')} dur=${durMs}ms`);
 
-  return serializeResults(results, currency || 'RUB', skillIds);
+  return serializeResults(results, baseCurrency, skillIds);
 }
 
 module.exports = {
   runFinanceEngine,
   calculateMetrics,
   calculateAffordability,
-  extractPurchaseAmount,
   calculateGoalPlan,
   calculateCashflow,
   calculateLeakSignals,

@@ -25,6 +25,8 @@ const notesRepo     = require('../_lib/repositories/notes');
 const habitsRepo    = require('../_lib/repositories/habits');
 const goalsRepo     = require('../_lib/repositories/goals');
 const crypto        = require('crypto');
+const { getExchangeRates } = require('../_lib/exchangeRates');
+const { normalizeTransactionsCurrency, needsFx } = require('../_lib/finance/normalizeCurrency');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TOTP (RFC 6238) — no external dependencies, uses Node.js built-in crypto
@@ -508,11 +510,24 @@ async function handleAnalyze(req, res) {
 
 async function _buildFinanceSection(userId, today, monthKey, currency = 'RUB') {
   try {
-    const allTx = await txRepo.getAllTransactions(userId);
-    console.log('[CHAT_TRACE] financeLoader=ok docs=' + allTx.length);
+    const rawTx = await txRepo.getAllTransactions(userId);
+    console.log('[CHAT_TRACE] financeLoader=ok docs=' + rawTx.length);
+
+    // Never sum raw amounts across currencies, and never guess a legacy
+    // record's currency as a blanket default — normalize every transaction
+    // via the same resolver + converter the Finance Engine and Proactive
+    // Brain use. Rates are only fetched if a foreign-currency transaction
+    // actually exists, so a RUB-only user's context never depends on the FX API.
+    const rates = needsFx(rawTx, currency) ? await getExchangeRates() : null;
+    const normalized = normalizeTransactionsCurrency(rawTx, currency, rates);
+
+    if (!normalized.ok) {
+      return '[ФИНАНСЫ]\nНедостаточно данных о курсе валют — часть операций в другой валюте, а курс обмена сейчас недоступен. Точные суммы недоступны.';
+    }
+    const allTx = normalized.transactions;
 
     // All-time balance via shared repository helper
-    const currentBalance = txRepo.calculateCurrentBalance(allTx);
+    const currentBalance = txRepo.calculateCurrentBalance(allTx, currency, rates);
 
     let monthIncome = 0, monthExpenses = 0;
     const cats = {};
@@ -533,11 +548,11 @@ async function _buildFinanceSection(userId, today, monthKey, currency = 'RUB') {
 
       if (recentTx.length < 5) {
         const sign = tx.type === 'income' ? '+' : '-';
-        recentTx.push(`${sign}${tx.amount} (${tx.description || 'транзакция'}) ${(tx.date || '').slice(0, 10)}`);
+        // Each transaction keeps its OWN real currency label — it must never
+        // be implied to be in the user's display currency without conversion.
+        recentTx.push(`${sign}${tx.originalAmount} ${tx.originalCurrency} (${tx.description || 'транзакция'}) ${(tx.date || '').slice(0, 10)}`);
       }
     }
-
-    const sym = { RUB: '₽', USD: '$', EUR: '€', BYN: 'Br', CNY: '¥' }[currency] || currency;
 
     const lines = [
       `Валюта пользователя: ${currency}`,
@@ -555,7 +570,7 @@ async function _buildFinanceSection(userId, today, monthKey, currency = 'RUB') {
     }
     if (recentTx.length) {
       lines.push('Последние операции:');
-      for (const t of recentTx) lines.push(`  ${t} ${currency}`);
+      for (const t of recentTx) lines.push(`  ${t}`);
     }
 
     console.log('[AI_FINANCE_CONTEXT] currency=%s balance=%s', currency, currentBalance.toFixed(0));
@@ -657,7 +672,9 @@ async function _buildGoalsSection(userId) {
     if (!goals.length) return null;
     const lines = goals.map(g => {
       const pct = Math.round(g.currentAmount / (g.targetAmount || 1) * 100);
-      return `  ${g.title}: ${g.currentAmount} / ${g.targetAmount} (${pct}%)`;
+      // Goal amounts are in the goal's OWN currency, which may differ from
+      // the user's current display currency — always label it explicitly.
+      return `  ${g.title}: ${g.currentAmount} / ${g.targetAmount} ${g.currency} (${pct}%)`;
     });
     return `[ЦЕЛИ НАКОПЛЕНИЯ]\n${lines.join('\n')}`;
   } catch (e) {
@@ -894,12 +911,15 @@ async function handleChat(req, res) {
         const rawFinance = await loadRawFinanceData(verifiedUid);
         const skillIds   = activeFinanceSkills.map(s => s.id);
 
-        calculatedMetrics = runFinanceEngine({
+        calculatedMetrics = await runFinanceEngine({
           skillIds,
           financeData: rawFinance,
           timezone,
           currency,
           message,
+          // Follow-up what-if ("А если на $300?") reuses the previous turn's
+          // scenario type/direction/currency, replacing only the amount.
+          previousScenarioModification: convState.parameters?.scenarioModification || null,
         });
 
         const engDur = Date.now() - t0Eng;

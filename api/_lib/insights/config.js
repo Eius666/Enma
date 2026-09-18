@@ -12,6 +12,7 @@ const INSIGHTS_CONFIG = {
   'finance.cash_gap': {
     projectedBalanceThreshold: 0,          // gap when projected closing balance < 0
     substantialChangeAmount:   5000,       // re-notify if |gap| worsens by this much
+    substantialChangeCurrency: 'RUB',      // substantialChangeAmount is denominated in this currency — converted before comparison
     cooldownMs:  24 * 60 * 60 * 1000,     // 24h between Telegram notifications
     expiryOffsetDays: 33,                  // ~end of month + buffer
     detectorVersion: DETECTOR_VERSION,
@@ -21,6 +22,7 @@ const INSIGHTS_CONFIG = {
   'finance.payment_cluster': {
     windowDays:      5,
     minTotalAmount:  10000,
+    thresholdCurrency: 'RUB',  // minTotalAmount is denominated in this currency — converted before comparison
     minPaymentCount: 2,
     minConfidence:   0.70,
     cooldownMs:  7 * 24 * 60 * 60 * 1000,
@@ -32,6 +34,7 @@ const INSIGHTS_CONFIG = {
   'finance.category_spike': {
     minIncreasePct:    30,     // mirrors LEAK_SPIKE_THRESHOLD_PCT in finance/constants
     minIncreaseAmount: 1000,   // absolute floor — 100→250 (+150%) is NOT a spike
+    thresholdCurrency: 'RUB',  // minIncreaseAmount is denominated in this currency — converted before comparison
     cooldownMs:  7 * 24 * 60 * 60 * 1000,
     expiryOffsetDays: 33,
     detectorVersion: DETECTOR_VERSION,

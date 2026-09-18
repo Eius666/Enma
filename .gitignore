@@ -28,3 +28,9 @@ functions/
 scripts/*.key
 scripts/*.json
 Снимок экрана*.png
+
+# Firebase service-account keys — must never be committed
+NEW_KEY_ENMA.json
+enma-4ea29-firebase-adminsdk-fbsvc-32b4b33295.json
+*firebase-adminsdk*.json
+serviceAccountKey*.json

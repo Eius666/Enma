@@ -6,6 +6,20 @@ const tasksRepo     = require('./repositories/tasks');
 const remindersRepo = require('./repositories/reminders');
 const notesRepo     = require('./repositories/notes');
 const habitsRepo    = require('./repositories/habits');
+const { getExchangeRates } = require('./exchangeRates');
+const { normalizeTransactionsCurrency, needsFx } = require('./finance/normalizeCurrency');
+
+// explicit > user's stored preference > RUB fallback (never forced RUB for an
+// existing user — RUB is a fallback for the absent case only).
+async function resolveUserCurrency(uid, options = {}) {
+  if (options.currency) return options.currency;
+  try {
+    const userSnap = await db.collection('users').doc(uid).get();
+    return userSnap.exists ? (userSnap.data().currency || 'RUB') : 'RUB';
+  } catch {
+    return 'RUB';
+  }
+}
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -453,14 +467,7 @@ async function tool_createTransaction(uid, args, options = {}) {
   const catName = CATEGORY_NAMES[catId] || catId;
   const id      = options.docId || makeDocId();
 
-  // Resolve user's base currency (Firestore SDK caches within the process request).
-  let currency = options.currency || 'RUB';
-  if (!options.currency) {
-    try {
-      const userSnap = await db.collection('users').doc(uid).get();
-      currency = userSnap.exists ? (userSnap.data().currency || 'RUB') : 'RUB';
-    } catch { /* keep default RUB */ }
-  }
+  const currency = await resolveUserCurrency(uid, options);
 
   const data = {
     id,
@@ -677,7 +684,7 @@ async function tool_searchReminders(uid, args) {
 
 // ── search_transactions ───────────────────────────────────────────────────────
 
-async function tool_searchTransactions(uid, args) {
+async function tool_searchTransactions(uid, args, options = {}) {
   const { dateFrom, dateTo, type, categoryId, query: q } = args;
 
   let txs = await txRepo.getAllTransactions(uid);
@@ -695,17 +702,37 @@ async function tool_searchTransactions(uid, args) {
   }
   txs = txRepo.filterByQuery(txs, q);
 
-  const totalIncome  = txRepo.filterByType(txs, 'income') .reduce((s, t) => s + t.amount, 0);
-  const totalExpense = txRepo.filterByType(txs, 'expense').reduce((s, t) => s + t.amount, 0);
+  // Aggregate in the user's own currency — never sum raw amounts across
+  // different transaction currencies, and never guess a legacy record's
+  // currency as a blanket default (see resolveUserCurrency precedence for
+  // the USER currency; resolveTransactionCurrency handles each TRANSACTION).
+  const currency = await resolveUserCurrency(uid, options);
+  const rates = needsFx(txs, currency) ? await getExchangeRates() : null;
+  const normalized = normalizeTransactionsCurrency(txs, currency, rates);
+
+  let totalIncome = 0;
+  let totalExpense = 0;
+  const displayTxs = normalized.ok ? normalized.transactions : txs;
+  if (normalized.ok) {
+    for (const t of displayTxs) {
+      if (t.type === 'income') totalIncome += t.amount;
+      if (t.type === 'expense') totalExpense += t.amount;
+    }
+  }
 
   return ok({
     count:        txs.length,
+    currency,
+    currencyDataOk: normalized.ok,
     totalIncome:  Math.round(totalIncome  * 100) / 100,
     totalExpense: Math.round(totalExpense * 100) / 100,
     balance:      Math.round((totalIncome - totalExpense) * 100) / 100,
-    transactions: txs.slice(0, 15).map(t => ({
+    transactions: displayTxs.slice(0, 15).map(t => ({
       type:        t.type,
-      amount:      t.amount,
+      // Each transaction keeps its OWN real currency — never implied to be
+      // in the user's display currency without conversion.
+      amount:      t.originalAmount ?? t.amount,
+      currency:    t.originalCurrency ?? t.currency ?? 'RUB',
       description: t.description,
       category:    t.category,
       date:        (t.date || '').slice(0, 10),

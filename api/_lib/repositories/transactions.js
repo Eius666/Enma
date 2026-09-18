@@ -1,6 +1,8 @@
 'use strict';
 
 const { db } = require('../firebaseAdmin');
+const { convertCurrency } = require('../convertCurrency');
+const { resolveTransactionCurrency } = require('../finance/resolveLegacyCurrency');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared sort helpers (pure, exported for tests)
@@ -23,6 +25,14 @@ function normalizeTransaction(doc) {
     id,
     type:        d.type,
     amount:      typeof d.amount === 'number' ? d.amount : 0,
+    // Currency the amount above is expressed in. Legacy records without this
+    // field must be resolved via resolveTransactionCurrency (uses `source` +
+    // `createdAt` below) — never guessed as a blanket default here.
+    currency:    d.currency || null,
+    // Needed by resolveTransactionCurrency for legacy (currency-less) records.
+    source:      d.source || null,
+    originalAmount:   typeof d.originalAmount === 'number' ? d.originalAmount : undefined,
+    originalCurrency: d.originalCurrency || undefined,
     category:    d.category    || d.categoryId || '',
     categoryId:  d.categoryId  || '',
     description: d.description || '',
@@ -56,11 +66,27 @@ async function getAllTransactions(uid) {
 // Pure computation helpers — no Firestore calls
 // ─────────────────────────────────────────────────────────────────────────────
 
-function calculateCurrentBalance(transactions) {
+// Never sum raw amounts across different currencies, and never guess a
+// legacy record's currency as a blanket default — resolveTransactionCurrency
+// determines it from proven historical write-path semantics (source +
+// createdAt). Each transaction is converted from its own (resolved) currency
+// into targetCurrency individually before being added to the balance. A
+// transaction whose currency can't be resolved, or can't be converted
+// (rates unavailable), is skipped rather than mis-summed — this keeps a
+// RUB-only user's balance correct even when the FX API is offline, since
+// same-currency transactions never need `rates` at all.
+function calculateCurrentBalance(transactions, targetCurrency = 'RUB', rates = null) {
   let balance = 0;
   for (const t of transactions) {
-    if (t.type === 'income')  balance += t.amount;
-    if (t.type === 'expense') balance -= t.amount;
+    const resolved = resolveTransactionCurrency(t);
+    if (resolved.currency === null) continue; // unresolvable — never guessed
+    let amount = t.amount;
+    if (resolved.currency !== targetCurrency) {
+      if (!rates) continue;
+      amount = convertCurrency(t.amount, resolved.currency, targetCurrency, rates);
+    }
+    if (t.type === 'income')  balance += amount;
+    if (t.type === 'expense') balance -= amount;
   }
   return Math.round(balance * 100) / 100;
 }

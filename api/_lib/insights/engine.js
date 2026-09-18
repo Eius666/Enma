@@ -13,6 +13,8 @@ const txRepo                  = require('../repositories/transactions');
 const goalsRepo               = require('../repositories/goals');
 const tasksRepo               = require('../repositories/tasks');
 const { INSIGHTS_CONFIG }     = require('./config');
+const { normalizeTransactionsCurrency, needsFx, normalizeGoalsCurrency, goalsNeedFx } = require('../finance/normalizeCurrency');
+const { getExchangeRates }    = require('../exchangeRates');
 const {
   detectCashGap,
   detectPaymentCluster,
@@ -63,13 +65,59 @@ async function loadUserData(uid) {
 // ── Run detectors for one user ────────────────────────────────────────────────
 
 async function runDetectorsForUser(uid, { domains } = {}) {
-  const { userData, transactions, goals, tasks } = await loadUserData(uid);
+  const { userData, transactions: rawTransactions, goals: rawGoals, tasks } = await loadUserData(uid);
 
   const tz       = userData.timezone || 'Europe/Moscow';
   const lang     = userData.language || 'ru';
   const currency = userData.currency || 'RUB';
 
-  const ctx = { uid, transactions, goals, tasks, timezone: tz, lang, currency };
+  // Proactive monetary thresholds (category_spike.minIncreaseAmount,
+  // payment_cluster.minTotalAmount, cash_gap.substantialChangeAmount) are
+  // RUB-denominated config values — they need FX to be compared against a
+  // non-RUB user's data even when that user's OWN transactions are all one
+  // currency. This is a deliberate, narrower exception than the Finance
+  // Engine's rule: engine arithmetic never needs FX for single-currency data,
+  // but threshold CALIBRATION does whenever currency !== 'RUB'. See
+  // detectors.js (convertThreshold) and store.js (checkSubstantialChange).
+  const needsThresholdFx = currency !== 'RUB';
+
+  const rates = (
+    needsThresholdFx ||
+    (Array.isArray(rawTransactions) && rawTransactions.length > 0 && needsFx(rawTransactions, currency)) ||
+    (Array.isArray(rawGoals) && rawGoals.length > 0 && goalsNeedFx(rawGoals, currency))
+  ) ? await getExchangeRates() : null;
+
+  // Normalize ONCE, before any finance detector runs — the same rule as the
+  // Finance Calculation Engine: never let a detector sum raw amounts across
+  // currencies, invent its own conversion, or treat an unresolvable legacy
+  // currency as RUB.
+  let transactions = rawTransactions;
+  if (Array.isArray(rawTransactions) && rawTransactions.length > 0) {
+    const normalized = normalizeTransactionsCurrency(rawTransactions, currency, rates);
+    if (normalized.ok) {
+      transactions = normalized.transactions;
+    } else {
+      // FX required but unavailable, or a transaction's real currency can't be
+      // proven — finance detectors must never compute on unconvertible or
+      // unresolvable data. Safe degradation: run this pass as if there were no
+      // transaction data (every finance calculator/detector already treats an
+      // empty array as insufficient_data / no signal), so no detector fires a
+      // false event and no event is wrongly resolved.
+      console.warn(`[PROACTIVE_DETECTOR] uid=${uid} financeDataOk=false reason=fx_unavailable_or_unknown_currency currency=${currency}`);
+      transactions = [];
+    }
+  }
+
+  let goals = rawGoals;
+  if (Array.isArray(rawGoals) && rawGoals.length > 0) {
+    const normalizedGoals = normalizeGoalsCurrency(rawGoals, currency, rates);
+    goals = normalizedGoals.ok ? normalizedGoals.goals : [];
+    if (!normalizedGoals.ok) {
+      console.warn(`[PROACTIVE_DETECTOR] uid=${uid} goalsCurrencyOk=false reason=fx_unavailable currency=${currency}`);
+    }
+  }
+
+  const ctx = { uid, transactions, goals, tasks, timezone: tz, lang, currency, rates };
 
   // Determine which detectors to run
   let detectorKeys = ALL_DETECTORS;
@@ -107,7 +155,7 @@ async function runDetectorsForUser(uid, { domains } = {}) {
         console.log(`[PROACTIVE_DETECTOR] uid=${uid} type=${detectorKey} result=${res.result} fingerprint=${output.fingerprint}`);
 
       } else if (output.type === 'upsert') {
-        const res = await upsertEvent(uid, output);
+        const res = await upsertEvent(uid, output, { currency, rates });
         const r   = res.result;
         if (r === 'created')            { stats.created++;  toNotify.push(output); }
         if (r === 'updated')            { stats.updated++;  }

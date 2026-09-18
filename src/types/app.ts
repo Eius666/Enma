@@ -60,10 +60,12 @@ export type Transaction = {
   id: string;
   type: 'income' | 'expense';
   // Stored in the transaction's own currency (see `currency` field).
-  // Legacy records without a `currency` field are treated as base currency (RUB).
+  // Legacy records without a `currency` field must be resolved via
+  // resolveLegacyCurrency() — never guessed as a blanket RUB default. See
+  // src/utils/resolveLegacyCurrency.ts for the historical write-path evidence.
   // Never apply convertToBase() before storing — amount is always the user-entered value.
   amount: number;
-  // Currency in which the amount is expressed. Defaults to base currency (RUB) for legacy records.
+  // Currency in which the amount is expressed. Absent for legacy records.
   currency?: Currency;
   categoryId: string;
   description: string;
@@ -77,6 +79,9 @@ export type Transaction = {
   originalCurrency?: Currency;
   // 'telegram-bot' for transactions created via Telegram chat; 'ai-chat' for web AI.
   source?: string;
+  // Firestore server timestamp of doc creation — used by resolveLegacyCurrency
+  // to place legacy (currency-less) records relative to the USD-bug window.
+  createdAt?: { toMillis?: () => number; toDate?: () => Date } | number | null;
   // Bank / payment method (e.g. "Тинькофф", "Наличные"). Optional.
   bank?: string;
 };

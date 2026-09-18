@@ -4,6 +4,8 @@ const { db, admin } = require('./firebaseAdmin');
 const txRepo        = require('./repositories/transactions');
 const tasksRepo     = require('./repositories/tasks');
 const remindersRepo = require('./repositories/reminders');
+const { getExchangeRates } = require('./exchangeRates');
+const { normalizeTransactionsCurrency, needsFx } = require('./finance/normalizeCurrency');
 
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -587,6 +589,7 @@ const TOOL_DEFINITIONS = [
         properties: {
           title:        { type: 'string', description: 'Название цели, например "Отпуск в Испании"' },
           targetAmount: { type: 'number', description: 'Целевая сумма' },
+          currency:     { type: 'string', enum: ['RUB', 'USD', 'EUR', 'BYN', 'CNY'], description: 'Валюта цели, ТОЛЬКО если пользователь явно назвал валюту (например "$20000" или "20000 долларов" → USD). Если валюта не названа — не указывай этот параметр, будет использована текущая валюта пользователя.' },
           deadline:     { type: 'string', description: 'Дедлайн YYYY-MM-DD (опционально)' },
           category:     { type: 'string', description: 'Категория цели (опционально): travel, car, home, education, other' },
         },
@@ -985,8 +988,22 @@ async function getFinanceStats(args, userId, currency = 'RUB') {
     return { ok: false, error: 'Не удалось загрузить финансовые данные. Попробуй чуть позже.' };
   }
 
+  // Never sum raw amounts across different currencies, and never guess a
+  // legacy record's currency as a blanket default — normalizeTransactionsCurrency
+  // resolves each one via resolveTransactionCurrency (source + createdAt) and
+  // converts it into `currency` ONCE, up front. Fetch FX rates only if a
+  // transaction actually needs converting — a RUB-only user (the common
+  // case) never triggers a network call and stays correct if the FX API is
+  // ever offline.
+  const rates = needsFx(allTransactions, currency) ? await getExchangeRates() : null;
+  const normalized = normalizeTransactionsCurrency(allTransactions, currency, rates);
+  if (!normalized.ok) {
+    return { ok: false, error: 'Часть операций в другой валюте, курс обмена сейчас недоступен — точный расчёт баланса невозможен.' };
+  }
+  allTransactions = normalized.transactions; // every amount below is already in `currency`
+
   // CRITICAL: actual balance = sum(all income) - sum(all expenses) over all time
-  const currentBalance = txRepo.calculateCurrentBalance(allTransactions);
+  const currentBalance = txRepo.calculateCurrentBalance(allTransactions, currency, rates);
 
   // USEFUL: period breakdown — isolated in try/catch
   let totalExpense = 0;
@@ -1001,19 +1018,21 @@ async function getFinanceStats(args, userId, currency = 'RUB') {
       : allTransactions;
 
     for (const t of periodTxs) {
+      const amount = t.amount; // already normalized into `currency` above
+
       if (t.type === 'expense') {
-        totalExpense += t.amount;
+        totalExpense += amount;
         const cat = (t.categoryId || 'cat-other').replace('cat-', '');
-        categories[cat] = (categories[cat] || 0) + t.amount;
+        categories[cat] = (categories[cat] || 0) + amount;
         if (t.bank) {
           if (!byBank[t.bank]) byBank[t.bank] = { income: 0, expense: 0 };
-          byBank[t.bank].expense += t.amount;
+          byBank[t.bank].expense += amount;
         }
       } else if (t.type === 'income') {
-        totalIncome += t.amount;
+        totalIncome += amount;
         if (t.bank) {
           if (!byBank[t.bank]) byBank[t.bank] = { income: 0, expense: 0 };
-          byBank[t.bank].income += t.amount;
+          byBank[t.bank].income += amount;
         }
       }
     }
@@ -1249,7 +1268,11 @@ function progressBar(current, target, width = 10) {
 
 async function createGoal(args, userId, currency) {
   const { title, targetAmount, deadline, category } = args;
-  const sym = CURRENCY_SYMBOLS[currency] || currency;
+  // Explicit currency named by the user ("Хочу накопить $20 000") always wins
+  // over the user's current display currency — never silently reinterpret a
+  // named amount into a different currency.
+  const goalCurrency = (args.currency && CURRENCY_SYMBOLS[args.currency]) ? args.currency : currency;
+  const sym = CURRENCY_SYMBOLS[goalCurrency] || goalCurrency;
   const id  = createId();
 
   await db.collection('goals').doc(id).set({
@@ -1257,7 +1280,7 @@ async function createGoal(args, userId, currency) {
     title,
     targetAmount,
     currentAmount: 0,
-    currency,
+    currency: goalCurrency,
     deadline:  deadline  || null,
     category:  category  || null,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),

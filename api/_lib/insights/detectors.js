@@ -15,6 +15,7 @@ const { calculateGoalPlan }    = require('../finance/goals');
 const { calculateMetrics }     = require('../finance/metrics');
 const { round }                = require('../finance/constants');
 const { currentYearMonth }     = require('../finance/dateHelpers');
+const { convertCurrency }      = require('../convertCurrency');
 
 const { INSIGHTS_CONFIG, determineSeverity, DETECTOR_VERSION } = require('./config');
 const { renderInsightText, getMonthLabel }                      = require('./templates');
@@ -39,6 +40,21 @@ function userTodayStr(tz) {
 function endOfMonthMs(yearMonth) {
   const [y, m] = yearMonth.split('-').map(Number);
   return new Date(y, m, 0, 23, 59, 59, 999).getTime();
+}
+
+// Proactive monetary thresholds in INSIGHTS_CONFIG are RUB-denominated
+// (`thresholdCurrency`). Converts one into the detector's calculation
+// currency before comparison — the detector must compare like with like,
+// never "$100 >= 1000" as if 1000 meant $1000.
+//
+// Returns { value, ok }. ok === false means conversion was required but FX
+// was unavailable — the caller MUST skip the detector entirely (no event),
+// never silently fall back to a percentage-only gate or treat the raw
+// threshold number as already being in the target currency.
+function convertThreshold(amount, thresholdCurrency, targetCurrency, rates) {
+  if (thresholdCurrency === targetCurrency) return { value: amount, ok: true };
+  if (!rates) return { value: null, ok: false };
+  return { value: convertCurrency(amount, thresholdCurrency, targetCurrency, rates), ok: true };
 }
 
 // ── Detector 1: finance.cash_gap ──────────────────────────────────────────────
@@ -105,12 +121,18 @@ function detectCashGap({ transactions, timezone, lang }) {
 // Sources: forward-dated expense transactions + recurring signals from leaks engine.
 // Heuristic signals are labeled "certainty: heuristic" so UI can hedge.
 
-function detectPaymentCluster({ transactions, timezone, lang }) {
+function detectPaymentCluster({ transactions, timezone, lang, currency = 'RUB', rates = null }) {
   if (!Array.isArray(transactions) || transactions.length === 0) return [];
 
   const cfg    = INSIGHTS_CONFIG['finance.payment_cluster'];
   const tz     = timezone || 'Europe/Moscow';
   const nowStr = userTodayStr(tz);
+
+  const threshold = convertThreshold(cfg.minTotalAmount, cfg.thresholdCurrency || 'RUB', currency, rates);
+  if (!threshold.ok) {
+    console.warn(`[PROACTIVE_DETECTOR] type=finance.payment_cluster skipped reason=threshold_fx_unavailable currency=${currency}`);
+    return [];
+  }
 
   const windowDate = new Date(Date.now() + cfg.windowDays * 86400000);
   const windowStr  = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(windowDate);
@@ -140,7 +162,7 @@ function detectPaymentCluster({ transactions, timezone, lang }) {
   if (allPayments.length < cfg.minPaymentCount) return [];
 
   const total = allPayments.reduce((s, p) => s + p.amount, 0);
-  if (total < cfg.minTotalAmount) return [];
+  if (total < threshold.value) return [];
 
   const sorted      = allPayments.slice().sort((a, b) => a.date.localeCompare(b.date));
   const hasHeuristic = allPayments.some(p => p.certainty === 'heuristic');
@@ -181,17 +203,23 @@ function detectPaymentCluster({ transactions, timezone, lang }) {
 // Applies two guards: minIncreasePct AND minIncreaseAmount.
 // Both must be satisfied — prevents 100→250 (+150%) from triggering.
 
-function detectCategorySpike({ transactions, timezone, lang }) {
+function detectCategorySpike({ transactions, timezone, lang, currency = 'RUB', rates = null }) {
   if (!Array.isArray(transactions) || transactions.length === 0) return [];
 
   const cfg   = INSIGHTS_CONFIG['finance.category_spike'];
   const leaks = calculateLeakSignals({ transactions, timezone });
   if (leaks.status !== 'ok') return [];
 
+  const threshold = convertThreshold(cfg.minIncreaseAmount, cfg.thresholdCurrency || 'RUB', currency, rates);
+  if (!threshold.ok) {
+    console.warn(`[PROACTIVE_DETECTOR] type=finance.category_spike skipped reason=threshold_fx_unavailable currency=${currency}`);
+    return [];
+  }
+
   const qualified = (leaks.signals || []).filter(s =>
     s.type === 'category_spike' &&
     s.increasePct >= cfg.minIncreasePct &&
-    s.increase    >= cfg.minIncreaseAmount
+    s.increase    >= threshold.value
   );
 
   const monthKey = currentYearMonth(timezone || 'Europe/Moscow');

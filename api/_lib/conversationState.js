@@ -2,6 +2,7 @@
 
 const { db, admin } = require('./firebaseAdmin');
 const { extractPurchaseAmount } = require('./finance/affordability');
+const { parseScenarioModification } = require('./finance/scenarioModification');
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -161,18 +162,7 @@ function extractIncomeDropPct(message) {
   return m ? parseInt(m[1], 10) : null;
 }
 
-function extractMonetaryChange(message) {
-  const lc     = String(message || '').toLowerCase();
-  const amount = extractPurchaseAmount(message);
-  if (!amount) return null;
-  const isMore = lc.includes('больше') || lc.includes('вырастет') || lc.includes('прибавится');
-  const isLess = lc.includes('меньше') || lc.includes('снизится') || lc.includes('сократить');
-  if (isMore) return amount;
-  if (isLess) return -amount;
-  return null;
-}
-
-function extractScenarioParameters(message, activeSkills) {
+function extractScenarioParameters(message, activeSkills, prevParams) {
   const params = {};
 
   for (const skillId of (activeSkills || [])) {
@@ -195,10 +185,11 @@ function extractScenarioParameters(message, activeSkills) {
       if (drop)   params.incomeDropPct  = drop;
     }
     if (skillId === 'finance.what_if') {
-      const change      = extractMonetaryChange(message);
-      const purchaseAmt = extractPurchaseAmount(message);
-      if (change !== null) params.incomeChange = change;
-      if (purchaseAmt)    params.purchase      = purchaseAmt;
+      // Structured, currency-aware — see scenarioModification.js. Follow-up
+      // turns ("А если на $300?") inherit type/direction/currency from the
+      // previous turn's parsed modification and only replace the amount.
+      const mod = parseScenarioModification(message, prevParams?.scenarioModification || null);
+      if (mod) params.scenarioModification = mod;
     }
     if (skillId === 'finance.cashflow') {
       const months = extractNoIncomeMonths(message);
@@ -254,7 +245,8 @@ function computeNextState(prevState, { message, skillRoute, toolCallsLog, respon
   }
 
   // ── Extract and merge scenario parameters ─────────────────────────────────
-  const newParams = extractScenarioParameters(message, next.activeSkills);
+  const inheritedParams = (isFollowUp && !isSwitched) ? prevState.parameters : null;
+  const newParams = extractScenarioParameters(message, next.activeSkills, inheritedParams);
   if (isFollowUp && !isSwitched) {
     next.parameters = Object.fromEntries(
       Object.entries({ ...(prevState.parameters || {}), ...newParams }).slice(0, MAX_PARAMETERS)
