@@ -32,15 +32,6 @@ service cloud.firestore {
       return isAuthenticated() && request.resource.data.userId == request.auth.uid;
     }
 
-    // ── Date helpers ──────────────────────────────────────────────────────────
-    // request.time is UTC — acceptable precision for server-side limit checks.
-
-    function monthStr() {
-      let m = request.time.month();
-      return string(request.time.year()) + '-' +
-        (m < 10 ? '0' + string(m) : string(m));
-    }
-
     function dateStr() {
       let m = request.time.month();
       let d = request.time.day();
@@ -96,12 +87,6 @@ service cloud.firestore {
     function freeData(uid) {
       let path = /databases/$(database)/documents/users/$(uid)/freeUsage/counters;
       return exists(path) ? get(path).data : {};
-    }
-
-    function freeTxOk(uid) {
-      let d = freeData(uid);
-      // Allow if stored month is stale (new month) or count is under limit.
-      return d.get('month', '') != monthStr() || d.get('transactionCount', 0) < 30;
     }
 
     function freeHabitOk(uid) {

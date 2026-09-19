@@ -176,3 +176,64 @@ test('service chain: T-Bank also down → CBR official_fallback', async () => {
   const r = await fx.getBankRateToRub({ currency: 'USD', transactionType: 'expense' });
   assert.equal(r.source, 'official_fallback'); assert.equal(r.rateToRub, 84);
 });
+
+// ── Banki circuit breaker + alerts ───────────────────────────────────────────
+test('breaker: 2 hard Banki failures pause it; it is skipped, then retried after the pause', async () => {
+  let bankiCalls = 0, t = 5_000_000;
+  const fx = createFxService({
+    fetchBankQuotes: async () => { bankiCalls++; throw new FxProviderError('banki', 'layout_changed', 'blocked'); },
+    fallbackChain: [cbr(84)],
+    now: () => t,
+  });
+  // distinct currency/side keys so the result cache doesn't hide the calls
+  await fx.getBankRateToRub({ currency: 'USD', transactionType: 'expense' });
+  await fx.getBankRateToRub({ currency: 'EUR', transactionType: 'expense' });
+  assert.equal(bankiCalls, 2);
+  await fx.getBankRateToRub({ currency: 'CNY', transactionType: 'expense' });
+  assert.equal(bankiCalls, 2, 'breaker open: Banki not called');
+  t += 31 * 60 * 1000;
+  await fx.getBankRateToRub({ currency: 'GBP', transactionType: 'expense' });
+  assert.equal(bankiCalls, 3, 'pause elapsed: Banki retried');
+});
+
+test('breaker: a Banki success resets the failure count', async () => {
+  let n = 0;
+  const fx = createFxService({
+    fetchBankQuotes: async () => {
+      n++;
+      if (n === 1) throw new FxProviderError('banki', 'network_error', 'x');
+      return { quotes: [85, 85.1, 85.2, 85.3, 85.4], provider: 'banki', refreshedAt: null };
+    },
+    fallbackChain: [cbr(84)],
+  });
+  await fx.getBankRateToRub({ currency: 'USD', transactionType: 'expense' });
+  await fx.getBankRateToRub({ currency: 'EUR', transactionType: 'expense' });
+  assert.equal(fx._breaker.failures, 0);
+});
+
+test('alert: no bank-sourced rate (only CBR) emits a WARN alert; unavailable also alerts', async () => {
+  const warns = [];
+  const orig = console.warn; console.warn = (m) => warns.push(String(m));
+  try {
+    const down = async () => { throw new FxProviderError('banki', 'schema_mismatch', 'x'); };
+    await createFxService({ fetchBankQuotes: down, fallbackChain: [cbr(84)] }).getBankRateToRub({ currency: 'USD', transactionType: 'expense' });
+    await assert.rejects(() => createFxService({ fetchBankQuotes: down, fallbackChain: [down] }).getBankRateToRub({ currency: 'USD', transactionType: 'expense' }));
+  } finally { console.warn = orig; }
+  assert.ok(warns.some(w => w.includes('[ALERT]') && w.includes('fx_bank_sources_down')));
+  assert.ok(warns.some(w => w.includes('[ALERT]') && w.includes('fx_unavailable')));
+});
+
+test('no alert when a bank quote (T-Bank) is used', async () => {
+  const warns = [];
+  const orig = console.warn; console.warn = (m) => warns.push(String(m));
+  try {
+    const { tbankRate: tb } = require('../fallbackProviders');
+    const rows = tbankPayload([{ category: 'ATMCashoutRateGroup', buy: 83.4, sell: 86.4 }]);
+    const fx = createFxService({
+      fetchBankQuotes: async () => { throw new FxProviderError('banki', 'schema_mismatch', 'x'); },
+      fallbackChain: [({ currency, side }) => tb({ currency, side, fetchImpl: tbankFetch(rows) })],
+    });
+    await fx.getBankRateToRub({ currency: 'USD', transactionType: 'expense' });
+  } finally { console.warn = orig; }
+  assert.equal(warns.filter(w => w.includes('[ALERT]')).length, 0);
+});

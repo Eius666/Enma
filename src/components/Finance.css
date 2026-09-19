@@ -805,3 +805,10 @@ body.theme-light .fin-editor__date {
   cursor: pointer;
   font-size: 14px;
 }
+
+.fin-editor__fx-note {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--notes-text-muted);
+}

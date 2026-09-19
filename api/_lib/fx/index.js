@@ -35,10 +35,18 @@ function sideFor(transactionType) {
   return transactionType === 'income' ? 'bank_buys' : 'bank_sells';
 }
 
-function metric(name, fields) {
+function metric(name, fields, level = 'log') {
   const kv = Object.entries(fields).map(([k, v]) => `${k}=${v}`).join(' ');
-  console.log(`[FX] metric=${name} ${kv}`);
+  console[level](`[FX]${level === 'warn' ? '[ALERT]' : ''} metric=${name} ${kv}`);
 }
+
+// Banki blocks datacenter IPs. After BREAKER_FAILURES consecutive hard failures
+// the provider is skipped for BREAKER_PAUSE_MS so every FX lookup doesn't pay
+// for a request that is known to fail (worst case: the 8s timeout).
+const BREAKER_FAILURES = 2;
+const BREAKER_PAUSE_MS = 30 * 60 * 1000;
+const HARD_FAILURES = new Set(['layout_changed', 'http_error', 'network_error']);
+const BANK_SOURCES = new Set(['bank_average', 'bank_quote']);
 
 function createFxService({
   fetchBankQuotes = bankiProvider.fetchQuotes,
@@ -48,6 +56,7 @@ function createFxService({
   minSample = MIN_BANK_SAMPLE,
 } = {}) {
   const cache = new Map(); // `${currency}:${side}` → { snapshot, at }
+  const breaker = { failures: 0, skipUntil: 0 };
 
   const fallbacks = fallbackChain || [
     ({ currency, side }) => tbankRate({ currency, side }),
@@ -70,27 +79,39 @@ function createFxService({
 
     const attempts = [];
 
-    // 1) Banki bank quotes → outlier-filtered median
-    try {
-      const { quotes, provider, refreshedAt } = await fetchBankQuotes({ currency, side });
-      const agg = aggregateQuotes(quotes, { minSample });
-      if (!agg.ok) throw new bankiProvider.FxProviderError('banki', agg.reason, `n=${agg.sampleSize}`);
-      const snapshot = {
-        rateToRub:  Math.round(agg.rate * 10000) / 10000,
-        source:     'bank_average',
-        provider,
-        capturedAt: new Date(now()).toISOString(),
-        rateDate:   (refreshedAt || new Date(now()).toISOString()).slice(0, 10),
-        sampleSize: agg.sampleSize,
-        method:     agg.method,
-        rateSide:   side,
-      };
-      metric('fx_provider_success', { provider, currency, side, sample: agg.sampleSize, method: agg.method });
-      cache.set(key, { snapshot, at: now() });
-      return withRequestedDate(snapshot, timestamp);
-    } catch (err) {
-      attempts.push({ provider: err.provider || 'banki', reason: err.reason || err.message });
-      metric('fx_provider_failure', { provider: err.provider || 'banki', currency, reason: err.reason || 'error', ...(err.detail ? { detail: JSON.stringify(err.detail) } : {}) });
+    // 1) Banki bank quotes → outlier-filtered median (skipped while its breaker is open)
+    if (now() < breaker.skipUntil) {
+      attempts.push({ provider: 'banki', reason: 'breaker_open' });
+    } else {
+      try {
+        const { quotes, provider, refreshedAt } = await fetchBankQuotes({ currency, side });
+        const agg = aggregateQuotes(quotes, { minSample });
+        if (!agg.ok) throw new bankiProvider.FxProviderError('banki', agg.reason, `n=${agg.sampleSize}`);
+        const snapshot = {
+          rateToRub:  Math.round(agg.rate * 10000) / 10000,
+          source:     'bank_average',
+          provider,
+          capturedAt: new Date(now()).toISOString(),
+          rateDate:   (refreshedAt || new Date(now()).toISOString()).slice(0, 10),
+          sampleSize: agg.sampleSize,
+          method:     agg.method,
+          rateSide:   side,
+        };
+        metric('fx_provider_success', { provider, currency, side, sample: agg.sampleSize, method: agg.method });
+        breaker.failures = 0;
+        cache.set(key, { snapshot, at: now() });
+        return withRequestedDate(snapshot, timestamp);
+      } catch (err) {
+        attempts.push({ provider: err.provider || 'banki', reason: err.reason || err.message });
+        metric('fx_provider_failure', { provider: err.provider || 'banki', currency, reason: err.reason || 'error', ...(err.detail ? { detail: JSON.stringify(err.detail) } : {}) });
+        if (HARD_FAILURES.has(err.reason)) {
+          breaker.failures += 1;
+          if (breaker.failures >= BREAKER_FAILURES) {
+            breaker.skipUntil = now() + BREAKER_PAUSE_MS;
+            metric('fx_provider_paused', { provider: 'banki', minutes: BREAKER_PAUSE_MS / 60000 });
+          }
+        }
+      }
     }
 
     // 2) Fallbacks — single-rate providers, honestly labelled
@@ -108,6 +129,11 @@ function createFxService({
           rateSide:   r.rateSide || 'mid',
         };
         metric('fx_fallback_used', { provider: r.provider, currency, source: r.source });
+        // No bank-sourced rate at all (Banki AND T-Bank down): visible in logs
+        // so it is noticed before users are.
+        if (!BANK_SOURCES.has(r.source)) {
+          metric('fx_bank_sources_down', { currency, side, using: r.provider }, 'warn');
+        }
         cache.set(key, { snapshot, at: now() });
         return withRequestedDate(snapshot, timestamp);
       } catch (err) {
@@ -116,6 +142,7 @@ function createFxService({
       }
     }
 
+    metric('fx_unavailable', { currency, side, attempts: attempts.map(a => `${a.provider}:${a.reason}`).join('|') }, 'warn');
     throw new FxUnavailableError(currency, attempts);
   }
 
@@ -127,7 +154,7 @@ function createFxService({
     return { ...snapshot, requestedDate: requested, rateMatchesRequestedDate: requested === snapshot.rateDate };
   }
 
-  return { getBankRateToRub, _cache: cache };
+  return { getBankRateToRub, _cache: cache, _breaker: breaker };
 }
 
 const defaultService = createFxService();

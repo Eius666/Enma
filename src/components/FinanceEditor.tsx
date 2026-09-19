@@ -113,6 +113,8 @@ const T = {
     detailsRate: 'Rate',
     detailsSource: 'Source',
     detailsCaptured: 'Locked at',
+    detailsRateNote: 'The rate is from the day the transaction was entered, not from its date.',
+    backdatedHint: 'For a past date the rate of today is used and locked.',
     sourceBank: 'average bank rate',
     sourceQuote: 'bank rate',
     sourceEstimate: 'estimated rate',
@@ -138,6 +140,8 @@ const T = {
     detailsRate: 'Курс',
     detailsSource: 'Источник',
     detailsCaptured: 'Зафиксирован',
+    detailsRateNote: 'Курс взят на день ввода операции, а не на её дату.',
+    backdatedHint: 'Для прошедшей даты берётся и фиксируется сегодняшний курс.',
     sourceBank: 'средний банковский курс',
     sourceQuote: 'курс банка',
     sourceEstimate: 'оценочный курс',
@@ -469,6 +473,9 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
           {existingTx.fx.capturedAt && (
             <div><span>{t.detailsCaptured}</span><b>{new Date(existingTx.fx.capturedAt).toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US')}</b></div>
           )}
+          {existingTx.fx.rateMatchesRequestedDate === false && (
+            <div className="fin-editor__fx-note">{t.detailsRateNote}</div>
+          )}
         </div>
       )}
 
@@ -517,6 +524,9 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
           value={date}
           onChange={e => setDate(e.target.value)}
         />
+        {isNew && txCurrency !== 'RUB' && date < todayStr() && (
+          <div className="fin-editor__fx-note">{t.backdatedHint}</div>
+        )}
       </div>
 
       {/* ── Bank / Payment method ── */}

@@ -98,6 +98,8 @@ export type Transaction = {
     sampleSize?: number;
     rateSide?: string;
     rateDate?: string;
+    requestedDate?: string;
+    rateMatchesRequestedDate?: boolean;
   } | null;
 };
 

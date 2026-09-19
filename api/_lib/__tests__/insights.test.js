@@ -135,17 +135,16 @@ function makeTransaction(type, amount, date, category = 'food') {
   return { id: `tx-${Math.random()}`, type, amount, date, categoryId: `p-${category}`, category, description: `test-${type}` };
 }
 
-function makePastDate(daysAgo) {
-  const d = new Date();
-  d.setDate(d.getDate() - daysAgo);
-  return d.toISOString().slice(0, 10);
+// The detectors use the user's calendar day (tests run with Europe/Moscow), so
+// the date helpers must too — UTC dates are a day off for part of every day.
+function moscowDate(offsetDays) {
+  const d = new Date(Date.now() + offsetDays * 86400000);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Moscow' }).format(d);
 }
 
-function makeFutureDate(daysAhead) {
-  const d = new Date();
-  d.setDate(d.getDate() + daysAhead);
-  return d.toISOString().slice(0, 10);
-}
+function makePastDate(daysAgo) { return moscowDate(-daysAgo); }
+
+function makeFutureDate(daysAhead) { return moscowDate(daysAhead); }
 
 const CURRENT_MONTH = new Date().toISOString().slice(0, 7);
 const PREV_MONTH    = (() => {

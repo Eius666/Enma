@@ -347,8 +347,10 @@ function detectOverdueTasks({ tasks, timezone, lang }) {
     const dueDate = task.date || task.dueDate || task.deadline;
     if (!dueDate || dueDate >= todayStr) continue;
 
-    const dueMs      = new Date(dueDate + 'T12:00:00Z').getTime();
-    const overdueDays = Math.floor((Date.now() - dueMs) / 86400000);
+    // Whole CALENDAR days between the due date and the user's today (both
+    // YYYY-MM-DD in the user's timezone). Measuring from "noon UTC" made the
+    // count come out one day short for anyone before noon UTC.
+    const overdueDays = Math.round((Date.parse(todayStr + 'T00:00:00Z') - Date.parse(dueDate + 'T00:00:00Z')) / 86400000);
     if (overdueDays <= 0) continue;
 
     const facts = {
