@@ -78,9 +78,15 @@ function isoToDateInput(iso: string): string {
   return `${y}-${m}-${day}`;
 }
 
-/** Convert date picker value (YYYY-MM-DD) to ISO string (local noon). */
-function dateInputToIso(val: string): string {
-  return new Date(`${val}T12:00:00`).toISOString();
+/**
+ * Convert the date picker value (YYYY-MM-DD) to an ISO timestamp: the chosen
+ * day at the CURRENT local time of day. The picker has no time field, so the
+ * moment of entry is the best real time we have (for "today" it is exactly now).
+ * Never a fake "noon".
+ */
+function dateInputToIso(val: string, now: Date = new Date()): string {
+  const [y, m, d] = val.split('-').map(Number);
+  return new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds()).toISOString();
 }
 
 function todayStr(): string {
@@ -325,10 +331,16 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
         type:        txType,
         amount,
         description: description.trim(),
-        date:        dateInputToIso(date),
         categoryId:  preset?.id ?? '',
         category:    preset ? catDisplayName(preset) : '',
       };
+      // Same day → keep the stored timestamp untouched; new day → that day at
+      // the original time of day (or now if the record had none).
+      const originalIso = existingTx?.date;
+      if (!originalIso || isoToDateInput(originalIso) !== date) {
+        const base = originalIso ? new Date(originalIso) : new Date();
+        patch.date = dateInputToIso(date, base);
+      }
       if (selectedBank) patch.bank = selectedBank;
       const token = await user.getIdToken();
       const resp = await fetch('/api/ai/transactionUpdate', {

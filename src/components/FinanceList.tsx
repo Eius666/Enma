@@ -75,6 +75,27 @@ function txDateLabel(isoStr: string, language: 'en' | 'ru'): string {
   });
 }
 
+// Real time of the operation. Older web rows were stored as a fake local noon
+// (12:00:00.000) — for those fall back to the creation time when it is from the
+// same day, otherwise show no time rather than a wrong one.
+function txTimeLabel(tx: Transaction): string | null {
+  const fmt = (d: Date) =>
+    `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const d = new Date(tx.date);
+  if (Number.isNaN(d.getTime())) return null;
+  const isNoonPlaceholder =
+    d.getHours() === 12 && d.getMinutes() === 0 && d.getSeconds() === 0 && d.getMilliseconds() === 0;
+  if (!isNoonPlaceholder) return fmt(d);
+
+  const c = tx.createdAt as { toMillis?: () => number } | number | null | undefined;
+  const ms = typeof c === 'number' ? c : c && typeof c.toMillis === 'function' ? c.toMillis() : NaN;
+  if (Number.isFinite(ms)) {
+    const created = new Date(ms);
+    if (created.toDateString() === d.toDateString()) return fmt(created);
+  }
+  return null;
+}
+
 type Period = 'day' | 'week' | 'month' | 'all';
 
 const T = {
@@ -393,6 +414,9 @@ const FinanceList: React.FC<FinanceListProps> = ({
                     </span>
                     {txAmountParts(tx).secondary && (
                       <span className="fin-list__item-approx">{txAmountParts(tx).secondary}</span>
+                    )}
+                    {txTimeLabel(tx) && (
+                      <span className="fin-list__item-date">{txTimeLabel(tx)}</span>
                     )}
                   </span>
                 </button>

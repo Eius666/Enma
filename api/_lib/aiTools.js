@@ -472,7 +472,8 @@ async function tool_createTransaction(uid, args, options = {}) {
       type, amount,
       currency: args.currency,
       description,
-      date: new Date(`${txDate}T12:00:00`).toISOString(),
+      // Real time when the operation is for today; otherwise that day at the current time of day.
+      date: (() => { const n = new Date(); const [y, m, d] = txDate.split('-').map(Number); return new Date(y, m - 1, d, n.getHours(), n.getMinutes(), n.getSeconds(), n.getMilliseconds()).toISOString(); })(),
       categoryId: catId,
       category: catName,
       bank,
