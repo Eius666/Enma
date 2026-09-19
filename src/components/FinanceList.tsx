@@ -74,13 +74,6 @@ function txDateLabel(isoStr: string, language: 'en' | 'ru'): string {
   });
 }
 
-function txTimeLabel(isoStr: string): string {
-  const d = new Date(isoStr);
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  return `${hh}:${mm}`;
-}
-
 type Period = 'day' | 'week' | 'month' | 'all';
 
 const T = {
@@ -394,7 +387,6 @@ const FinanceList: React.FC<FinanceListProps> = ({
                     {txAmountParts(tx).secondary && (
                       <span className="fin-list__item-approx">{txAmountParts(tx).secondary}</span>
                     )}
-                    <span className="fin-list__item-date">{txTimeLabel(tx.date)}</span>
                   </span>
                 </button>
               );
