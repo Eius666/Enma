@@ -33,6 +33,7 @@
     "test": "react-scripts test",
     "test:unit": "node --test api/_lib/__tests__/insights.test.js api/_lib/finance/__tests__/normalizeCurrency.test.js api/_lib/finance/__tests__/resolveLegacyCurrency.test.js api/_lib/insights/__tests__/detectorsCurrency.test.js api/_lib/insights/__tests__/cashGapThreshold.test.js api/_lib/finance/__tests__/lockedAmount.test.js api/_lib/fx/__tests__/fx.test.js api/_lib/transactions/__tests__/financialTransaction.test.js api/_lib/insights/__tests__/proactiveRub.test.js",
     "test:rules": "firebase emulators:exec --only firestore --project enma-rules-test \"node --test firestore-tests/rules.test.js\"",
+    "test:migration": "firebase emulators:exec --only firestore --project enma-rules-test \"node --test firestore-tests/migration.test.js\"",
     "test:brain": "node api/_lib/evals/runner.js",
     "test:brain:finance": "node api/_lib/evals/runner.js --domain finance",
     "test:brain:proactive": "node api/_lib/evals/runner.js --domain proactive",
