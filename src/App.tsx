@@ -33,6 +33,7 @@ import DayList, { DayTask } from './components/DayList';
 import DayTaskEditor from './components/DayTaskEditor';
 import CalendarView from './components/CalendarView';
 import FinanceList from './components/FinanceList';
+import GoalsList from './components/GoalsList';
 import FinanceEditor from './components/FinanceEditor';
 import HabitsList, { HabitDoc } from './components/HabitsList';
 import HabitEditor from './components/HabitEditor';
@@ -657,6 +658,7 @@ const App: React.FC = () => {
   const [notesView, setNotesView] = useState<'list' | 'editor'>('list');
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [financeView, setFinanceView] = useState<'list' | 'editor'>('list');
+  const [financeSection, setFinanceSection] = useState<'operations' | 'goals'>('operations');
   const [activeTransactionId, setActiveTransactionId] = useState<string | null>(null);
   const [habitsView, setHabitsView] = useState<'list' | 'editor'>('list');
   const [activeHabitId, setActiveHabitId] = useState<string | null>(null);
@@ -1755,6 +1757,27 @@ const App: React.FC = () => {
           />
         )}
         {activeTab === 'finance' && financeView === 'list' && (
+          <div className="fin-switch" role="tablist">
+            <button
+              type="button"
+              className={`fin-switch__btn${financeSection === 'operations' ? ' fin-switch__btn--active' : ''}`}
+              onClick={() => setFinanceSection('operations')}
+            >
+              {language === 'ru' ? 'Операции' : 'Transactions'}
+            </button>
+            <button
+              type="button"
+              className={`fin-switch__btn${financeSection === 'goals' ? ' fin-switch__btn--active' : ''}`}
+              onClick={() => setFinanceSection('goals')}
+            >
+              {language === 'ru' ? 'Цели' : 'Goals'}
+            </button>
+          </div>
+        )}
+        {activeTab === 'finance' && financeView === 'list' && financeSection === 'goals' && (
+          <GoalsList user={user} language={language} />
+        )}
+        {activeTab === 'finance' && financeView === 'list' && financeSection === 'operations' && (
           <FinanceList
             language={language}
             currency={BASE_CURRENCY}

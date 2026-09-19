@@ -1509,6 +1509,96 @@ async function handleTransactionUpdate(req, res) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Savings goals — server-owned writes (clients only read via Firestore rules).
+// Web-created goals are in the budget currency (RUB); goals created elsewhere
+// (Telegram) keep their own `currency`, and deposits are always in that
+// goal's currency, so no FX is ever involved.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MAX_GOAL_AMOUNT = 1_000_000_000;
+const isPosNum = (n) => typeof n === 'number' && Number.isFinite(n) && n > 0 && n <= MAX_GOAL_AMOUNT;
+const round2 = (n) => Math.round(n * 100) / 100;
+
+async function handleGoalCreate(req, res) {
+  const uid = await requireAuth(req, res);
+  if (!uid) return;
+  const { title, targetAmount, deadline } = req.body ?? {};
+  if (typeof title !== 'string' || !title.trim() || title.length > 120) {
+    return res.status(400).json({ error: 'Invalid title', code: 'VALIDATION_ERROR' });
+  }
+  if (!isPosNum(targetAmount)) {
+    return res.status(400).json({ error: 'Invalid targetAmount', code: 'VALIDATION_ERROR' });
+  }
+  if (deadline != null && deadline !== '' && !/^\d{4}-\d{2}-\d{2}$/.test(String(deadline))) {
+    return res.status(400).json({ error: 'Invalid deadline', code: 'VALIDATION_ERROR' });
+  }
+  try {
+    const ref = db.collection('goals').doc();
+    await ref.set({
+      userId: uid,
+      title: title.trim(),
+      targetAmount: round2(targetAmount),
+      currentAmount: 0,
+      currency: HOME_BUDGET_CURRENCY,
+      deadline: deadline ? String(deadline) : null,
+      category: null,
+      source: 'web-app',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return res.status(200).json({ ok: true, id: ref.id });
+  } catch (err) {
+    console.error('[ai/goalCreate] error:', err.message);
+    return res.status(500).json({ error: 'Failed to create goal' });
+  }
+}
+
+// direction: 'deposit' adds, 'withdraw' subtracts (never below 0)
+async function handleGoalAdjust(req, res) {
+  const uid = await requireAuth(req, res);
+  if (!uid) return;
+  const { id, amount, direction } = req.body ?? {};
+  if (typeof id !== 'string' || !id || !isPosNum(amount) || !['deposit', 'withdraw'].includes(direction)) {
+    return res.status(400).json({ error: 'Invalid request', code: 'VALIDATION_ERROR' });
+  }
+  try {
+    const ref = db.collection('goals').doc(id);
+    const out = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists || snap.data().userId !== uid) return { notFound: true };
+      const current = Number(snap.data().currentAmount) || 0;
+      if (direction === 'withdraw' && amount > current) return { insufficient: true, current };
+      const next = round2(direction === 'deposit' ? current + amount : current - amount);
+      tx.update(ref, { currentAmount: next, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      return { next };
+    });
+    if (out.notFound) return res.status(404).json({ error: 'Goal not found' });
+    if (out.insufficient) return res.status(400).json({ error: 'Insufficient goal balance', code: 'INSUFFICIENT', current: out.current });
+    return res.status(200).json({ ok: true, id, currentAmount: out.next });
+  } catch (err) {
+    console.error('[ai/goalAdjust] error:', err.message);
+    return res.status(500).json({ error: 'Failed to update goal' });
+  }
+}
+
+async function handleGoalDelete(req, res) {
+  const uid = await requireAuth(req, res);
+  if (!uid) return;
+  const { id } = req.body ?? {};
+  if (typeof id !== 'string' || !id) return res.status(400).json({ error: 'Invalid request', code: 'VALIDATION_ERROR' });
+  try {
+    const ref = db.collection('goals').doc(id);
+    const snap = await ref.get();
+    if (!snap.exists || snap.data().userId !== uid) return res.status(404).json({ error: 'Goal not found' });
+    await ref.delete();
+    return res.status(200).json({ ok: true, id });
+  } catch (err) {
+    console.error('[ai/goalDelete] error:', err.message);
+    return res.status(500).json({ error: 'Failed to delete goal' });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Categorize — auto-classify a transaction using preset category IDs
 // No AI usage counter charged (background utility, not user-initiated AI call)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2397,6 +2487,9 @@ module.exports = async (req, res) => {
       case 'categorize':       return await handleCategorize(req, res);
       case 'entityCreate':     return await handleEntityCreate(req, res);
       case 'transactionUpdate': return await handleTransactionUpdate(req, res);
+      case 'goalCreate':       return await handleGoalCreate(req, res);
+      case 'goalAdjust':       return await handleGoalAdjust(req, res);
+      case 'goalDelete':       return await handleGoalDelete(req, res);
       case 'referralValidate':      return await handleReferralValidate(req, res);
       case 'referralInfo':          return await handleReferralInfo(req, res);
       case 'referralPayout':        return await handleReferralPayout(req, res);

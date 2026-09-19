@@ -18,6 +18,16 @@ service cloud.firestore {
       return isAuthenticated() && resource.data.userId == request.auth.uid;
     }
 
+    // Money fields of a transaction are SERVER-OWNED (Admin SDK bypasses rules).
+    // A client update may touch only metadata; it can neither change nor ADD
+    // any of these keys (so a legacy doc can't be upgraded to a forged v2).
+    function touchesLockedTxFields() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'amount', 'currency', 'rubAmount', 'fx', 'schemaVersion',
+        'type', 'userId', 'source', 'createdAt', 'goalId'
+      ]);
+    }
+
     function writesOwnUid() {
       return isAuthenticated() && request.resource.data.userId == request.auth.uid;
     }
@@ -136,10 +146,10 @@ service cloud.firestore {
 
         // Transactions — 30/month for Free
         match /transactions/{txId} {
-          allow read:           if isAuthenticated() && request.auth.uid == userId;
-          allow create:         if isAuthenticated() && request.auth.uid == userId &&
-                                   (hasPaidAccess(userId) || freeTxOk(userId));
-          allow update, delete: if isAuthenticated() && request.auth.uid == userId;
+          allow read:   if isAuthenticated() && request.auth.uid == userId;
+          allow create: if false;
+          allow update: if isAuthenticated() && request.auth.uid == userId && !touchesLockedTxFields();
+          allow delete: if isAuthenticated() && request.auth.uid == userId;
         }
 
         // Habits — 3 total for Free
@@ -176,11 +186,19 @@ service cloud.firestore {
     // ─────────────────────────────────────────────────────────────────────────
 
     // Finance transactions — 30/month for Free
+    // Created only by the server (createFinancialTransaction). Clients may read,
+    // delete, and edit metadata — never money fields.
     match /transactions/{transactionId} {
-      allow read:           if ownsDoc();
-      allow create:         if writesOwnUid() &&
-                               (hasPaidAccess(request.auth.uid) || freeTxOk(request.auth.uid));
-      allow update, delete: if ownsDoc();
+      allow read:   if ownsDoc();
+      allow create: if false;
+      allow update: if ownsDoc() && !touchesLockedTxFields();
+      allow delete: if ownsDoc();
+    }
+
+    // Savings goals — read-only for clients; all writes go through the API.
+    match /goals/{goalId} {
+      allow read:  if ownsDoc();
+      allow write: if false;
     }
 
     // Habits — 3 total for Free

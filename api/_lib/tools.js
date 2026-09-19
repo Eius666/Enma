@@ -1341,6 +1341,7 @@ async function depositToGoal(args, userId, chatId, currency) {
   await db.collection('transactions').doc(createId()).set({
     userId, chatId,
     type:        'goal_deposit',
+    budgetImpact: false, // goal movement, not an income/expense — carries no rubAmount by design
     amount,
     description: `Пополнение: ${goal.title}`,
     categoryId:  'cat-goal',
@@ -1377,6 +1378,7 @@ async function withdrawFromGoal(args, userId, chatId, currency) {
   await db.collection('transactions').doc(createId()).set({
     userId, chatId,
     type:        'goal_withdraw',
+    budgetImpact: false, // goal movement, not an income/expense — carries no rubAmount by design
     amount,
     description: `Снятие: ${goal.title}`,
     categoryId:  'cat-goal',

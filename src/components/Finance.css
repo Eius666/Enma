@@ -674,3 +674,66 @@ body.theme-light .fin-editor__date {
   color: var(--notes-text-muted);
   text-align: right;
 }
+
+/* — Finance section switch (operations / goals) — */
+.fin-switch {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  margin: 0 0 12px;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  border-radius: 12px;
+}
+.fin-switch__btn {
+  flex: 1;
+  padding: 8px 0;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--notes-text-muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.fin-switch__btn--active {
+  background: var(--notes-text);
+  color: var(--notes-card-bg);
+}
+
+/* — Savings goals — */
+.goals { display: flex; flex-direction: column; gap: 12px; padding-bottom: 24px; }
+.goals__add {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px; border: 1px dashed var(--notes-card-border); border-radius: 14px;
+  background: transparent; color: var(--notes-text); font: inherit; font-weight: 600; cursor: pointer;
+}
+.goals__empty { text-align: center; color: var(--notes-text-muted); padding: 28px 8px; }
+.goals__empty-hint { font-size: 13px; margin-top: 6px; }
+.goals__form, .goals__card {
+  background: var(--notes-card-bg); border: 1px solid var(--notes-card-border);
+  border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
+}
+.goals__input {
+  width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--notes-card-border); background: transparent;
+  color: var(--notes-text); font: inherit; font-size: 15px;
+}
+.goals__label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--notes-text-muted); }
+.goals__row { display: flex; gap: 8px; align-items: center; }
+.goals__row .goals__input { flex: 1; min-width: 0; }
+.goals__btn {
+  padding: 9px 14px; border-radius: 10px; border: 1px solid var(--notes-card-border);
+  background: transparent; color: var(--notes-text); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.goals__btn--primary { background: var(--notes-text); color: var(--notes-card-bg); border-color: transparent; }
+.goals__btn:disabled { opacity: 0.5; }
+.goals__head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.goals__title { font-size: 16px; font-weight: 700; color: var(--notes-text); }
+.goals__icon-btn { background: none; border: none; color: var(--notes-text-muted); cursor: pointer; padding: 4px; }
+.goals__amounts { font-size: 14px; color: var(--notes-text); }
+.goals__bar { height: 8px; border-radius: 999px; background: var(--notes-card-border); overflow: hidden; }
+.goals__bar-fill { height: 100%; border-radius: 999px; background: var(--fin-income, #4caf50); transition: width 0.3s; }
+.goals__bar-fill--done { background: #2196f3; }
+.goals__meta { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--notes-text-muted); }
