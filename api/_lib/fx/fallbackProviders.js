@@ -49,4 +49,33 @@ async function marketRate({ currency, getRates }) {
   };
 }
 
-module.exports = { cbrRate, marketRate };
+// T-Bank public rates (unofficial endpoint, reachable from datacenters, unlike
+// Banki). Rates are tiered by operation category; ATMCashoutRateGroup is the
+// one that matches the cash market (USD sell ≈ Banki median, not the ~8%
+// wider card-operation spread). A SINGLE bank, so it is labelled `bank_quote`,
+// never `bank_average`.
+const TBANK_CATEGORY = 'ATMCashoutRateGroup';
+
+async function tbankRate({ currency, side, fetchImpl = fetch }) {
+  const url = `https://api.tbank.ru/v1/currency_rates?from=${encodeURIComponent(currency)}&to=RUB`;
+  const data = await getJson(url, 'tbank', fetchImpl);
+  const rates = data && data.resultCode === 'OK' && data.payload && data.payload.rates;
+  if (!Array.isArray(rates)) throw new FxProviderError('tbank', 'schema_mismatch', 'no rates');
+  const row = rates.find(r => r.category === TBANK_CATEGORY);
+  if (!row) throw new FxProviderError('tbank', 'unsupported_currency', currency);
+  const { buy, sell } = row;
+  if (!Number.isFinite(buy) || !Number.isFinite(sell) || !(buy > 0) || !(sell > 0) || buy > sell) {
+    throw new FxProviderError('tbank', 'schema_mismatch', 'implausible quote');
+  }
+  const updated = data.payload.lastUpdate && data.payload.lastUpdate.milliseconds;
+  return {
+    rateToRub: side === 'bank_buys' ? buy : sell,
+    provider:  'tbank',
+    source:    'bank_quote',
+    method:    'single_quote',
+    rateSide:  side,
+    rateDate:  updated ? new Date(updated).toISOString().slice(0, 10) : null,
+  };
+}
+
+module.exports = { cbrRate, marketRate, tbankRate };

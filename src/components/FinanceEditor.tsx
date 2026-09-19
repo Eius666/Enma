@@ -10,7 +10,7 @@ import { db } from '../firebase';
 import type { Currency, Transaction } from '../types/app';
 import { getCurrencySymbol, formatCurrency } from '../utils/formatCurrency';
 import { resolveTransactionCurrency } from '../utils/resolveLegacyCurrency';
-import { hasLockedRub, isEstimatedRate } from '../utils/budgetAmount';
+import { hasLockedRub, rateKind } from '../utils/budgetAmount';
 import type { Subscription } from '../subscription';
 import { getActivePlan, FREE_LIMITS } from '../subscription';
 import { subscribeFreeUsage } from '../lib/usageCounters';
@@ -114,6 +114,7 @@ const T = {
     detailsSource: 'Source',
     detailsCaptured: 'Locked at',
     sourceBank: 'average bank rate',
+    sourceQuote: 'bank rate',
     sourceEstimate: 'estimated rate',
     fxUnavailable: 'Could not get a reliable exchange rate. The transaction was not saved — try again later or enter it in rubles.',
     saveFailed: 'Could not save the transaction. Try again.',
@@ -138,6 +139,7 @@ const T = {
     detailsSource: 'Источник',
     detailsCaptured: 'Зафиксирован',
     sourceBank: 'средний банковский курс',
+    sourceQuote: 'курс банка',
     sourceEstimate: 'оценочный курс',
     fxUnavailable: 'Не удалось получить надёжный курс. Операция не сохранена — попробуйте позже или введите сумму в рублях.',
     saveFailed: 'Не удалось сохранить операцию. Попробуйте ещё раз.',
@@ -463,7 +465,7 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
           <div><span>{t.detailsAmount}</span><b>{formatCurrency(existingTx.amount, existingTx.currency, language)}</b></div>
           <div><span>{t.detailsInBudget}</span><b>≈ {formatCurrency(existingTx.rubAmount as number, 'RUB', language)}</b></div>
           <div><span>{t.detailsRate}</span><b>1 {getCurrencySymbol(existingTx.currency)} = {existingTx.fx.rateToRub.toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US', { maximumFractionDigits: 4 })} ₽</b></div>
-          <div><span>{t.detailsSource}</span><b>{isEstimatedRate(existingTx) ? t.sourceEstimate : t.sourceBank}</b></div>
+          <div><span>{t.detailsSource}</span><b>{{ average: t.sourceBank, quote: t.sourceQuote, estimate: t.sourceEstimate }[rateKind(existingTx)]}</b></div>
           {existingTx.fx.capturedAt && (
             <div><span>{t.detailsCaptured}</span><b>{new Date(existingTx.fx.capturedAt).toLocaleString(language === 'ru' ? 'ru-RU' : 'en-US')}</b></div>
           )}

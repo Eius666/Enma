@@ -2,7 +2,7 @@
 
 // ── FX service: getBankRateToRub ─────────────────────────────────────────────
 //
-// Chain:  Banki (aggregated bank quotes)  →  CBR official  →  market mid rate
+// Chain:  Banki (aggregated bank quotes)  →  T-Bank quote  →  CBR official  →  market mid rate
 //
 // Rate side (client perspective — the user is the one exchanging money):
 //   expense  → user must BUY foreign currency  → bank SELLS  → `bank_sells`
@@ -17,7 +17,7 @@
 // must refuse to store a foreign transaction rather than invent a ruble value.
 
 const bankiProvider = require('./bankiProvider');
-const { cbrRate, marketRate } = require('./fallbackProviders');
+const { cbrRate, marketRate, tbankRate } = require('./fallbackProviders');
 const { aggregateQuotes, MIN_BANK_SAMPLE } = require('./aggregate');
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
@@ -50,6 +50,7 @@ function createFxService({
   const cache = new Map(); // `${currency}:${side}` → { snapshot, at }
 
   const fallbacks = fallbackChain || [
+    ({ currency, side }) => tbankRate({ currency, side }),
     ({ currency }) => cbrRate({ currency }),
     ({ currency }) => marketRate({
       currency,
@@ -95,7 +96,7 @@ function createFxService({
     // 2) Fallbacks — single-rate providers, honestly labelled
     for (const attempt of fallbacks) {
       try {
-        const r = await attempt({ currency });
+        const r = await attempt({ currency, side });
         const snapshot = {
           rateToRub:  Math.round(r.rateToRub * 10000) / 10000,
           source:     r.source,
@@ -103,8 +104,8 @@ function createFxService({
           capturedAt: new Date(now()).toISOString(),
           rateDate:   r.rateDate,
           sampleSize: 1,
-          method:     'single_rate',
-          rateSide:   'mid',
+          method:     r.method || 'single_rate',
+          rateSide:   r.rateSide || 'mid',
         };
         metric('fx_fallback_used', { provider: r.provider, currency, source: r.source });
         cache.set(key, { snapshot, at: now() });

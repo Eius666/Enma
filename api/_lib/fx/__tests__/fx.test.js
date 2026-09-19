@@ -135,3 +135,44 @@ test('banki: a challenge/captcha page yields layout_changed WITH a content-free 
     (e) => e.reason === 'layout_changed' && /markers=captcha/.test(e.detail) && /hasResultList=false/.test(e.detail) && !/<html/.test(e.detail),
   );
 });
+
+// ── T-Bank single-bank quote ─────────────────────────────────────────────────
+const { tbankRate } = require('../fallbackProviders');
+const tbankPayload = (rows) => ({ resultCode: 'OK', payload: { lastUpdate: { milliseconds: Date.parse('2026-09-19T06:00:00Z') }, rates: rows } });
+const tbankFetch = (body, ok = true) => async () => ({ ok, status: ok ? 200 : 500, json: async () => body });
+const ROWS = [
+  { category: 'DebitCardsOperations', buy: 79.5, sell: 91.05 },      // wide card spread — must NOT be used
+  { category: 'ATMCashoutRateGroup', buy: 83.4, sell: 86.4 },
+];
+
+test('tbank: uses the cash-market category, sell side for expenses, buy side for income', async () => {
+  const e = await tbankRate({ currency: 'USD', side: 'bank_sells', fetchImpl: tbankFetch(tbankPayload(ROWS)) });
+  const i = await tbankRate({ currency: 'USD', side: 'bank_buys', fetchImpl: tbankFetch(tbankPayload(ROWS)) });
+  assert.equal(e.rateToRub, 86.4); assert.equal(i.rateToRub, 83.4);
+  assert.equal(e.source, 'bank_quote'); assert.equal(e.provider, 'tbank'); assert.equal(e.rateSide, 'bank_sells');
+});
+
+test('tbank: implausible / missing data is rejected, never trusted', async () => {
+  await assert.rejects(() => tbankRate({ currency: 'USD', side: 'bank_sells', fetchImpl: tbankFetch(tbankPayload([{ category: 'ATMCashoutRateGroup', buy: 90, sell: 80 }])) }), FxProviderError);
+  await assert.rejects(() => tbankRate({ currency: 'XXX', side: 'bank_sells', fetchImpl: tbankFetch(tbankPayload([])) }), FxProviderError);
+  await assert.rejects(() => tbankRate({ currency: 'USD', side: 'bank_sells', fetchImpl: tbankFetch({}, false) }), FxProviderError);
+});
+
+test('service chain: Banki blocked → T-Bank quote (bank_quote, single_quote) BEFORE CBR', async () => {
+  const fx = createFxService({
+    fetchBankQuotes: async () => { throw new FxProviderError('banki', 'layout_changed', 'blocked'); },
+    fallbackChain: [({ currency, side }) => tbankRate({ currency, side, fetchImpl: tbankFetch(tbankPayload(ROWS)) }), cbr(84)],
+  });
+  const r = await fx.getBankRateToRub({ currency: 'USD', transactionType: 'expense' });
+  assert.equal(r.source, 'bank_quote'); assert.equal(r.provider, 'tbank');
+  assert.equal(r.method, 'single_quote'); assert.equal(r.rateSide, 'bank_sells'); assert.equal(r.rateToRub, 86.4);
+});
+
+test('service chain: T-Bank also down → CBR official_fallback', async () => {
+  const fx = createFxService({
+    fetchBankQuotes: async () => { throw new FxProviderError('banki', 'layout_changed', 'blocked'); },
+    fallbackChain: [({ currency, side }) => tbankRate({ currency, side, fetchImpl: tbankFetch({}, false) }), cbr(84)],
+  });
+  const r = await fx.getBankRateToRub({ currency: 'USD', transactionType: 'expense' });
+  assert.equal(r.source, 'official_fallback'); assert.equal(r.rateToRub, 84);
+});

@@ -29,7 +29,14 @@ export function getOriginalCurrency(tx: Transaction): string | null {
   return resolveTransactionCurrency(tx).currency;
 }
 
-/** Whether the stored FX rate is a bank average or a labelled estimate. */
+/** Whether the stored FX rate is an estimate (not a bank rate). */
 export function isEstimatedRate(tx: Transaction): boolean {
-  return !!tx.fx && tx.fx.source !== 'bank_average';
+  return !!tx.fx && tx.fx.source !== 'bank_average' && tx.fx.source !== 'bank_quote';
+}
+
+/** 'average' = median over many banks, 'quote' = a single bank, 'estimate' = CBR / market. */
+export function rateKind(tx: Transaction): 'average' | 'quote' | 'estimate' {
+  if (tx.fx?.source === 'bank_average') return 'average';
+  if (tx.fx?.source === 'bank_quote') return 'quote';
+  return 'estimate';
 }

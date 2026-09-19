@@ -843,7 +843,7 @@ async function createTransaction(args, userId, chatId, userCurrency) {
   const sym      = CURRENCY_SYMBOLS[tx.currency] || tx.currency;
   const bankStr  = bank ? ` [${bank}]` : '';
   const approx   = tx.currency !== HOME_BUDGET_CURRENCY
-    ? ` (≈ ${Math.round(tx.rubAmount).toLocaleString('ru-RU')} ₽${tx.fx && tx.fx.source !== 'bank_average' ? ', оценочный курс' : ''})`
+    ? ` (≈ ${Math.round(tx.rubAmount).toLocaleString('ru-RU')} ₽${tx.fx && tx.fx.source !== 'bank_average' && tx.fx.source !== 'bank_quote' ? ', оценочный курс' : ''})`
     : '';
   return { ok: true, message: `${emoji} ${verb}: ${description} — ${tx.amount} ${sym}${approx} [${category}]${bankStr}` };
 }
