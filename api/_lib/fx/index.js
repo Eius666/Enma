@@ -89,7 +89,7 @@ function createFxService({
       return withRequestedDate(snapshot, timestamp);
     } catch (err) {
       attempts.push({ provider: err.provider || 'banki', reason: err.reason || err.message });
-      metric('fx_provider_failure', { provider: err.provider || 'banki', currency, reason: err.reason || 'error' });
+      metric('fx_provider_failure', { provider: err.provider || 'banki', currency, reason: err.reason || 'error', ...(err.detail ? { detail: JSON.stringify(err.detail) } : {}) });
     }
 
     // 2) Fallbacks — single-rate providers, honestly labelled

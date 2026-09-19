@@ -126,3 +126,12 @@ test('service: back-dated transaction is NOT presented as a historical rate', as
   assert.equal(r.rateMatchesRequestedDate, false);
   assert.ok(r.capturedAt && r.rateDate);
 });
+
+test('banki: a challenge/captcha page yields layout_changed WITH a content-free diagnostic', async () => {
+  const { fetchQuotes } = require('../bankiProvider');
+  const fetchImpl = async () => ({ ok: true, status: 200, headers: { get: () => 'text/html' }, text: async () => '<html><title>Проверка браузера</title>captcha</html>' });
+  await assert.rejects(
+    () => fetchQuotes({ currency: 'USD', side: 'bank_sells', fetchImpl }),
+    (e) => e.reason === 'layout_changed' && /markers=captcha/.test(e.detail) && /hasResultList=false/.test(e.detail) && !/<html/.test(e.detail),
+  );
+});

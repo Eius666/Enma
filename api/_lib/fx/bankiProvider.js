@@ -30,7 +30,20 @@ class FxProviderError extends Error {
     super(`${provider}: ${reason}${detail ? ` (${detail})` : ''}`);
     this.provider = provider;
     this.reason = reason;
+    this.detail = detail || null;
   }
+}
+
+// Safe, content-free summary of a page we could not parse (public page, no
+// user data): enough to tell "challenge/captcha page" from "layout changed".
+function describeResponse(resp, html) {
+  const title = (html.match(/<title[^>]*>([^<]{0,80})/i) || [])[1] || '';
+  const lower = html.toLowerCase();
+  const markers = ['captcha', 'antibot', 'access denied', 'forbidden', 'cloudflare', 'ddos', 'проверк', 'robot']
+    .filter(m => lower.includes(m));
+  return `status=${resp.status} type=${resp.headers && resp.headers.get ? resp.headers.get('content-type') : '?'} `
+    + `bytes=${html.length} title="${title.trim().replace(/\s+/g, ' ')}" markers=${markers.join('|') || 'none'} `
+    + `hasResultList=${html.includes('resultList')} hasModuleOptions=${html.includes('data-module-options')}`;
 }
 
 function unescapeHtml(s) {
@@ -99,8 +112,10 @@ async function fetchQuotes({ currency, side, fetchImpl = fetch, now = Date.now()
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
   let html;
+  let lastResp;
   try {
     const resp = await fetchImpl(pageUrl, { headers: { 'User-Agent': UA, 'Accept-Language': 'ru' }, signal: ctl.signal });
+    lastResp = resp;
     if (!resp.ok) throw new FxProviderError('banki', 'http_error', String(resp.status));
     html = await resp.text();
   } catch (err) {
@@ -110,8 +125,16 @@ async function fetchQuotes({ currency, side, fetchImpl = fetch, now = Date.now()
     clearTimeout(timer);
   }
 
-  const { quotes, refreshedAt } = parseQuotes(html, side, now);
-  return { quotes, provider: 'banki', refreshedAt, pageUrl };
+  let parsed;
+  try {
+    parsed = parseQuotes(html, side, now);
+  } catch (err) {
+    if (err instanceof FxProviderError && err.reason === 'layout_changed') {
+      throw new FxProviderError('banki', 'layout_changed', describeResponse(lastResp, html));
+    }
+    throw err;
+  }
+  return { quotes: parsed.quotes, provider: 'banki', refreshedAt: parsed.refreshedAt, pageUrl };
 }
 
 module.exports = { fetchQuotes, parseQuotes, extractBankList, FxProviderError };
