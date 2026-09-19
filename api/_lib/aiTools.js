@@ -742,6 +742,9 @@ async function tool_searchTransactions(uid, args, options = {}) {
       // in the user's display currency without conversion.
       amount:      t.originalAmount ?? t.amount,
       currency:    t.originalCurrency ?? t.currency ?? 'RUB',
+      // Budget value in RUB (locked rubAmount for v2). The model must use THIS
+      // — never add up `amount` across different currencies.
+      amountRub:   normalized.ok ? Math.round(t.amount * 100) / 100 : undefined,
       description: t.description,
       category:    t.category,
       date:        (t.date || '').slice(0, 10),

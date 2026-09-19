@@ -53,6 +53,7 @@ import './components/Day.css';
 import './components/Calendar.css';
 import './components/AppShell.css';
 import './components/Insights.css';
+import { compareNewestFirst } from './utils/sortTransactions';
 
 type Theme = 'dark' | 'light';
 type Language = 'en' | 'ru';
@@ -1054,7 +1055,7 @@ const App: React.FC = () => {
                 }
               });
               // Sort by date descending (client-side)
-              return Array.from(updated.values()).sort((a, b) => b.date.localeCompare(a.date));
+              return Array.from(updated.values()).sort(compareNewestFirst);
             });
           },
           error => {

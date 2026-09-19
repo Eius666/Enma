@@ -5,6 +5,7 @@ import { ru as ruLocale, enUS } from 'date-fns/locale';
 import type { Transaction, Category, Currency } from '../types/app';
 import { PRESET_COLOR_BY_ID } from './FinanceEditor';
 import { getBudgetAmount, getOriginalCurrency } from '../utils/budgetAmount';
+import { compareNewestFirst } from '../utils/sortTransactions';
 import './Finance.css';
 
 interface FinanceListProps {
@@ -128,8 +129,14 @@ const FinanceList: React.FC<FinanceListProps> = ({
   const [activeBank, setActiveBank] = useState<string | null>(null);
 
   // Filter transactions by selected period first; everything else derives from this.
+  // Always newest first (top = most recent), whatever order the data arrives in.
+  const sortedTransactions = useMemo(
+    () => [...transactions].sort(compareNewestFirst),
+    [transactions],
+  );
+
   const periodFiltered = useMemo((): Transaction[] => {
-    if (period === 'all') return transactions;
+    if (period === 'all') return sortedTransactions;
     const now = new Date();
     const start = new Date();
     if (period === 'day') {
@@ -141,8 +148,8 @@ const FinanceList: React.FC<FinanceListProps> = ({
       start.setDate(1);
       start.setHours(0, 0, 0, 0);
     }
-    return transactions.filter(tx => new Date(tx.date) >= start);
-  }, [transactions, period]);
+    return sortedTransactions.filter(tx => new Date(tx.date) >= start);
+  }, [sortedTransactions, period]);
 
   // Budget is always RUB. Every transaction contributes its budget amount:
   // v2 rows → the ruble value LOCKED at creation (never re-priced with today's
