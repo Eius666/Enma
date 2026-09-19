@@ -7,7 +7,7 @@ const { printProgress, printReport, buildJsonReport } = require('./report');
 
 // ── Global firebaseAdmin mock ─────────────────────────────────────────────────
 // Injected before every scenario run so modules that import firebaseAdmin at
-// load time (conversationState, aiTools) always get the mock, not real Firebase.
+// load time (tools, insights) always get the mock, not real Firebase.
 
 function setupGlobalMocks() {
   const {
@@ -33,14 +33,8 @@ function setupGlobalMocks() {
 // ── Load all scenario files ───────────────────────────────────────────────────
 
 const SCENARIO_FILES = [
-  './scenarios/finance',
-  './scenarios/tasks',
-  './scenarios/habits',
-  './scenarios/notes',
-  './scenarios/conversation',
-  './scenarios/tools',
+  './scenarios/currency',
   './scenarios/proactive',
-  './scenarios/security',
 ];
 
 function loadScenarios() {

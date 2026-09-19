@@ -3,9 +3,8 @@
 // ── Unified financial transaction service ────────────────────────────────────
 //
 // The ONLY place where a new transaction's money fields are decided. Web UI
-// (/api/ai/entityCreate + transactionUpdate), Telegram (tools.js) and Web AI
-// (aiTools.js) all go through here, so currency semantics can never drift
-// between channels again.
+// (/api/ai/entityCreate + transactionUpdate) and Telegram (tools.js) both go
+// through here, so currency semantics can never drift between channels again.
 //
 // Contract (schemaVersion 2):
 //   amount     — what the user actually spent/received, in `currency`

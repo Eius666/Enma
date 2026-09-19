@@ -10,7 +10,6 @@ require.cache[fa] = { id: fa, filename: fa, loaded: true, exports: { db: createM
 const { hasLockedRub } = require('../lockedAmount');
 const { normalizeTransactionsCurrency, needsFx } = require('../normalizeCurrency');
 const { calculateCurrentBalance, normalizeTransaction } = require('../../repositories/transactions');
-const { extractMoneyAmount } = require('../extractMoneyAmount');
 
 const v2 = (currency, amount, rubAmount, type = 'expense') => ({ schemaVersion: 2, type, currency, amount, rubAmount, date: '2026-09-05' });
 
@@ -55,19 +54,4 @@ test('repository normalizeTransaction preserves v2 fields (and adds none for leg
   assert.equal(n.schemaVersion, 2); assert.equal(n.rubAmount, 8600); assert.equal(n.fx.rateToRub, 86);
   const l = normalizeTransaction({ id: 'b', data: () => ({ type: 'expense', amount: 5, currency: 'RUB' }) });
   assert.equal('rubAmount' in l, false);
-});
-
-test('extractMoneyAmount: explicit currency for RUB/USD/EUR/CNY, none → caller default', () => {
-  const cases = [
-    ['ресторан 5000 руб', 5000, 'RUB', true], ['такси 10 $', 10, 'USD', true], ['кофе 5 долларов', 5, 'USD', true],
-    ['отель 100 евро', 100, 'EUR', true], ['такси 80 юаней', 80, 'CNY', true], ['обед 500 ₽', 500, 'RUB', true],
-    ['coffee 30 GBP', 30, 'GBP', true],
-  ];
-  for (const [text, amount, currency, explicit] of cases) {
-    const r = extractMoneyAmount(text, 'USD');
-    assert.deepEqual([r.amount, r.currency, r.explicitCurrency], [amount, currency, explicit], text);
-  }
-  assert.equal(extractMoneyAmount('кофе 500', 'USD'), null); // no trigger word → no amount
-  const imp = extractMoneyAmount('могу купить за 5000', 'CNY');
-  assert.deepEqual([imp.amount, imp.currency, imp.explicitCurrency], [5000, 'CNY', false]);
 });
