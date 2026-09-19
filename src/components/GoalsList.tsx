@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { User } from 'firebase/auth';
-import { FaPlus, FaTrash } from 'react-icons/fa';
+import { FaBullseye, FaTrash } from 'react-icons/fa';
 import { db } from '../firebase';
 import { formatCurrency } from '../utils/formatCurrency';
 import './Finance.css';
@@ -23,6 +23,11 @@ interface GoalsListProps {
 
 const T = {
   en: {
+    saved: 'Saved',
+    goalsCount: 'Goals',
+    of: 'of',
+    reachedCount: 'Reached',
+    sectionLabel: 'Goals',
     empty: 'No savings goals yet',
     emptyHint: 'Create a goal and put money aside step by step.',
     newGoal: 'New goal',
@@ -45,6 +50,11 @@ const T = {
     failed: 'Could not save. Try again.',
   },
   ru: {
+    saved: 'Накоплено',
+    goalsCount: 'Целей',
+    of: 'из',
+    reachedCount: 'Достигнуто',
+    sectionLabel: 'Цели',
     empty: 'Целей пока нет',
     emptyHint: 'Создайте цель и откладывайте деньги шаг за шагом.',
     newGoal: 'Новая цель',
@@ -145,68 +155,137 @@ const GoalsList: React.FC<GoalsListProps> = ({ user, language }) => {
   const fmtDeadline = (d: string) =>
     new Date(`${d}T12:00:00`).toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' });
 
+  // Summary is only meaningful when every goal is in the same currency.
+  const summaryCurrency = sorted.length > 0 && sorted.every(g => (g.currency || 'RUB') === (sorted[0].currency || 'RUB'))
+    ? (sorted[0].currency || 'RUB')
+    : null;
+  const totalSaved = sorted.reduce((s, g) => s + (g.currentAmount || 0), 0);
+  const totalTarget = sorted.reduce((s, g) => s + (g.targetAmount || 0), 0);
+  const doneCount = sorted.filter(g => g.targetAmount > 0 && g.currentAmount >= g.targetAmount).length;
+
   return (
-    <div className="goals">
-      {error && <div className="fin-editor__error" role="alert">{error}</div>}
-
-      {showForm ? (
-        <div className="goals__form">
-          <input className="goals__input" placeholder={t.title} value={title} onChange={e => setTitle(e.target.value)} maxLength={120} />
-          <input className="goals__input" placeholder={t.target} type="number" inputMode="decimal" min="0" step="0.01" value={target} onChange={e => setTarget(e.target.value)} />
-          <label className="goals__label">{t.deadline}
-            <input className="goals__input" type="date" value={deadline} onChange={e => setDeadline(e.target.value)} />
-          </label>
-          <div className="goals__row">
-            <button className="goals__btn goals__btn--primary" disabled={busy} onClick={handleCreate} type="button">{t.create}</button>
-            <button className="goals__btn" onClick={() => { setShowForm(false); setError(null); }} type="button">{t.cancel}</button>
+    <>
+      <div className="fin-list goals">
+        {/* ── Summary card ── */}
+        <div className="fin-list__summary">
+          <div className="fin-list__balance-label">{t.saved}</div>
+          <div className="fin-list__balance-amount">
+            {summaryCurrency ? formatCurrency(totalSaved, summaryCurrency, language) : `${sorted.length}`}
           </div>
-        </div>
-      ) : (
-        <button className="goals__add" onClick={() => setShowForm(true)} type="button"><FaPlus /> {t.newGoal}</button>
-      )}
-
-      {sorted.length === 0 && !showForm && (
-        <div className="goals__empty">
-          <div>{t.empty}</div>
-          <div className="goals__empty-hint">{t.emptyHint}</div>
-        </div>
-      )}
-
-      {sorted.map(g => {
-        const pct = g.targetAmount > 0 ? Math.min(100, Math.round((g.currentAmount / g.targetAmount) * 100)) : 0;
-        const done = g.currentAmount >= g.targetAmount && g.targetAmount > 0;
-        const cur = g.currency || 'RUB';
-        const isAdjusting = adjust?.id === g.id;
-        return (
-          <div className="goals__card" key={g.id}>
-            <div className="goals__head">
-              <span className="goals__title">{g.title}</span>
-              <button className="goals__icon-btn" onClick={() => handleDelete(g.id)} aria-label={t.del} type="button"><FaTrash /></button>
-            </div>
-            <div className="goals__amounts">
-              {formatCurrency(g.currentAmount, cur, language)} / {formatCurrency(g.targetAmount, cur, language)}
-            </div>
-            <div className="goals__bar"><div className={`goals__bar-fill${done ? ' goals__bar-fill--done' : ''}`} style={{ width: `${pct}%` }} /></div>
-            <div className="goals__meta">
-              <span>{done ? t.reached : `${pct}% · ${t.left} ${formatCurrency(Math.max(0, g.targetAmount - g.currentAmount), cur, language)}`}</span>
-              {g.deadline && <span>{t.until} {fmtDeadline(g.deadline)}</span>}
-            </div>
-            {isAdjusting ? (
-              <div className="goals__row">
-                <input className="goals__input" placeholder={t.amount} type="number" inputMode="decimal" min="0" step="0.01" value={adjustAmount} onChange={e => setAdjustAmount(e.target.value)} autoFocus />
-                <button className="goals__btn goals__btn--primary" disabled={busy} onClick={handleAdjust} type="button">{t.confirm}</button>
-                <button className="goals__btn" onClick={() => { setAdjust(null); setAdjustAmount(''); setError(null); }} type="button">{t.cancel}</button>
-              </div>
-            ) : (
-              <div className="goals__row">
-                <button className="goals__btn goals__btn--primary" onClick={() => { setAdjust({ id: g.id, direction: 'deposit' }); setAdjustAmount(''); }} type="button">{t.deposit}</button>
-                <button className="goals__btn" onClick={() => { setAdjust({ id: g.id, direction: 'withdraw' }); setAdjustAmount(''); }} type="button">{t.withdraw}</button>
-              </div>
+          <div className="fin-list__balance-row">
+            <span className="fin-list__balance-item goals__summary-item">
+              {t.goalsCount}: {sorted.length}
+            </span>
+            {summaryCurrency && totalTarget > 0 && (
+              <span className="fin-list__balance-item goals__summary-item">
+                {t.of} {formatCurrency(totalTarget, summaryCurrency, language)}
+              </span>
+            )}
+            {doneCount > 0 && (
+              <span className="fin-list__balance-item fin-list__balance-item--income">
+                {t.reachedCount}: {doneCount}
+              </span>
             )}
           </div>
-        );
-      })}
-    </div>
+        </div>
+
+        {error && <div className="fin-editor__error" role="alert">{error}</div>}
+
+        {/* ── Create form ── */}
+        {showForm && (
+          <div className="goals__form">
+            <div className="fin-editor__field-wrap">
+              <label className="fin-editor__field-label">{t.title}</label>
+              <input className="fin-editor__field" value={title} onChange={e => setTitle(e.target.value)} maxLength={120} autoFocus />
+            </div>
+            <div className="fin-editor__field-wrap">
+              <label className="fin-editor__field-label">{t.target}</label>
+              <input className="fin-editor__field" type="number" inputMode="decimal" min="0" step="0.01" value={target} onChange={e => setTarget(e.target.value)} placeholder="0" />
+            </div>
+            <div className="fin-editor__field-wrap">
+              <label className="fin-editor__field-label">{t.deadline}</label>
+              <input className="fin-editor__date" type="date" value={deadline} onChange={e => setDeadline(e.target.value)} />
+            </div>
+            <button className="fin-editor__save-btn" disabled={busy} onClick={handleCreate} type="button">{t.create}</button>
+            <button className="goals__link-btn" onClick={() => { setShowForm(false); setError(null); }} type="button">{t.cancel}</button>
+          </div>
+        )}
+
+        {/* ── Goals ── */}
+        {sorted.length === 0 && !showForm ? (
+          <div className="fin-list__empty">
+            <span className="fin-list__empty-icon"><FaBullseye /></span>
+            <span className="fin-list__empty-title">{t.empty}</span>
+            <span className="fin-list__empty-hint">{t.emptyHint}</span>
+          </div>
+        ) : (
+          sorted.length > 0 && <div className="fin-list__section-label">{t.sectionLabel}</div>
+        )}
+
+        {sorted.map(g => {
+          const pct = g.targetAmount > 0 ? Math.min(100, Math.round((g.currentAmount / g.targetAmount) * 100)) : 0;
+          const done = g.targetAmount > 0 && g.currentAmount >= g.targetAmount;
+          const cur = g.currency || 'RUB';
+          const isAdjusting = adjust?.id === g.id;
+          return (
+            <div className="goals__card" key={g.id}>
+              <div className="goals__top">
+                <span className="fin-list__item-icon goals__icon">
+                  <span className="fin-list__item-initial">{(g.title || '?').trim().charAt(0).toUpperCase()}</span>
+                </span>
+                <span className="fin-list__item-body">
+                  <span className="fin-list__item-title">{g.title}</span>
+                  <span className="goals__sub">
+                    {done ? t.reached : `${t.left} ${formatCurrency(Math.max(0, g.targetAmount - g.currentAmount), cur, language)}`}
+                    {g.deadline ? ` · ${t.until} ${fmtDeadline(g.deadline)}` : ''}
+                  </span>
+                </span>
+                <span className="fin-list__item-right">
+                  <span className="fin-list__item-amount">{formatCurrency(g.currentAmount, cur, language)}</span>
+                  <span className="fin-list__item-date">{t.of} {formatCurrency(g.targetAmount, cur, language)}</span>
+                </span>
+              </div>
+
+              <div className="goals__bar-row">
+                <div className="goals__bar"><div className={`goals__bar-fill${done ? ' goals__bar-fill--done' : ''}`} style={{ width: `${pct}%` }} /></div>
+                <span className="goals__pct">{pct}%</span>
+              </div>
+
+              {isAdjusting ? (
+                <div className="goals__actions">
+                  <input
+                    className="goals__amount-input"
+                    placeholder={t.amount}
+                    type="number" inputMode="decimal" min="0" step="0.01"
+                    value={adjustAmount}
+                    onChange={e => setAdjustAmount(e.target.value)}
+                    autoFocus
+                  />
+                  <button className="goals__btn goals__btn--primary" disabled={busy} onClick={handleAdjust} type="button">{t.confirm}</button>
+                  <button className="goals__btn" onClick={() => { setAdjust(null); setAdjustAmount(''); setError(null); }} type="button">{t.cancel}</button>
+                </div>
+              ) : (
+                <div className="goals__actions">
+                  <button className="goals__btn goals__btn--primary" onClick={() => { setAdjust({ id: g.id, direction: 'deposit' }); setAdjustAmount(''); }} type="button">{t.deposit}</button>
+                  <button className="goals__btn" onClick={() => { setAdjust({ id: g.id, direction: 'withdraw' }); setAdjustAmount(''); }} type="button">{t.withdraw}</button>
+                  <button className="goals__icon-btn" onClick={() => handleDelete(g.id)} aria-label={t.del} type="button"><FaTrash /></button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* FAB — same control as the transactions list */}
+      {!showForm && (
+        <button className="fab" onClick={() => { setShowForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }} type="button" aria-label={t.newGoal}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+        </button>
+      )}
+    </>
   );
 };
 

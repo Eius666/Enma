@@ -1757,17 +1757,17 @@ const App: React.FC = () => {
           />
         )}
         {activeTab === 'finance' && financeView === 'list' && (
-          <div className="fin-switch" role="tablist">
+          <div className="fin-list__period-wrap" role="tablist">
             <button
               type="button"
-              className={`fin-switch__btn${financeSection === 'operations' ? ' fin-switch__btn--active' : ''}`}
+              className={`fin-list__period-chip${financeSection === 'operations' ? ' fin-list__period-chip--active' : ''}`}
               onClick={() => setFinanceSection('operations')}
             >
               {language === 'ru' ? 'Операции' : 'Transactions'}
             </button>
             <button
               type="button"
-              className={`fin-switch__btn${financeSection === 'goals' ? ' fin-switch__btn--active' : ''}`}
+              className={`fin-list__period-chip${financeSection === 'goals' ? ' fin-list__period-chip--active' : ''}`}
               onClick={() => setFinanceSection('goals')}
             >
               {language === 'ru' ? 'Цели' : 'Goals'}
