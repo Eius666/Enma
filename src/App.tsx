@@ -658,7 +658,7 @@ const App: React.FC = () => {
   const [notesView, setNotesView] = useState<'list' | 'editor'>('list');
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [financeView, setFinanceView] = useState<'list' | 'editor'>('list');
-  const [financeSection, setFinanceSection] = useState<'operations' | 'goals'>('operations');
+  const [habitsSection, setHabitsSection] = useState<'habits' | 'goals'>('habits');
   const [activeTransactionId, setActiveTransactionId] = useState<string | null>(null);
   const [habitsView, setHabitsView] = useState<'list' | 'editor'>('list');
   const [activeHabitId, setActiveHabitId] = useState<string | null>(null);
@@ -1757,27 +1757,6 @@ const App: React.FC = () => {
           />
         )}
         {activeTab === 'finance' && financeView === 'list' && (
-          <div className="fin-list__period-wrap" role="tablist">
-            <button
-              type="button"
-              className={`fin-list__period-chip${financeSection === 'operations' ? ' fin-list__period-chip--active' : ''}`}
-              onClick={() => setFinanceSection('operations')}
-            >
-              {language === 'ru' ? 'Операции' : 'Transactions'}
-            </button>
-            <button
-              type="button"
-              className={`fin-list__period-chip${financeSection === 'goals' ? ' fin-list__period-chip--active' : ''}`}
-              onClick={() => setFinanceSection('goals')}
-            >
-              {language === 'ru' ? 'Цели' : 'Goals'}
-            </button>
-          </div>
-        )}
-        {activeTab === 'finance' && financeView === 'list' && financeSection === 'goals' && (
-          <GoalsList user={user} language={language} />
-        )}
-        {activeTab === 'finance' && financeView === 'list' && financeSection === 'operations' && (
           <FinanceList
             language={language}
             currency={BASE_CURRENCY}
@@ -1811,6 +1790,27 @@ const App: React.FC = () => {
           />
         )}
         {activeTab === 'habits' && habitsView === 'list' && (
+          <div className="fin-list__period-wrap" role="tablist">
+            <button
+              type="button"
+              className={`fin-list__period-chip${habitsSection === 'habits' ? ' fin-list__period-chip--active' : ''}`}
+              onClick={() => setHabitsSection('habits')}
+            >
+              {language === 'ru' ? 'Привычки' : 'Habits'}
+            </button>
+            <button
+              type="button"
+              className={`fin-list__period-chip${habitsSection === 'goals' ? ' fin-list__period-chip--active' : ''}`}
+              onClick={() => setHabitsSection('goals')}
+            >
+              {language === 'ru' ? 'Цели' : 'Goals'}
+            </button>
+          </div>
+        )}
+        {activeTab === 'habits' && habitsView === 'list' && habitsSection === 'goals' && (
+          <GoalsList user={user} language={language} />
+        )}
+        {activeTab === 'habits' && habitsView === 'list' && habitsSection === 'habits' && (
           <HabitsList
             language={language}
             user={user}
