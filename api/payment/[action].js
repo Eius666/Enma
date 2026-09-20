@@ -215,7 +215,8 @@ async function handleCallback(req, res) {
     const incomingMerchant = req.headers['x-merchantid'] || req.headers['x-merchantId'];
     const incomingSecret   = req.headers['x-secret'];
 
-    if (incomingMerchant !== merchantId || incomingSecret !== secret) {
+    // Fail closed: an unset env var must never make "no header" equal "no secret".
+    if (!merchantId || !secret || incomingMerchant !== merchantId || incomingSecret !== secret) {
       console.warn('[payment/callback] invalid credentials in headers');
       return res.status(200).json({ ok: true });
     }

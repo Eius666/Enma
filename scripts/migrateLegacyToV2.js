@@ -45,6 +45,8 @@ const UID = val('--uid');
 const RUN_ID = val('--run');
 const LIMIT = val('--limit') ? Number(val('--limit')) : null;
 const CONFIRM = flag('--confirm-production');
+// --exclude <txId>[,<txId>...] : leave these documents legacy (e.g. outliers awaiting review)
+const EXCLUDE = new Set((val('--exclude') || '').split(',').map(x => x.trim()).filter(Boolean));
 
 const BACKUP_ROOT = ['migration_backups', 'legacy_to_v2'];
 const BATCH = 200; // 2 writes per doc → 400 ops, under the 500 limit
@@ -150,6 +152,7 @@ async function runMigration() {
   const plans = [];
   const skips = {};
   for (const d of docs) {
+    if (EXCLUDE.has(d.id)) { skips.excluded_by_flag = (skips.excluded_by_flag || 0) + 1; continue; }
     const p = await plan(d);
     if (p.skip) { if (p.skip !== 'already_v2') skips[p.skip] = (skips[p.skip] || 0) + 1; continue; }
     plans.push({ doc: d, ...p });

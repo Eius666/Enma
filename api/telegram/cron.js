@@ -50,7 +50,6 @@ module.exports = async (req, res) => {
 
     console.log('[cron] auth — bearer:', bearer ? 'set' : 'empty',
       '| querySecret:', querySecret ? 'set' : 'empty',
-      '| req.query:', JSON.stringify(req.query),
       '| isVercelCron:', isVercelCron);
 
     if (!isVercelCron && bearer !== cronSecret && querySecret !== cronSecret) {
