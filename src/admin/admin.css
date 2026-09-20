@@ -469,6 +469,22 @@ table.adm-table tr:hover td { background: rgba(255,255,255,0.02); }
 }
 .adm-card-actions > span { display: contents; }
 
+
+/* ── Layout helpers (desktop look unchanged) ── */
+.adm-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.adm-form-body { padding: 20px; }
+.adm-target-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.adm-secret-row { display: flex; gap: 8px; align-items: center; }
+.adm-var-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.adm-var-name { flex: 1; }
+.adm-var-value { flex: 2; min-width: 0; }
+.adm-otp-row { display: flex; gap: 10px; align-items: center; }
+
+/* Never let wide content stretch the page: flex/grid children may shrink */
+.adm-main, .adm-page { min-width: 0; }
+.adm-kpi-grid > *, .adm-charts-row > *, .adm-two-col > * { min-width: 0; }
+.adm-textarea, .adm-input, .adm-select { max-width: 100%; box-sizing: border-box; }
+
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -555,6 +571,48 @@ table.adm-table tr:hover td { background: rgba(255,255,255,0.02); }
 
   /* Login card */
   .adm-login-card { padding: 28px 20px; }
+
+  /* ── Phone-width fixes ── */
+  .adm-page { max-width: 100vw; overflow-x: hidden; }
+  .adm-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .adm-charts-row { grid-template-columns: minmax(0, 1fr); }
+  .adm-two-col { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .adm-stat-label { overflow-wrap: anywhere; }
+  .adm-stat-value { overflow-wrap: anywhere; }
+
+  /* Forms */
+  .adm-form-body { padding: 14px; }
+  .adm-form-body .adm-btn { min-height: 44px; }
+  .adm-target-row .adm-btn { flex: 1 1 calc(50% - 8px); min-width: 0; padding-left: 8px; padding-right: 8px; }
+  .adm-form-body > .adm-btn.primary { width: 100%; }
+  .adm-input, .adm-select, .adm-textarea { font-size: 16px; } /* no iOS zoom on focus */
+  .adm-select { width: 100%; }
+
+  /* 2FA */
+  .adm-secret-row { flex-wrap: wrap; }
+  .adm-secret-row code { flex: 1 1 100%; min-width: 0; overflow-wrap: anywhere; }
+  .adm-secret-row .adm-btn { width: 100%; }
+  .adm-var-row { flex-direction: column; gap: 12px; }
+  .adm-var-name, .adm-var-value { flex: none; width: 100%; }
+  .adm-otp-row { flex-wrap: wrap; }
+  .adm-otp-row .adm-btn { flex: 1; min-height: 44px; }
+
+  /* Small tables become stacked cards: every column stays readable, no side-scroll */
+  table.adm-table--stack, table.adm-table--stack tbody, table.adm-table--stack tr, table.adm-table--stack td { display: block; width: 100%; }
+  table.adm-table--stack thead { display: none; }
+  table.adm-table--stack tr { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  table.adm-table--stack tr:last-child { border-bottom: none; }
+  table.adm-table--stack td {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+    padding: 4px 0; border: none; text-align: right; overflow-wrap: anywhere;
+    max-width: none !important; white-space: normal !important;
+  }
+  table.adm-table--stack td::before {
+    content: attr(data-label); flex: none; color: var(--muted);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; text-align: left;
+  }
+  table.adm-table--stack td.adm-cell-text { display: block; text-align: left; }
+  table.adm-table--stack td.adm-cell-text::before { display: block; margin-bottom: 2px; }
 }
 
 /* ════════════════════════════════════════

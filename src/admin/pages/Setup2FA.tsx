@@ -78,7 +78,7 @@ export default function Setup2FA() {
         <div className="adm-table-header">
           <span className="adm-table-title">Шаг 1 — Добавить в Google Authenticator</span>
         </div>
-        <div style={{ padding: 20 }}>
+        <div className="adm-form-body">
           <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
             <div>
               <div className="adm-label" style={{ marginBottom: 10 }}>QR-код</div>
@@ -96,7 +96,7 @@ export default function Setup2FA() {
             <div style={{ flex: 1, minWidth: 220 }}>
               <div className="adm-form-row">
                 <label className="adm-label">Или введи ключ вручную</label>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div className="adm-secret-row">
                   <code
                     style={{
                       background: 'rgba(255,255,255,0.06)',
@@ -134,18 +134,18 @@ export default function Setup2FA() {
         <div className="adm-table-header">
           <span className="adm-table-title">Шаг 2 — Добавить в Vercel</span>
         </div>
-        <div style={{ padding: 20 }}>
+        <div className="adm-form-body">
           <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.6 }}>
             Vercel Dashboard → Settings → Environment Variables → добавь переменную:
           </div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-            <div style={{ flex: 1 }}>
+          <div className="adm-var-row">
+            <div className="adm-var-name">
               <div className="adm-label">Имя переменной</div>
               <code style={{ background: 'rgba(255,255,255,0.06)', padding: '8px 12px', borderRadius: 6, fontSize: 13, display: 'block', fontFamily: 'monospace' }}>ADMIN_TOTP_SECRET</code>
             </div>
-            <div style={{ flex: 2 }}>
+            <div className="adm-var-value">
               <div className="adm-label">Значение</div>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div className="adm-secret-row">
                 <code style={{ background: 'rgba(255,255,255,0.06)', padding: '8px 12px', borderRadius: 6, fontSize: 13, display: 'block', fontFamily: 'monospace', flex: 1, wordBreak: 'break-all' }}>
                   {data.secret}
                 </code>
@@ -165,10 +165,10 @@ export default function Setup2FA() {
         <div className="adm-table-header">
           <span className="adm-table-title">Шаг 3 — Проверить код</span>
         </div>
-        <div style={{ padding: 20 }}>
+        <div className="adm-form-body">
           <div className="adm-form-row">
             <label className="adm-label">Введи 6-значный код из Google Authenticator</label>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <div className="adm-otp-row">
               <input
                 className="adm-input"
                 type="text"

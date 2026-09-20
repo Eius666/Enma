@@ -132,17 +132,17 @@ export default function Overview() {
             <span className="adm-table-title">Топ инфлюенсеры</span>
           </div>
           <div className="adm-table-wrap">
-            <table className="adm-table adm-ref-table">
+            <table className="adm-table adm-ref-table adm-table--stack">
               <thead>
                 <tr><th>Код</th><th>Имя</th><th>Всего заработано</th><th>К выплате</th></tr>
               </thead>
               <tbody>
                 {stats.topReferrers.map(r => (
                   <tr key={r.id}>
-                    <td className="adm-mono">{r.id}</td>
-                    <td>{r.name}</td>
-                    <td>{(r.totalEarned || 0).toLocaleString()} ₽</td>
-                    <td>
+                    <td className="adm-mono" data-label="Код">{r.id}</td>
+                    <td data-label="Имя">{r.name}</td>
+                    <td data-label="Всего заработано">{(r.totalEarned || 0).toLocaleString()} ₽</td>
+                    <td data-label="К выплате">
                       {(r.pendingPayout || 0) > 0
                         ? <span className="adm-badge yellow">{(r.pendingPayout || 0).toLocaleString()} ₽</span>
                         : <span className="adm-badge gray">0 ₽</span>}
@@ -155,7 +155,7 @@ export default function Overview() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div className="adm-two-col">
         <div className="adm-table-card">
           <div className="adm-table-header">
             <span className="adm-table-title">Последние платежи</span>
@@ -164,18 +164,18 @@ export default function Overview() {
             <div className="adm-empty">Нет платежей</div>
           ) : (
             <div className="adm-table-wrap">
-              <table className="adm-table">
+              <table className="adm-table adm-table--stack">
                 <thead>
                   <tr><th>Сумма</th><th>Метод</th><th>Тариф</th><th>Промо</th><th>Дата</th></tr>
                 </thead>
                 <tbody>
                   {stats.recentPayments.map(p => (
                     <tr key={p.id}>
-                      <td><b style={{ color: 'var(--green)' }}>{(p.amount || 0).toLocaleString()} ₽</b></td>
-                      <td><span className="adm-badge gray">{p.method || '—'}</span></td>
-                      <td>{p.plan || '—'}</td>
-                      <td>{p.promoCode ? <span className="adm-mono" style={{ fontSize: 11 }}>{p.promoCode}</span> : <span style={{ color: 'var(--muted)' }}>—</span>}</td>
-                      <td style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{p.createdAt ? p.createdAt.slice(0, 16).replace('T', ' ') : '—'}</td>
+                      <td data-label="Сумма"><b style={{ color: 'var(--green)' }}>{(p.amount || 0).toLocaleString()} ₽</b></td>
+                      <td data-label="Метод"><span className="adm-badge gray">{p.method || '—'}</span></td>
+                      <td data-label="Тариф">{p.plan || '—'}</td>
+                      <td data-label="Промо">{p.promoCode ? <span className="adm-mono" style={{ fontSize: 11 }}>{p.promoCode}</span> : <span style={{ color: 'var(--muted)' }}>—</span>}</td>
+                      <td data-label="Дата" style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{p.createdAt ? p.createdAt.slice(0, 16).replace('T', ' ') : '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -192,16 +192,16 @@ export default function Overview() {
             <div className="adm-empty">Нет пользователей</div>
           ) : (
             <div className="adm-table-wrap">
-              <table className="adm-table">
+              <table className="adm-table adm-table--stack">
                 <thead>
                   <tr><th>Имя</th><th>Username</th><th>Дата</th></tr>
                 </thead>
                 <tbody>
                   {stats.recentUsers.map(u => (
                     <tr key={u.uid}>
-                      <td>{u.displayName || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
-                      <td>{u.username ? <span className="adm-mono">@{u.username}</span> : <span style={{ color: 'var(--muted)' }}>—</span>}</td>
-                      <td style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{u.createdAt ? u.createdAt.slice(0, 10) : '—'}</td>
+                      <td data-label="Имя">{u.displayName || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
+                      <td data-label="Username">{u.username ? <span className="adm-mono">@{u.username}</span> : <span style={{ color: 'var(--muted)' }}>—</span>}</td>
+                      <td data-label="Дата" style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{u.createdAt ? u.createdAt.slice(0, 10) : '—'}</td>
                     </tr>
                   ))}
                 </tbody>

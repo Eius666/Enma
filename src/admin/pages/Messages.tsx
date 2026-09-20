@@ -61,7 +61,7 @@ export default function Messages() {
         <div className="adm-table-header">
           <span className="adm-table-title">Новая рассылка</span>
         </div>
-        <div style={{ padding: 20 }}>
+        <div className="adm-form-body">
           <div className="adm-form-row">
             <label className="adm-label">Аудитория</label>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
@@ -79,7 +79,7 @@ export default function Messages() {
                 placeholder="Один User ID на строку..."
               />
             ) : (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div className="adm-target-row">
                 {TARGETS.map(t => (
                   <button
                     key={t.value}
@@ -141,7 +141,7 @@ export default function Messages() {
           <div className="adm-empty">Рассылок ещё не было</div>
         ) : (
           <div className="adm-table-wrap">
-            <table className="adm-table">
+            <table className="adm-table adm-table--stack">
               <thead>
                 <tr>
                   <th>Дата</th>
@@ -155,12 +155,12 @@ export default function Messages() {
               <tbody>
                 {history.messages.map(m => (
                   <tr key={m.id}>
-                    <td style={{ whiteSpace: 'nowrap' }}>{m.sentAt ? m.sentAt.slice(0, 16).replace('T', ' ') : '—'}</td>
-                    <td><span className="adm-badge gray">{m.target}</span></td>
-                    <td>{m.total}</td>
-                    <td><span style={{ color: 'var(--green)' }}>{m.sent}</span></td>
-                    <td>{m.failed > 0 ? <span style={{ color: 'var(--red)' }}>{m.failed}</span> : '—'}</td>
-                    <td style={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--muted)', fontSize: 12 }}>
+                    <td data-label="Дата" style={{ whiteSpace: 'nowrap' }}>{m.sentAt ? m.sentAt.slice(0, 16).replace('T', ' ') : '—'}</td>
+                    <td data-label="Аудитория"><span className="adm-badge gray">{m.target}</span></td>
+                    <td data-label="Всего">{m.total}</td>
+                    <td data-label="Доставлено"><span style={{ color: 'var(--green)' }}>{m.sent}</span></td>
+                    <td data-label="Ошибок">{m.failed > 0 ? <span style={{ color: 'var(--red)' }}>{m.failed}</span> : '—'}</td>
+                    <td data-label="Текст" className="adm-cell-text" style={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--muted)', fontSize: 12 }}>
                       {m.text}
                     </td>
                   </tr>
