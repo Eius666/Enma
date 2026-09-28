@@ -9,7 +9,7 @@ const { executeTool, getUserTimezone, getUserCurrency, isValidTimezone, getUtcOf
 const { generatePost, generateImage }                      = require('../_lib/content/generator');
 const { handleCallbackQuery: handleContentCb, handleAdminTextMessage, isContentCallback, isAdminChatId } = require('../_lib/content/moderationHandler');
 const { handleTaskCallback }                               = require('../_lib/ai/tools');
-const { handleReferralStart, ensureReferralCode }          = require('../_lib/referral/codes');
+const { ensureReferralCode }                                = require('../_lib/referral/codes');
 const { handleReferralCommand, handleWalletCommand, handleBalanceCommand, checkUserState } = require('../_lib/referral/commands');
 const { processSubscriptionPayment }                       = require('../_lib/referral/earnings');
 const { saveMessage, loadHistory }                         = require('../_lib/ai/chatHistory');
@@ -459,6 +459,21 @@ module.exports = async (req, res) => {
 
     const chatId = message.chat.id;
 
+    // Partner deep-link click: recorded here so it fires for a genuinely
+    // brand-new chat too (the [5] lookup below bails out before any account
+    // exists yet) — a "click" is Telegram delivering /start ref_CODE for this
+    // chat, deduped per chat, independent of whether the visitor ever signs up.
+    if (text?.startsWith('/start')) {
+      const startParam = text.split(' ')[1] || '';
+      if (startParam.startsWith('ref_')) {
+        const { resolveReferralParam, recordPartnerClick } = require('../_lib/referral/partners');
+        const resolved = await resolveReferralParam(startParam.slice(4)).catch(() => ({ kind: 'invalid' }));
+        if (resolved.kind === 'partner') {
+          await recordPartnerClick(chatId, resolved.code, resolved.platform).catch(() => {});
+        }
+      }
+    }
+
     // ── [5] USER LOOKUP ──────────────────────────────────────────────────────
     let userQuery = await db.collection('users').where('chatId', '==', chatId).limit(1).get();
     if (userQuery.empty) {
@@ -496,8 +511,9 @@ module.exports = async (req, res) => {
         await ensureReferralCode(userId).catch(() => {});
         const param = text.split(' ')[1] || '';
         if (param.startsWith('ref_')) {
-          const result = await handleReferralStart(userId, param.slice(4)).catch(() => ({ ok: false }));
-          if (result.ok) {
+          const { attributeReferral } = require('../_lib/referral/partners');
+          const result = await attributeReferral(userId, param.slice(4), { chatId }).catch(() => ({ ok: false }));
+          if (result.ok && result.kind === 'consumer') {
             await sendMessage(token, chatId,
               `👋 Тебя пригласил ${result.referrerName}.\n\n` +
               `У тебя ${TRIAL_LIMIT} бесплатных запроса. Для безлимита — /subscribe`

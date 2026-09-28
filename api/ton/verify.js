@@ -184,7 +184,8 @@ module.exports = async (req, res) => {
       userId,
       payment.referralCode,
       amountRub,
-      paymentId
+      paymentId,
+      process.env.TELEGRAM_BOT_TOKEN
     ).catch(err => console.error('[ton/verify] referral commission error:', err.message));
   }
 

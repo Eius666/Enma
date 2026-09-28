@@ -103,6 +103,19 @@ function createMockDb(seed = {}) {
     return out;
   }
 
+  // set(..., { merge: true }) must only touch the given keys, like real
+  // Firestore — NOT replace the whole document. Every set() path (doc,
+  // transaction, batch) routes through this.
+  function applySet(path, incoming, options) {
+    const resolved = resolveData(path, incoming);
+    if (options && options.merge) {
+      const existing = store.get(path);
+      store.set(path, { ...(existing || {}), ...resolved });
+    } else {
+      store.set(path, resolved);
+    }
+  }
+
   function docRef(path) {
     return {
       id:   path.split('/').pop(),
@@ -111,8 +124,8 @@ function createMockDb(seed = {}) {
         const d = store.get(path);
         return { exists: !!d, data: () => (d ? { ...d } : undefined), id: path.split('/').pop() };
       },
-      set: async (data) => {
-        store.set(path, resolveData(path, data));
+      set: async (data, options) => {
+        applySet(path, data, options);
       },
       update: async (patch) => {
         const ex = store.get(path) || {};
@@ -149,7 +162,7 @@ function createMockDb(seed = {}) {
           forEach: (fn) => docs.forEach(fn) };
       },
       where: (field, op, value) => {
-        const filter = (d) => {
+        const makeFilter = (field, op, value) => (d) => {
           const v = d[field];
           if (op === '==')  return v === value;
           if (op === '!=')  return v !== value;
@@ -160,27 +173,33 @@ function createMockDb(seed = {}) {
           if (op === 'in')  return Array.isArray(value) && value.includes(v);
           return false;
         };
-        const chainable = {
-          get: async () => {
-            const docs = directChildren()
-              .filter(([, v]) => filter(v))
-              .map(([k, v]) => ({
-                id: k.split('/').pop(), data: () => ({ ...v }), exists: true, ref: docRef(k),
-              }));
-            return { empty: docs.length === 0, docs, size: docs.length,
-              forEach: (fn) => docs.forEach(fn) };
-          },
-          where:   () => chainable,
-          orderBy: () => chainable,
-          limit:   (n) => ({
+        // Each .where() ANDs onto the previous ones — real Firestore chains
+        // filters, it doesn't replace them.
+        function build(predicates) {
+          const chainable = {
             get: async () => {
-              const all = await chainable.get();
-              const sliced = all.docs.slice(0, n);
-              return { empty: sliced.length === 0, docs: sliced, size: sliced.length,
-                forEach: (fn) => sliced.forEach(fn) };
+              const docs = directChildren()
+                .filter(([, v]) => predicates.every((f) => f(v)))
+                .map(([k, v]) => ({
+                  id: k.split('/').pop(), data: () => ({ ...v }), exists: true, ref: docRef(k),
+                }));
+              return { empty: docs.length === 0, docs, size: docs.length,
+                forEach: (fn) => docs.forEach(fn) };
             },
-          }),
-        };
+            where:   (f, o, v) => build([...predicates, makeFilter(f, o, v)]),
+            orderBy: () => chainable,
+            limit:   (n) => ({
+              get: async () => {
+                const all = await chainable.get();
+                const sliced = all.docs.slice(0, n);
+                return { empty: sliced.length === 0, docs: sliced, size: sliced.length,
+                  forEach: (fn) => sliced.forEach(fn) };
+              },
+            }),
+          };
+          return chainable;
+        }
+        const chainable = build([makeFilter(field, op, value)]);
         return chainable;
       },
       orderBy: function() { return this; },
@@ -202,7 +221,7 @@ function createMockDb(seed = {}) {
       const writes = [];
       const tx = {
         get:    async (ref)       => ref.get(),
-        set:    (ref, data)       => writes.push(() => store.set(ref.path, resolveData(ref.path, data))),
+        set:    (ref, data, options) => writes.push(() => applySet(ref.path, data, options)),
         update: (ref, patch)      => writes.push(() => {
           const ex = store.get(ref.path) || {};
           store.set(ref.path, { ...ex, ...resolveData(ref.path, patch) });
@@ -216,7 +235,7 @@ function createMockDb(seed = {}) {
     batch: () => {
       const ops = [];
       return {
-        set:    (ref, data)  => ops.push(() => store.set(ref.path, resolveData(ref.path, data))),
+        set:    (ref, data, options) => ops.push(() => applySet(ref.path, data, options)),
         update: (ref, patch) => ops.push(() => {
           const ex = store.get(ref.path) || {};
           store.set(ref.path, { ...ex, ...resolveData(ref.path, patch) });

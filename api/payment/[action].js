@@ -238,6 +238,14 @@ async function handleCallback(req, res) {
 
     if (status === 'CANCELED') {
       await payDoc.ref.update({ status: 'CANCELED' });
+      // Claws back a partner's commission if this payment was confirmed and
+      // then cancelled within the window; a no-op if it was never confirmed
+      // (nothing to claw back) or the window already passed.
+      if (payment.referralCode) {
+        const { cancelInfluencerCommission } = require('../_lib/referral/influencer');
+        await cancelInfluencerCommission(payment.userId, transactionId)
+          .catch(e => console.error('[callback] commission clawback error:', e.message));
+      }
       return res.status(200).json({ ok: true });
     }
 
@@ -281,7 +289,7 @@ async function handleCallback(req, res) {
 
       if (payment.referralCode) {
         const { processInfluencerCommission } = require('../_lib/referral/influencer');
-        await processInfluencerCommission(payment.userId, payment.referralCode, paidAmount, transactionId)
+        await processInfluencerCommission(payment.userId, payment.referralCode, paidAmount, transactionId, BOT_TOKEN)
           .catch(e => console.error('[callback] referral commission:', e.message));
       }
 

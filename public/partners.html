@@ -333,6 +333,33 @@
   .copy-btn{ flex-shrink:0; width:42px; height:42px; border-radius:var(--r-xs); border:1px solid var(--border-strong); background:rgba(255,255,255,.03); display:grid; place-items:center; color:var(--text-dim); cursor:pointer; }
   .copy-btn.copied{ color:var(--success); border-color:var(--success); }
 
+  .dash-signed-out{
+    margin-top:18px; padding-top:18px; border-top:1px solid var(--border-soft);
+    display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
+  }
+  .dash-signed-out span{ font-size:13px; color:var(--text-faint); }
+  .dash.is-live .dash-signed-out{ display:none; }
+
+  /* ── Login modal (Telegram Login Widget) ── */
+  .modal-overlay{
+    position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center;
+    background:rgba(4,5,10,.72); backdrop-filter:blur(6px); padding:20px;
+  }
+  .modal-overlay.open{ display:flex; }
+  .modal-card{
+    width:100%; max-width:380px; padding:28px 26px; text-align:center; position:relative;
+  }
+  .modal-close{
+    position:absolute; top:14px; right:14px; width:32px; height:32px; border-radius:50%;
+    border:1px solid var(--border-strong); background:rgba(255,255,255,.03); color:var(--text-dim);
+    display:grid; place-items:center; cursor:pointer;
+  }
+  .modal-card h3{ font-size:1.15rem; margin-bottom:8px; }
+  .modal-card p{ font-size:13.5px; color:var(--text-dim); margin-bottom:22px; }
+  .modal-widget-slot{ display:flex; justify-content:center; min-height:44px; }
+  .modal-status{ margin-top:16px; font-size:13px; color:var(--text-faint); min-height:18px; }
+  .modal-status.error{ color:#ff8a8a; }
+
   /* ── Audience / for-whom ── */
   .grid-6{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
   .callout{ margin-top:28px; padding:20px 24px; display:flex; gap:14px; align-items:flex-start; }
@@ -458,10 +485,10 @@
       <a href="#materials">Материалы</a>
       <a href="#forwhom">Для кого</a>
       <a href="#faq">FAQ</a>
-      <a href="#dashboard">Войти</a>
+      <a href="#dashboard" class="js-partner-login">Войти</a>
     </nav>
     <div class="nav-cta">
-      <a href="#cta" class="btn btn-primary btn-sm">Стать партнёром</a>
+      <a href="#cta" class="btn btn-primary btn-sm js-partner-cta">Стать партнёром</a>
       <button class="nav-burger" id="burger" aria-label="Открыть меню" aria-expanded="false"><span></span></button>
     </div>
   </div>
@@ -470,7 +497,7 @@
     <a href="#materials">Материалы</a>
     <a href="#forwhom">Для кого</a>
     <a href="#faq">FAQ</a>
-    <a href="#dashboard">Войти</a>
+    <a href="#dashboard" class="js-partner-login">Войти</a>
   </div>
 </header>
 
@@ -482,7 +509,7 @@
       <h1>Получайте <span class="hl">30%</span> с пользователей<span style="white-space:nowrap">, которых</span> приводите в Enma</h1>
       <p class="hero-lede">Рекомендуйте AI-ассистента своей аудитории и получайте часть выручки с привлечённых пользователей. Мы даём персональную ссылку, готовые материалы и прозрачную статистику по каждой оплате.</p>
       <div class="hero-actions">
-        <a href="#cta" class="btn btn-primary btn-lg">Стать партнёром</a>
+        <a href="#cta" class="btn btn-primary btn-lg js-partner-cta">Стать партнёром</a>
         <a href="#how" class="btn btn-ghost btn-lg">Как это работает</a>
       </div>
       <ul class="hero-meta">
@@ -733,14 +760,13 @@
     </div>
     <div class="glass dash reveal">
       <div class="dash-head">
-        <h3>Обзор · последние 30 дней</h3>
-        <span class="demo-badge">Демо-данные</span>
+        <h3 id="dashTitle">Обзор · демо-данные</h3>
+        <span class="demo-badge" id="dashBadge">Демо-данные</span>
       </div>
-      <div class="dash-stats">
+      <div class="dash-stats" id="dashStats">
         <div class="dash-tile"><div class="k">Переходы</div><div class="v tabnum">1 284</div></div>
         <div class="dash-tile"><div class="k">Регистрации</div><div class="v tabnum">403</div></div>
-        <div class="dash-tile"><div class="k">Активировано</div><div class="v tabnum">268</div></div>
-        <div class="dash-tile"><div class="k">Покупки</div><div class="v tabnum">37</div></div>
+        <div class="dash-tile"><div class="k">Оплаты</div><div class="v tabnum">37</div></div>
         <div class="dash-tile"><div class="k">Конверсия в оплату</div><div class="v accent tabnum">9,2%</div></div>
         <div class="dash-tile"><div class="k">Заработано</div><div class="v pos tabnum">8 547 ₽</div></div>
         <div class="dash-tile"><div class="k">Доступно к выплате</div><div class="v pos tabnum">6 120 ₽</div></div>
@@ -750,7 +776,7 @@
       <div class="dash-table-wrap">
         <table class="dash-table">
           <thead><tr><th>Источник</th><th>Клики</th><th>Регистрации</th><th>Оплаты</th><th>Доход</th></tr></thead>
-          <tbody>
+          <tbody id="dashTableBody">
             <tr><td class="src"><svg class="icon"><use href="#i-plane"/></svg>Telegram Channel</td><td class="tabnum">724</td><td class="tabnum">216</td><td class="tabnum">21</td><td class="rev tabnum">4 830 ₽</td></tr>
             <tr><td class="src"><svg class="icon"><use href="#i-play"/></svg>Shorts</td><td class="tabnum">319</td><td class="tabnum">103</td><td class="tabnum">9</td><td class="rev tabnum">2 070 ₽</td></tr>
             <tr><td class="src"><svg class="icon"><use href="#i-link"/></svg>Referral</td><td class="tabnum">241</td><td class="tabnum">84</td><td class="tabnum">7</td><td class="rev tabnum">1 647 ₽</td></tr>
@@ -759,18 +785,23 @@
       </div>
 
       <div class="link-tool">
-        <div class="link-tool-head">Создать ссылку для отслеживания</div>
+        <div class="link-tool-head" id="linkToolHead">Создать ссылку для отслеживания (демо)</div>
         <div class="platform-pills" id="platformPills">
-          <button class="p-pill active" data-p="tg" data-code="tg"><svg class="icon"><use href="#i-plane"/></svg>Telegram</button>
-          <button class="p-pill" data-p="yt" data-code="yt"><svg class="icon"><use href="#i-play"/></svg>YouTube</button>
-          <button class="p-pill" data-p="vk" data-code="vk"><svg class="icon"><use href="#i-users"/></svg>VK</button>
-          <button class="p-pill" data-p="ig" data-code="ig"><svg class="icon"><use href="#i-camera"/></svg>Instagram</button>
-          <button class="p-pill" data-p="other" data-code="src"><svg class="icon"><use href="#i-globe"/></svg>Другое</button>
+          <button class="p-pill active" data-p="tg"><svg class="icon"><use href="#i-plane"/></svg>Telegram</button>
+          <button class="p-pill" data-p="yt"><svg class="icon"><use href="#i-play"/></svg>YouTube</button>
+          <button class="p-pill" data-p="vk"><svg class="icon"><use href="#i-users"/></svg>VK</button>
+          <button class="p-pill" data-p="ig"><svg class="icon"><use href="#i-camera"/></svg>Instagram</button>
+          <button class="p-pill" data-p="src"><svg class="icon"><use href="#i-globe"/></svg>Другое</button>
         </div>
         <div class="link-out">
-          <code id="linkOut" class="tabnum">t.me/ENMA_BOT?start=ref_DEMO482_tg</code>
+          <code id="linkOut" class="tabnum">t.me/EnmaAI_bot?start=ref_DEMO482_tg</code>
           <button class="copy-btn" id="copyBtn" aria-label="Скопировать ссылку"><svg class="icon"><use href="#i-copy"/></svg></button>
         </div>
+      </div>
+
+      <div class="dash-signed-out" id="dashSignedOut">
+        <span>Это демонстрационные данные интерфейса.</span>
+        <button class="btn btn-primary btn-sm js-partner-cta" type="button">Войти и увидеть свою статистику</button>
       </div>
     </div>
   </div>
@@ -892,7 +923,7 @@
     <div class="glass cta-final reveal">
       <h2>Ваша аудитория может приносить доход уже с первой рекомендации</h2>
       <p>Подключитесь к партнёрской программе Enma, получите персональную ссылку и выберите готовый материал для первой публикации.</p>
-      <a href="#" class="btn btn-primary btn-lg" id="ctaFinalBtn">Стать партнёром</a>
+      <a href="#" class="btn btn-primary btn-lg js-partner-cta" id="ctaFinalBtn">Стать партнёром</a>
       <div class="fine">Подключение бесплатно</div>
     </div>
   </div>
@@ -925,6 +956,19 @@
     <span>Партнёрская программа Enma</span>
   </div>
 </footer>
+
+<!-- ══════════════════════════ LOGIN MODAL ══════════════════════════ -->
+<div class="modal-overlay" id="loginModal" role="dialog" aria-modal="true" aria-label="Вход для партнёров">
+  <div class="glass modal-card">
+    <button class="modal-close" id="loginModalClose" aria-label="Закрыть" type="button">
+      <svg class="icon"><use href="#i-arrow"/></svg>
+    </button>
+    <h3>Вход для партнёров</h3>
+    <p>Войдите через Telegram — тот же аккаунт, которым пользуется бот Enma. Пароль не нужен.</p>
+    <div class="modal-widget-slot" id="tgWidgetSlot"></div>
+    <div class="modal-status" id="loginStatus"></div>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -971,11 +1015,6 @@
     toastTimer = setTimeout(function(){ toastEl.classList.remove('show'); }, 2200);
   }
 
-  // ── "Войти" preview ─────────────────────────────────────────────────────
-  document.querySelectorAll('a[href="#dashboard"]').forEach(function(a){
-    a.addEventListener('click', function(){ setTimeout(function(){ toast('Так выглядит кабинет партнёра после входа'); }, 500); });
-  });
-
   // ── Income calculator ───────────────────────────────────────────────────
   var rAudience = document.getElementById('rAudience');
   var rClick    = document.getElementById('rClick');
@@ -1020,21 +1059,59 @@
   });
   recalc();
 
-  // ── Tracking link generator ─────────────────────────────────────────────
-  var PARTNER_ID = 'DEMO482'; // demo id — a real partner's own id after registration
-  var BOT_USERNAME = 'ENMA_BOT'; // placeholder — set from Enma bot config
+  // ── Analytics event hooks (wire to the real tracker in production) ──────
+  function track(name, data){
+    if (window.dataLayer) { window.dataLayer.push(Object.assign({event:name}, data||{})); }
+  }
+  track('partner_page_view');
+  document.querySelectorAll('.p-pill').forEach(function(p){
+    p.addEventListener('click', function(){ track('referral_link_created', { platform: p.dataset.p }); });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Partner backend integration: Telegram Login Widget + live dashboard.
+  //
+  // IMPORTANT — must match the server's TELEGRAM_BOT_USERNAME env var (see
+  // _lib/referral/partners.js). Both default to 'EnmaAI_bot'; if the bot is
+  // renamed or the env var overridden, update this constant too.
+  // ═══════════════════════════════════════════════════════════════════════
+  var BOT_USERNAME = 'EnmaAI_bot';
+  var DEMO_CODE = 'DEMO482';
+  var TOKEN_KEY = 'enma_partner_token';
+  var CODE_KEY  = 'enma_partner_code';
+
+  var state = {
+    token: localStorage.getItem(TOKEN_KEY) || null,
+    code:  localStorage.getItem(CODE_KEY) || null,
+    partner: null, // filled in by loadDashboard()
+  };
+
+  function buildLink(code, platform){
+    return 't.me/' + BOT_USERNAME + '?start=ref_' + code + (platform === 'direct' ? '' : '_' + platform);
+  }
+
+  // ── Tracking-link pills (work in both demo and signed-in mode) ──────────
   var pills = document.querySelectorAll('#platformPills .p-pill');
   var linkOut = document.getElementById('linkOut');
-  function buildLink(code){
-    return 't.me/' + BOT_USERNAME + '?start=ref_' + PARTNER_ID + '_' + code;
+  function refreshLinkOut(){
+    var active = document.querySelector('#platformPills .p-pill.active');
+    var platform = active ? active.dataset.p : 'tg';
+    var code = state.partner ? state.partner.code : DEMO_CODE;
+    linkOut.textContent = buildLink(code, platform);
+    // Signed in: ensure the per-platform link doc exists server-side too, so
+    // it shows up in the source table even before its first real click.
+    if (state.token && state.partner) {
+      apiFetch('link', { method: 'POST', body: JSON.stringify({ platform: platform }) }).catch(function(){});
+    }
   }
   pills.forEach(function(p){
     p.addEventListener('click', function(){
       pills.forEach(function(x){ x.classList.remove('active'); });
       p.classList.add('active');
-      linkOut.textContent = buildLink(p.dataset.code);
+      refreshLinkOut();
     });
   });
+  refreshLinkOut();
 
   var copyBtn = document.getElementById('copyBtn');
   copyBtn.addEventListener('click', function(){
@@ -1051,20 +1128,143 @@
     }
   });
 
-  // ── Analytics event hooks (wire to the real tracker in production) ──────
-  function track(name, data){
-    if (window.dataLayer) { window.dataLayer.push(Object.assign({event:name}, data||{})); }
+  // ── API helper ────────────────────────────────────────────────────────
+  function apiFetch(action, opts){
+    opts = opts || {};
+    var headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+    if (state.token) headers.Authorization = 'Bearer ' + state.token;
+    return fetch('/api/partner/' + action, Object.assign({ method: 'GET' }, opts, { headers: headers }))
+      .then(function(resp){ return resp.json().then(function(data){ return { ok: resp.ok, status: resp.status, data: data }; }); });
   }
-  track('partner_page_view');
-  document.querySelectorAll('a.btn-primary, #ctaFinalBtn').forEach(function(a){
-    a.addEventListener('click', function(){ track('partner_signup_started'); });
+
+  // ── Login modal + Telegram Login Widget ──────────────────────────────────
+  var loginModal  = document.getElementById('loginModal');
+  var loginStatus = document.getElementById('loginStatus');
+  var widgetSlot  = document.getElementById('tgWidgetSlot');
+  var widgetLoaded = false;
+
+  function openLoginModal(){
+    if (state.token) { document.getElementById('dashboard').scrollIntoView({ behavior: 'smooth' }); return; }
+    track('partner_signup_started');
+    loginModal.classList.add('open');
+    loginStatus.textContent = '';
+    loginStatus.classList.remove('error');
+    if (!widgetLoaded) {
+      var s = document.createElement('script');
+      s.async = true;
+      s.src = 'https://telegram.org/js/telegram-widget.js?22';
+      s.setAttribute('data-telegram-login', BOT_USERNAME);
+      s.setAttribute('data-size', 'large');
+      s.setAttribute('data-radius', '10');
+      s.setAttribute('data-userpic', 'false');
+      s.setAttribute('data-onauth', 'onTelegramAuth(user)');
+      widgetSlot.appendChild(s);
+      widgetLoaded = true;
+    }
+  }
+  function closeLoginModal(){ loginModal.classList.remove('open'); }
+
+  document.getElementById('loginModalClose').addEventListener('click', closeLoginModal);
+  loginModal.addEventListener('click', function(e){ if (e.target === loginModal) closeLoginModal(); });
+
+  document.querySelectorAll('.js-partner-cta, .js-partner-login').forEach(function(a){
+    a.addEventListener('click', function(e){ e.preventDefault(); openLoginModal(); });
   });
-  document.querySelectorAll('.p-pill').forEach(function(p){
-    p.addEventListener('click', function(){ track('referral_link_created', { platform: p.dataset.p }); });
-  });
-  document.querySelectorAll('a[href="#dashboard"]').forEach(function(a){
-    a.addEventListener('click', function(){ track('promo_material_opened'); });
-  });
+
+  // Telegram calls this global with the signed payload once the visitor
+  // authorizes the widget — same shape _lib/referral/partnerAuth.js verifies.
+  window.onTelegramAuth = function(user){
+    loginStatus.textContent = 'Проверяем…';
+    fetch('/api/partner/telegramLogin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(user),
+    })
+      .then(function(resp){ return resp.json().then(function(data){ return { ok: resp.ok, data: data }; }); })
+      .then(function(res){
+        if (!res.ok) {
+          loginStatus.textContent = 'Не удалось войти. Попробуйте ещё раз.';
+          loginStatus.classList.add('error');
+          return;
+        }
+        state.token = res.data.token;
+        state.code  = res.data.partner.code;
+        localStorage.setItem(TOKEN_KEY, state.token);
+        localStorage.setItem(CODE_KEY, state.code);
+        track('partner_registered');
+        closeLoginModal();
+        toast('Добро пожаловать' + (res.data.partner.name ? ', ' + res.data.partner.name : '') + '!');
+        loadDashboard();
+      })
+      .catch(function(){
+        loginStatus.textContent = 'Ошибка сети. Попробуйте ещё раз.';
+        loginStatus.classList.add('error');
+      });
+  };
+
+  // ── Live dashboard ────────────────────────────────────────────────────
+  var fmtRub = function(n){ return Math.round(n || 0).toLocaleString('ru-RU') + ' ₽'; };
+  var PLATFORM_LABEL = { tg: 'Telegram', yt: 'YouTube', vk: 'VK', ig: 'Instagram', src: 'Другое', direct: 'Прямая ссылка' };
+  var PLATFORM_ICON  = { tg: 'i-plane', yt: 'i-play', vk: 'i-users', ig: 'i-camera', src: 'i-globe', direct: 'i-link' };
+
+  function renderDashboard(partner){
+    document.getElementById('dashTitle').textContent = 'Обзор · ' + partner.name;
+    var badge = document.getElementById('dashBadge');
+    badge.textContent = 'Код: ' + partner.code;
+    badge.style.color = 'var(--success)';
+    badge.style.borderColor = 'rgba(52,211,153,.4)';
+    badge.style.background = 'rgba(52,211,153,.08)';
+    document.querySelector('.dash').classList.add('is-live');
+
+    var conv = partner.registrations > 0 ? Math.round((partner.payments / partner.registrations) * 1000) / 10 : 0;
+    document.getElementById('dashStats').innerHTML = [
+      ['Переходы', partner.clicks.toLocaleString('ru-RU')],
+      ['Регистрации', partner.registrations.toLocaleString('ru-RU')],
+      ['Оплаты', partner.payments.toLocaleString('ru-RU')],
+      ['Конверсия в оплату', conv.toLocaleString('ru-RU') + '%'],
+      ['Заработано', fmtRub(partner.totalEarned)],
+      ['Доступно к выплате', fmtRub(partner.pendingPayout)],
+      ['Выплачено всего', fmtRub(partner.paidOut)],
+    ].map(function(kv){
+      return '<div class="dash-tile"><div class="k">' + kv[0] + '</div><div class="v tabnum">' + kv[1] + '</div></div>';
+    }).join('');
+
+    var tbody = document.getElementById('dashTableBody');
+    var links = (partner.links || []).filter(function(l){ return l.clicks || l.registrations || l.payments; });
+    if (!links.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text-faint); font-family:var(--ff-body)">Пока нет переходов по вашим ссылкам — они появятся здесь автоматически.</td></tr>';
+    } else {
+      tbody.innerHTML = links.map(function(l){
+        var label = PLATFORM_LABEL[l.id] || l.id;
+        var icon = PLATFORM_ICON[l.id] || 'i-link';
+        return '<tr><td class="src"><svg class="icon"><use href="#' + icon + '"/></svg>' + label + '</td>' +
+          '<td class="tabnum">' + (l.clicks || 0).toLocaleString('ru-RU') + '</td>' +
+          '<td class="tabnum">' + (l.registrations || 0).toLocaleString('ru-RU') + '</td>' +
+          '<td class="tabnum">' + (l.payments || 0).toLocaleString('ru-RU') + '</td>' +
+          '<td class="rev tabnum">' + fmtRub(l.commission) + '</td></tr>';
+      }).join('');
+    }
+
+    document.getElementById('linkToolHead').textContent = 'Ваши ссылки для отслеживания';
+    refreshLinkOut();
+  }
+
+  function loadDashboard(){
+    if (!state.token) return;
+    apiFetch('me').then(function(res){
+      if (!res.ok) {
+        // Session expired or revoked — fall back to the demo view quietly.
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(CODE_KEY);
+        state.token = null; state.code = null;
+        return;
+      }
+      state.partner = res.data.partner;
+      renderDashboard(state.partner);
+    }).catch(function(){ /* offline — keep whatever is currently shown */ });
+  }
+
+  loadDashboard();
 })();
 </script>
 </body>

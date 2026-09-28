@@ -123,11 +123,14 @@ async function setupNewUserIfNeeded(uid, tgUser, startParam) {
 
   const [userSnap, subSnap] = await Promise.all([userRef.get(), subRef.get()]);
 
-  // Process referral link regardless of new/existing user (handleReferralStart is idempotent)
+  // Process referral link regardless of new/existing user (attributeReferral is
+  // idempotent). This IS the real "registration" moment for the deep-link
+  // funnel: a Mini App launch is the only way a brand-new Enma account gets
+  // created, so this is where a partner's "click" becomes a "registration".
   if (startParam && startParam.startsWith('ref_')) {
     const refCode = startParam.slice(4);
-    const { handleReferralStart } = require('../_lib/referral/codes');
-    await handleReferralStart(uid, refCode).catch(err =>
+    const { attributeReferral } = require('../_lib/referral/partners');
+    await attributeReferral(uid, refCode, { chatId: tgUser.id }).catch(err =>
       console.error('[auth/telegram] referral start error:', err.message)
     );
   }
