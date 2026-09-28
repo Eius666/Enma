@@ -5,6 +5,13 @@ const { HOME_BUDGET_CURRENCY } = require('../_lib/config');
 const { createEntityInFirestore, getActivePlan } = require('../_lib/entities/createEntity');
 const { createFinancialTransaction, buildTransactionUpdate, TransactionValidationError } = require('../_lib/transactions/financialTransaction');
 const { FxUnavailableError } = require('../_lib/fx');
+const { rateLimit, getClientIp } = require('../_lib/rateLimit');
+const {
+  verifyTelegramLoginWidget, issuePartnerSession, verifyPartnerSession, bearerToken,
+} = require('../_lib/referral/partnerAuth');
+const {
+  findOrCreatePartnerByTelegram, getPartnerSummary, getOrCreateTrackingLink, normalizePlatform,
+} = require('../_lib/referral/partners');
 const crypto        = require('crypto');
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -399,6 +406,78 @@ async function handleGoalDelete(req, res) {
   } catch (err) {
     console.error('[ai/goalDelete] error:', err.message);
     return res.status(500).json({ error: 'Failed to delete goal' });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Partner (affiliate) program — folded into this route, not its own function,
+// to stay under Vercel's Hobby-plan serverless function cap. Auth here is a
+// separate HMAC session token (see _lib/referral/partnerAuth.js), NOT the
+// Firebase ID token requireAuth() above expects — a partner may have no Enma
+// account at all.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function requirePartner(req, res) {
+  const token = bearerToken(req);
+  const result = verifyPartnerSession(token);
+  if (!result.ok) {
+    res.status(401).json({ error: 'unauthorized', code: result.reason });
+    return null;
+  }
+  return result.code;
+}
+
+async function handlePartnerLogin(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const ip = getClientIp(req);
+  if (!(await rateLimit(`partner_login:${ip}`, 10, 60 * 1000))) {
+    return res.status(429).json({ error: 'Too many requests' });
+  }
+
+  const verified = verifyTelegramLoginWidget(req.body || {}, process.env.TELEGRAM_BOT_TOKEN);
+  if (!verified.ok) {
+    return res.status(401).json({ error: 'invalid_telegram_signature', code: verified.reason });
+  }
+
+  try {
+    const partner = await findOrCreatePartnerByTelegram(verified.user);
+    const token = issuePartnerSession(partner.code);
+    return res.status(200).json({
+      ok: true, token,
+      partner: { code: partner.code, name: partner.name, status: partner.status || 'active' },
+    });
+  } catch (err) {
+    console.error('[ai/partnerLogin] error:', err.message);
+    return res.status(500).json({ error: 'Failed to sign in' });
+  }
+}
+
+async function handlePartnerMe(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  const code = await requirePartner(req, res);
+  if (!code) return;
+  try {
+    const summary = await getPartnerSummary(code);
+    if (!summary) return res.status(404).json({ error: 'partner_not_found' });
+    return res.status(200).json({ ok: true, partner: summary });
+  } catch (err) {
+    console.error('[ai/partnerMe] error:', err.message);
+    return res.status(500).json({ error: 'Failed to load dashboard' });
+  }
+}
+
+async function handlePartnerLink(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const code = await requirePartner(req, res);
+  if (!code) return;
+  const platform = normalizePlatform((req.body || {}).platform);
+  try {
+    const link = await getOrCreateTrackingLink(code, platform);
+    return res.status(200).json({ ok: true, ...link });
+  } catch (err) {
+    console.error('[ai/partnerLink] error:', err.message);
+    return res.status(500).json({ error: 'Failed to create link' });
   }
 }
 
@@ -1228,6 +1307,9 @@ module.exports = async (req, res) => {
       case 'goalCreate':       return await handleGoalCreate(req, res);
       case 'goalAdjust':       return await handleGoalAdjust(req, res);
       case 'goalDelete':       return await handleGoalDelete(req, res);
+      case 'partnerLogin':     return await handlePartnerLogin(req, res);
+      case 'partnerMe':        return await handlePartnerMe(req, res);
+      case 'partnerLink':      return await handlePartnerLink(req, res);
       case 'referralValidate':      return await handleReferralValidate(req, res);
       case 'referralInfo':          return await handleReferralInfo(req, res);
       case 'referralPayout':        return await handleReferralPayout(req, res);
