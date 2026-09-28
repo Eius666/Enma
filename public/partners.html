@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0B0E14" />
+<meta name="color-scheme" content="dark" />
+<title>Партнёрская программа — Enma</title>
+<meta name="description" content="Получайте 30% с платежей пользователей, которых вы приводите в Enma. Персональная реферальная ссылка, готовые материалы и статистика в реальном времени." />
+<link rel="icon" href="/favicon.ico" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700;800&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ── Design tokens ─────────────────────────────────────────────────────────
+     Deliberate single dark world: Enma's brand ground (#0B0E14) is the whole
+     page, not a "dark mode" of a lighter design — so tokens are declared once,
+     no light/prefers-color-scheme branch (see artifact-design: committed look).
+  */
+  :root{
+    --bg:#0B0E14;
+    --bg-soft:#0E1320;
+    --surface: rgba(255,255,255,.045);
+    --surface-2: rgba(255,255,255,.075);
+    --surface-solid:#121826;
+    --border: rgba(255,255,255,.10);
+    --border-soft: rgba(255,255,255,.06);
+    --border-strong: rgba(255,255,255,.18);
+    --text:#F3F4FA;
+    --text-dim:#AEB4C9;
+    --text-faint:#767D93;
+    --accent:#4F46E5;
+    --accent-light:#8B7CF7;
+    --accent-ink:#EDEBFF;
+    --success:#34D399;
+    --warn:#F2B84B;
+    --r-xs:10px; --r-sm:14px; --r-md:20px; --r-lg:28px; --r-xl:36px; --r-pill:999px;
+    --gutter: max(20px, env(safe-area-inset-left, 0px));
+    --shadow-1: 0 1px 0 rgba(255,255,255,.04) inset, 0 20px 50px -24px rgba(0,0,0,.65);
+    --shadow-glow: 0 0 0 1px rgba(79,70,229,.35), 0 0 80px -12px rgba(79,70,229,.55);
+    --ff-display:'Unbounded','Manrope',system-ui,sans-serif;
+    --ff-body:'Manrope',system-ui,-apple-system,sans-serif;
+    --ff-mono:'JetBrains Mono',ui-monospace,'SFMono-Regular',monospace;
+    --ease: cubic-bezier(.16,.8,.24,1);
+  }
+
+  *,*::before,*::after{ box-sizing:border-box; margin:0; padding:0; }
+  html{ background:var(--bg); }
+  body{
+    background:
+      radial-gradient(1100px 620px at 82% -8%, rgba(79,70,229,.30), transparent 60%),
+      radial-gradient(900px 500px at -10% 18%, rgba(139,124,247,.16), transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--ff-body);
+    font-size:16px;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    padding-inline:var(--gutter);
+    overflow-x:hidden;
+  }
+  img{ max-width:100%; display:block; }
+  a{ color:inherit; text-decoration:none; }
+  ul{ list-style:none; margin:0; padding:0; }
+  h1,h2,h3,h4{ font-family:var(--ff-display); font-weight:700; line-height:1.08; text-wrap:balance; margin:0; letter-spacing:-.01em; overflow-wrap:break-word; }
+  p{ margin:0; overflow-wrap:break-word; }
+  button{ font-family:inherit; }
+  ::selection{ background:rgba(79,70,229,.45); color:#fff; }
+  :focus-visible{ outline:2px solid var(--accent-light); outline-offset:3px; border-radius:6px; }
+  .icon{ width:1em; height:1em; stroke:currentColor; fill:none; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; }
+  .tabnum{ font-variant-numeric:tabular-nums; }
+
+  .shell{ max-width:1180px; margin-inline:auto; }
+  /* Grid/flex items default to a content-based min-width, which lets one long
+     unbreakable word blow the whole track past the viewport — reset it once,
+     site-wide, on every multi-item layout used below. */
+  .hero-grid, .steps, .grid-2, .grid-3, .grid-6, .commission, .calc, .calc-col,
+  .dash-stats, .chats, .stat-grid, .footer-grid, .platform-pills, .link-out,
+  .hero-actions, .hero-meta, .nav-inner{ min-width:0; }
+  .hero-grid > *, .steps > *, .grid-2 > *, .grid-3 > *, .grid-6 > *, .commission > *,
+  .calc > *, .dash-stats > *, .chats > *, .stat-grid > *, .footer-grid > *,
+  .footer-links > *{ min-width:0; }
+  .eyebrow{
+    display:inline-flex; align-items:center; gap:8px;
+    font-family:var(--ff-mono); font-size:12.5px; font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--accent-light);
+  }
+  .eyebrow::before{ content:""; width:6px; height:6px; border-radius:50%; background:var(--accent-light); box-shadow:0 0 12px 2px var(--accent-light); }
+
+  .section{ padding-block: clamp(56px,9vw,108px); position:relative; }
+  .section-head{ max-width:640px; margin-bottom:clamp(32px,5vw,56px); }
+  .section-head.center{ margin-inline:auto; text-align:center; }
+  .section-title{ font-size:clamp(1.9rem,1.55rem + 1.7vw,2.7rem); margin-top:14px; }
+  .section-sub{ margin-top:16px; color:var(--text-dim); font-size:1.06rem; max-width:60ch; }
+  .section-head.center .section-sub{ margin-inline:auto; }
+
+  .glass{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--r-lg);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    box-shadow:var(--shadow-1);
+  }
+
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:9px;
+    font-family:var(--ff-body); font-weight:700; font-size:15px;
+    padding:13px 26px; border-radius:var(--r-pill); border:1px solid transparent;
+    cursor:pointer; white-space:nowrap; transition:transform .18s var(--ease), box-shadow .18s var(--ease), background .18s var(--ease), border-color .18s var(--ease);
+  }
+  .btn:active{ transform:scale(.97); }
+  .btn-primary{
+    background:linear-gradient(135deg,var(--accent),#6C5CE9);
+    color:#fff; box-shadow: 0 14px 34px -12px rgba(79,70,229,.65);
+  }
+  .btn-primary:hover{ box-shadow:0 18px 40px -10px rgba(79,70,229,.8); transform:translateY(-1px); }
+  .btn-ghost{ background:rgba(255,255,255,.03); border-color:var(--border-strong); color:var(--text); }
+  .btn-ghost:hover{ background:rgba(255,255,255,.07); border-color:rgba(255,255,255,.3); }
+  .btn-sm{ padding:9px 18px; font-size:13.5px; }
+  .btn-lg{ padding:15px 30px; font-size:16px; }
+  .btn-block{ width:100%; }
+
+  /* ── Nav ── */
+  .nav{
+    position:sticky; top:env(safe-area-inset-top,0px); z-index:60;
+    padding-block:14px; margin-inline:calc(var(--gutter) * -1); padding-inline:var(--gutter);
+    background:rgba(11,14,20,.62);
+    border-bottom:1px solid var(--border-soft);
+    backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  }
+  .nav-inner{ max-width:1180px; margin-inline:auto; display:flex; align-items:center; gap:20px; }
+  .brand{ display:flex; align-items:center; gap:9px; font-family:var(--ff-display); font-weight:700; font-size:17px; letter-spacing:-.01em; margin-right:6px; }
+  .brand-mark{
+    width:30px; height:30px; border-radius:9px; display:grid; place-items:center;
+    background:linear-gradient(145deg,var(--accent),#7C6FF2); box-shadow:0 6px 18px -6px rgba(79,70,229,.8);
+    color:#fff; font-size:14px;
+  }
+  .nav-links{ display:flex; align-items:center; gap:26px; margin-inline:auto; }
+  .nav-links a{ font-size:14.5px; color:var(--text-dim); font-weight:600; transition:color .15s; }
+  .nav-links a:hover{ color:var(--text); }
+  .nav-cta{ display:flex; align-items:center; gap:14px; }
+  .nav-burger{ display:none; width:40px; height:40px; border-radius:10px; border:1px solid var(--border-strong); background:rgba(255,255,255,.03); align-items:center; justify-content:center; }
+  .nav-burger span, .nav-burger span::before, .nav-burger span::after{ content:""; display:block; width:16px; height:2px; background:var(--text); border-radius:2px; position:relative; transition:transform .2s, opacity .2s; }
+  .nav-burger span::before{ position:absolute; top:-5px; }
+  .nav-burger span::after{ position:absolute; top:5px; }
+  .nav-burger.open span{ background:transparent; }
+  .nav-burger.open span::before{ top:0; transform:rotate(45deg); }
+  .nav-burger.open span::after{ top:0; transform:rotate(-45deg); }
+  .nav-mobile{
+    display:none; flex-direction:column; gap:4px; margin-top:14px; padding-top:14px;
+    border-top:1px solid var(--border-soft);
+  }
+  .nav-mobile a{ padding:11px 4px; font-weight:600; color:var(--text-dim); font-size:15px; }
+  .nav-mobile.open{ display:flex; }
+
+  /* ── Hero ── */
+  .hero{ padding-top:clamp(52px,8vw,92px); padding-bottom:clamp(56px,8vw,88px); position:relative; }
+  .hero-grid{ display:grid; grid-template-columns:1.05fr .95fr; gap:clamp(28px,5vw,64px); align-items:center; }
+  .badge{
+    display:inline-flex; align-items:center; gap:8px; padding:8px 16px 8px 12px; border-radius:var(--r-pill);
+    background:rgba(79,70,229,.14); border:1px solid rgba(139,124,247,.35); color:var(--accent-ink);
+    font-size:13px; font-weight:700; margin-bottom:22px;
+  }
+  .badge .dot{ width:7px; height:7px; border-radius:50%; background:var(--success); box-shadow:0 0 10px 2px var(--success); }
+  .hero h1{ font-size:clamp(2.35rem,1.85rem + 2.6vw,3.65rem); }
+  .hero h1 .hl{
+    background:linear-gradient(120deg,#B9AEFF,var(--accent-light) 55%,#6C5CE9);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .hero-lede{ margin-top:22px; font-size:1.14rem; color:var(--text-dim); max-width:52ch; }
+  .hero-actions{ display:flex; gap:14px; flex-wrap:wrap; margin-top:32px; }
+  .hero-meta{ display:flex; flex-wrap:wrap; gap:18px; margin-top:28px; }
+  .hero-meta li{ display:flex; align-items:center; gap:8px; font-size:13.5px; color:var(--text-faint); font-weight:600; }
+  .hero-meta .icon{ color:var(--success); }
+
+  .hero-visual{ position:relative; }
+  .hero-card{ padding:22px; }
+  .hero-card-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+  .hero-card-title{ font-size:13px; font-weight:700; color:var(--text-dim); }
+  .live-pill{ display:flex; align-items:center; gap:6px; font-family:var(--ff-mono); font-size:11px; color:var(--success); font-weight:600; }
+  .live-pill i{ width:6px; height:6px; border-radius:50%; background:var(--success); box-shadow:0 0 8px 2px var(--success); display:block; }
+  .stat-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .stat-tile{
+    background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-md); padding:16px;
+  }
+  .stat-tile .k{ font-size:11.5px; color:var(--text-faint); font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+  .stat-tile .v{ font-family:var(--ff-mono); font-size:clamp(1.25rem,1rem + 1vw,1.7rem); font-weight:700; margin-top:8px; color:var(--text); }
+  .stat-tile .v.accent{ color:var(--accent-light); }
+  .hero-chart{ margin-top:14px; padding:16px; }
+  .hero-chart-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+  .hero-chart-head span{ font-size:11.5px; color:var(--text-faint); font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+  .hero-chart-head b{ font-family:var(--ff-mono); color:var(--success); font-size:13px; }
+  .demo-note{ margin-top:14px; text-align:center; font-size:11.5px; color:var(--text-faint); }
+
+  /* ── Reveal ── */
+  .reveal{ opacity:0; transform:translateY(18px); transition:opacity .7s var(--ease), transform .7s var(--ease); }
+  .reveal.in{ opacity:1; transform:none; }
+  @media (prefers-reduced-motion:reduce){ .reveal{ opacity:1!important; transform:none!important; transition:none!important; } }
+
+  /* ── How it works ── */
+  .steps{ position:relative; display:grid; grid-template-columns:repeat(4,1fr); gap:18px; }
+  .steps::before{
+    content:""; position:absolute; top:34px; left:8%; right:8%; height:1px;
+    background:linear-gradient(90deg,transparent,var(--border-strong) 12%,var(--border-strong) 88%,transparent);
+    z-index:0;
+  }
+  .step{ position:relative; z-index:1; padding:24px 20px; }
+  .step-num{
+    width:44px; height:44px; border-radius:14px; display:grid; place-items:center;
+    font-family:var(--ff-mono); font-weight:700; font-size:15px; color:var(--accent-ink);
+    background:linear-gradient(150deg,rgba(79,70,229,.55),rgba(108,92,233,.25));
+    border:1px solid rgba(139,124,247,.45); margin-bottom:16px;
+  }
+  .step h3{ font-size:1.05rem; margin-bottom:8px; }
+  .step p{ font-size:14px; color:var(--text-dim); }
+
+  /* ── Commission ── */
+  .commission{
+    padding:clamp(36px,6vw,64px); display:grid; grid-template-columns:auto 1fr; gap:clamp(28px,5vw,56px); align-items:center;
+    position:relative; overflow:hidden;
+  }
+  .commission::before{
+    content:""; position:absolute; inset:-40% -10% auto auto; width:60%; aspect-ratio:1; border-radius:50%;
+    background:radial-gradient(circle,rgba(79,70,229,.45),transparent 65%); filter:blur(10px); pointer-events:none;
+  }
+  .commission-num{
+    font-family:var(--ff-display); font-weight:800; font-size:clamp(4.2rem,3rem + 6vw,7.5rem); line-height:.9;
+    background:linear-gradient(160deg,#fff,var(--accent-light) 75%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    position:relative;
+  }
+  .commission-body{ position:relative; }
+  .commission-body .lead{ font-size:1.3rem; font-family:var(--ff-display); font-weight:600; line-height:1.3; max-width:22ch; }
+  .commission-body p{ margin-top:16px; color:var(--text-dim); font-size:1rem; max-width:56ch; }
+  .commission-quote{
+    margin-top:22px; padding:16px 20px; border-left:2px solid var(--accent-light);
+    background:rgba(255,255,255,.03); border-radius:0 var(--r-sm) var(--r-sm) 0;
+    font-family:var(--ff-display); font-weight:500; font-size:.98rem; color:var(--accent-ink);
+  }
+
+  /* ── Calculator ── */
+  .calc{ padding:clamp(28px,5vw,44px); display:grid; grid-template-columns:1fr 1fr; gap:clamp(28px,4vw,48px); }
+  .calc-field{ margin-bottom:24px; }
+  .calc-field:last-child{ margin-bottom:0; }
+  .calc-label{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; font-size:14px; font-weight:700; color:var(--text-dim); }
+  .calc-label b{ font-family:var(--ff-mono); color:var(--text); font-size:15px; font-weight:700; }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:6px; border-radius:99px;
+    background:linear-gradient(90deg,var(--accent) var(--fill,50%),rgba(255,255,255,.12) var(--fill,50%));
+    outline:none; cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:20px; height:20px; border-radius:50%;
+    background:#fff; box-shadow:0 0 0 5px rgba(79,70,229,.35), 0 4px 10px rgba(0,0,0,.4); cursor:grab; border:none;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:20px; height:20px; border-radius:50%; background:#fff; box-shadow:0 0 0 5px rgba(79,70,229,.35); border:none; cursor:grab;
+  }
+  .price-input-wrap{ position:relative; }
+  .price-input{
+    width:100%; background:var(--surface-2); border:1px solid var(--border-strong); color:var(--text);
+    border-radius:var(--r-sm); padding:13px 44px 13px 16px; font-family:var(--ff-mono); font-size:16px; font-weight:600;
+  }
+  .price-input-wrap::after{ content:"₽/мес"; position:absolute; right:14px; top:50%; transform:translateY(-50%); font-size:12.5px; color:var(--text-faint); font-family:var(--ff-mono); }
+  .calc-results{
+    background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-md); padding:24px;
+    display:flex; flex-direction:column; gap:16px;
+  }
+  .res-row{ display:flex; justify-content:space-between; align-items:center; padding-bottom:14px; border-bottom:1px dashed var(--border-soft); }
+  .res-row:last-of-type{ border-bottom:none; padding-bottom:0; }
+  .res-row .rk{ font-size:13.5px; color:var(--text-dim); font-weight:600; }
+  .res-row .rv{ font-family:var(--ff-mono); font-weight:700; font-size:17px; }
+  .res-hero{ margin-top:2px; padding-top:18px; border-top:1px solid var(--border-strong); }
+  .res-hero .rk{ font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--accent-light); font-weight:700; }
+  .res-hero .rv{ font-family:var(--ff-display); font-size:clamp(1.9rem,1.5rem + 1.4vw,2.5rem); font-weight:700; color:#fff; margin-top:6px; display:block; }
+  .calc-disclaimer{ margin-top:20px; font-size:12px; color:var(--text-faint); line-height:1.6; grid-column:1/-1; }
+
+  /* ── Cards grids ── */
+  .grid-3{ display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
+  .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .card{ padding:26px; }
+  .card-icon{
+    width:46px; height:46px; border-radius:13px; display:grid; place-items:center; margin-bottom:18px;
+    background:linear-gradient(150deg,rgba(79,70,229,.4),rgba(139,124,247,.12)); border:1px solid rgba(139,124,247,.3);
+    color:var(--accent-ink); font-size:20px;
+  }
+  .card h3{ font-size:1.02rem; margin-bottom:8px; }
+  .card p{ font-size:13.8px; color:var(--text-dim); }
+  .materials-cta{ text-align:center; margin-top:40px; }
+
+  /* ── Product demo (chat) ── */
+  .chats{ display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
+  .chat-card{ padding:20px; display:flex; flex-direction:column; gap:12px; min-height:230px; }
+  .chat-card-head{ display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+  .chat-card-head .tag{ font-family:var(--ff-mono); font-size:11px; color:var(--text-faint); font-weight:600; }
+  .bubble{ max-width:88%; padding:11px 15px; border-radius:16px; font-size:14px; line-height:1.45; }
+  .bubble.user{ align-self:flex-end; background:linear-gradient(135deg,var(--accent),#6C5CE9); color:#fff; border-bottom-right-radius:4px; }
+  .bubble.bot{ align-self:flex-start; background:var(--surface-2); border:1px solid var(--border-soft); border-bottom-left-radius:4px; }
+  .bubble.bot b{ color:var(--accent-light); }
+  .demo-text{ margin-top:32px; max-width:64ch; margin-inline:auto; text-align:center; color:var(--text-dim); font-size:1rem; }
+
+  /* ── Dashboard mockup ── */
+  .dash{ padding:clamp(24px,4vw,36px); }
+  .dash-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; flex-wrap:wrap; gap:10px; }
+  .dash-head h3{ font-size:1.15rem; }
+  .demo-badge{ font-family:var(--ff-mono); font-size:11px; color:var(--warn); border:1px solid rgba(242,184,75,.4); background:rgba(242,184,75,.08); padding:5px 11px; border-radius:var(--r-pill); font-weight:700; }
+  .dash-stats{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:26px; }
+  .dash-tile{ background:var(--surface-2); border:1px solid var(--border-soft); border-radius:var(--r-sm); padding:16px 14px; }
+  .dash-tile .k{ font-size:11px; color:var(--text-faint); font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+  .dash-tile .v{ font-family:var(--ff-mono); font-size:1.3rem; font-weight:700; margin-top:7px; }
+  .dash-tile .v.pos{ color:var(--success); }
+  .dash-tile .v.accent{ color:var(--accent-light); }
+
+  .dash-table-wrap{ overflow-x:auto; border:1px solid var(--border-soft); border-radius:var(--r-sm); margin-bottom:26px; }
+  table.dash-table{ width:100%; border-collapse:collapse; min-width:560px; font-size:13.8px; }
+  table.dash-table th{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-faint); font-weight:700; padding:13px 16px; background:rgba(255,255,255,.03); }
+  table.dash-table td{ padding:13px 16px; border-top:1px solid var(--border-soft); font-family:var(--ff-mono); }
+  table.dash-table td.src{ font-family:var(--ff-body); font-weight:700; display:flex; align-items:center; gap:9px; }
+  table.dash-table td.rev{ color:var(--success); font-weight:700; }
+
+  .link-tool{ background:var(--surface-2); border:1px solid var(--border); border-radius:var(--r-md); padding:20px; }
+  .link-tool-head{ font-size:13px; font-weight:700; color:var(--text-dim); margin-bottom:14px; }
+  .platform-pills{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  .p-pill{
+    display:flex; align-items:center; gap:7px; padding:9px 15px; border-radius:var(--r-pill);
+    border:1px solid var(--border-strong); background:rgba(255,255,255,.02); font-size:13px; font-weight:700; color:var(--text-dim);
+    cursor:pointer; transition:all .15s;
+  }
+  .p-pill.active{ background:rgba(79,70,229,.22); border-color:var(--accent-light); color:#fff; }
+  .link-out{ display:flex; gap:10px; align-items:center; }
+  .link-out code{ flex:1; min-width:0; overflow-x:auto; white-space:nowrap; font-family:var(--ff-mono); font-size:13px; background:var(--bg-soft); border:1px solid var(--border-soft); border-radius:var(--r-xs); padding:12px 14px; color:var(--accent-ink); }
+  .copy-btn{ flex-shrink:0; width:42px; height:42px; border-radius:var(--r-xs); border:1px solid var(--border-strong); background:rgba(255,255,255,.03); display:grid; place-items:center; color:var(--text-dim); cursor:pointer; }
+  .copy-btn.copied{ color:var(--success); border-color:var(--success); }
+
+  /* ── Audience / for-whom ── */
+  .grid-6{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .callout{ margin-top:28px; padding:20px 24px; display:flex; gap:14px; align-items:flex-start; }
+  .callout .icon{ font-size:20px; color:var(--accent-light); margin-top:2px; }
+  .callout p{ color:var(--text-dim); font-size:14.5px; }
+  .callout strong{ color:var(--text); }
+
+  .forwhom-list{ display:grid; grid-template-columns:1fr 1fr; gap:12px 24px; margin-top:6px; }
+  .forwhom-list li{ display:flex; gap:10px; align-items:flex-start; font-size:15px; color:var(--text-dim); padding:6px 0; }
+  .forwhom-list .icon{ color:var(--accent-light); margin-top:3px; }
+
+  /* ── FAQ ── */
+  .faq-list{ display:flex; flex-direction:column; gap:10px; max-width:760px; margin-inline:auto; }
+  details.faq-item{ padding:6px 22px; }
+  details.faq-item summary{
+    list-style:none; cursor:pointer; padding:14px 0; display:flex; justify-content:space-between; align-items:center; gap:16px;
+    font-family:var(--ff-display); font-weight:600; font-size:1rem;
+  }
+  details.faq-item summary::-webkit-details-marker{ display:none; }
+  details.faq-item summary .plus{ flex-shrink:0; width:26px; height:26px; border-radius:50%; border:1px solid var(--border-strong); display:grid; place-items:center; transition:transform .25s var(--ease); }
+  details.faq-item[open] summary .plus{ transform:rotate(45deg); background:rgba(79,70,229,.25); border-color:var(--accent-light); }
+  .faq-a{ padding-bottom:18px; color:var(--text-dim); font-size:14.5px; max-width:68ch; }
+
+  /* ── CTA ── */
+  .cta-final{
+    text-align:center; padding:clamp(48px,8vw,86px) clamp(24px,6vw,64px); position:relative; overflow:hidden;
+  }
+  .cta-final::before{
+    content:""; position:absolute; inset:-30%; background:radial-gradient(60% 60% at 50% 30%,rgba(79,70,229,.4),transparent 70%); pointer-events:none;
+  }
+  .cta-final h2{ font-size:clamp(1.9rem,1.5rem + 1.8vw,3rem); max-width:18ch; margin-inline:auto; position:relative; }
+  .cta-final p{ margin-top:18px; color:var(--text-dim); max-width:52ch; margin-inline:auto; position:relative; font-size:1.05rem; }
+  .cta-final .btn{ margin-top:32px; position:relative; }
+  .cta-final .fine{ margin-top:14px; font-size:12.5px; color:var(--text-faint); position:relative; }
+
+  /* ── Footer ── */
+  footer{ padding-block:56px 40px; border-top:1px solid var(--border-soft); margin-top:20px; }
+  .footer-grid{ display:flex; justify-content:space-between; gap:40px; flex-wrap:wrap; }
+  .footer-brand p{ margin-top:12px; color:var(--text-faint); font-size:13.5px; max-width:32ch; }
+  .footer-links{ display:flex; gap:56px; flex-wrap:wrap; }
+  .footer-col h4{ font-family:var(--ff-body); font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-faint); font-weight:700; margin-bottom:14px; }
+  .footer-col a{ display:block; font-size:14px; color:var(--text-dim); padding:5px 0; }
+  .footer-col a:hover{ color:var(--text); }
+  .footer-bottom{ margin-top:44px; padding-top:22px; border-top:1px solid var(--border-soft); font-size:12.5px; color:var(--text-faint); display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+
+  /* ── Toast ── */
+  .toast{
+    position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%) translateY(140%);
+    background:var(--surface-solid); border:1px solid var(--border-strong); color:var(--text);
+    padding:13px 20px; border-radius:var(--r-pill); font-size:13.5px; font-weight:600; z-index:200;
+    box-shadow:0 20px 40px -10px rgba(0,0,0,.6); transition:transform .35s var(--ease); pointer-events:none;
+  }
+  .toast.show{ transform:translateX(-50%) translateY(0); }
+
+  /* ══ Responsive ══ */
+  @media (max-width:980px){
+    .nav-links{ display:none; }
+    .nav-burger{ display:flex; }
+    .hero-grid{ grid-template-columns:1fr; }
+    .steps{ grid-template-columns:1fr 1fr; row-gap:28px; }
+    .steps::before{ display:none; }
+    .commission{ grid-template-columns:1fr; text-align:left; }
+    .calc{ grid-template-columns:1fr; }
+    .grid-3{ grid-template-columns:1fr 1fr; }
+    .grid-6{ grid-template-columns:1fr 1fr; }
+    .chats{ grid-template-columns:1fr; }
+    .dash-stats{ grid-template-columns:1fr 1fr; }
+    .forwhom-list{ grid-template-columns:1fr; }
+  }
+  @media (max-width:620px){
+    body{ font-size:15.5px; }
+    .steps{ grid-template-columns:1fr; }
+    .grid-3{ grid-template-columns:1fr; }
+    .grid-2{ grid-template-columns:1fr; }
+    .grid-6{ grid-template-columns:1fr; }
+    .dash-stats{ grid-template-columns:1fr 1fr; }
+    .commission-num{ font-size:clamp(3.4rem,2.6rem + 8vw,5rem); }
+    .hero-actions .btn, .cta-final .btn{ width:100%; }
+    .hero-actions{ flex-direction:column; }
+    .footer-grid{ flex-direction:column; gap:32px; }
+    .footer-links{ gap:32px; }
+  }
+</style>
+</head>
+<body>
+<!-- Icon sprite: hand-drawn line icons, single consistent stroke style -->
+<svg style="display:none" aria-hidden="true">
+  <defs>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M9 15L15 9M10 6l1.3-1.3a4 4 0 1 1 5.7 5.7L15.7 11.7M14 18l-1.3 1.3a4 4 0 1 1-5.7-5.7L8.3 12.3"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5Z"/><path d="M3 13l9 5 9-5"/></symbol>
+    <symbol id="i-megaphone" viewBox="0 0 24 24"><path d="M3 10v4a1 1 0 0 0 1 1h2l5 4V5L6 9H4a1 1 0 0 0-1 1Z"/><path d="M17 8a4 4 0 0 1 0 8M20 5a8 8 0 0 1 0 14"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V10M11 20V4M18 20v-7"/><path d="M3 20h18"/></symbol>
+    <symbol id="i-percent" viewBox="0 0 24 24"><circle cx="7" cy="7" r="2.5"/><circle cx="17" cy="17" r="2.5"/><path d="M18 6 6 18"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5 9.5 17 19 7"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 3 5 14h6l-1 7 8-11h-6l1-7Z"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v5h5M8 13h8M8 17h5"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 8.5 16 12l-6 3.5v-7Z"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5.5-5.5L8 18"/></symbol>
+    <symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M6 8.5V13a4 4 0 0 0 4 4h6.5"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="M12 3h6a1 1 0 0 1 1 1v6l-9.5 9.5a2 2 0 0 1-2.8 0l-4.2-4.2a2 2 0 0 1 0-2.8L12 3Z"/><circle cx="15.5" cy="8.5" r="1.4"/></symbol>
+    <symbol id="i-checklist" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1 1 2-2M3.5 12l1 1 2-2M3.5 18l1 1 2-2"/></symbol>
+    <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v3"/><path d="M3 8v9a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1h-4a2 2 0 1 0 0 4"/></symbol>
+    <symbol id="i-cap" viewBox="0 0 24 24"><path d="M12 5 2 10l10 5 10-5-10-5Z"/><path d="M6 12.5V17c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5"/></symbol>
+    <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="10" y="10" width="4" height="4"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/></symbol>
+    <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M20 4C10 4 4 10 4 18v2h2c8 0 14-6 14-14V4Z"/><path d="M8 20c1-4 4-8 12-12"/></symbol>
+    <symbol id="i-plane" viewBox="0 0 24 24"><path d="M21 3 3 10.5l7 2.5m11-10-3 15-8-5m11-10-8 8"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V6l8-3Z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M6 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v2"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 2.6 4 5.6 4 9s-1.2 6.4-4 9c-2.8-2.6-4-5.6-4-9s1.2-6.4 4-9Z"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><circle cx="17.5" cy="9" r="2.4"/><path d="M15.5 14c2.8.2 4.5 2 5 6"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><circle cx="12" cy="13.5" r="3.3"/><path d="M8 7l1.5-3h5L16 7"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-gift" viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="4"/><rect x="5" y="13" width="14" height="8"/><path d="M12 9v12M12 9C10 5 6 5 6 7.5S9 9 12 9ZM12 9c2-4 6-4 6-1.5S15 9 12 9Z"/></symbol>
+  </defs>
+</svg>
+
+<!-- ══════════════════════════ NAV ══════════════════════════ -->
+<header class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#top"><span class="brand-mark">E</span>Enma</a>
+    <nav class="nav-links" aria-label="Основная навигация">
+      <a href="#how">Как работает</a>
+      <a href="#materials">Материалы</a>
+      <a href="#forwhom">Для кого</a>
+      <a href="#faq">FAQ</a>
+      <a href="#dashboard">Войти</a>
+    </nav>
+    <div class="nav-cta">
+      <a href="#cta" class="btn btn-primary btn-sm">Стать партнёром</a>
+      <button class="nav-burger" id="burger" aria-label="Открыть меню" aria-expanded="false"><span></span></button>
+    </div>
+  </div>
+  <div class="nav-mobile" id="navMobile">
+    <a href="#how">Как работает</a>
+    <a href="#materials">Материалы</a>
+    <a href="#forwhom">Для кого</a>
+    <a href="#faq">FAQ</a>
+    <a href="#dashboard">Войти</a>
+  </div>
+</header>
+
+<!-- ══════════════════════════ HERO ══════════════════════════ -->
+<section class="hero" id="top">
+  <div class="shell hero-grid">
+    <div class="hero-copy">
+      <span class="badge"><span class="dot"></span>Партнёрская программа Enma</span>
+      <h1>Получайте <span class="hl">30%</span> с пользователей<span style="white-space:nowrap">, которых</span> приводите в Enma</h1>
+      <p class="hero-lede">Рекомендуйте AI-ассистента своей аудитории и получайте часть выручки с привлечённых пользователей. Мы даём персональную ссылку, готовые материалы и прозрачную статистику по каждой оплате.</p>
+      <div class="hero-actions">
+        <a href="#cta" class="btn btn-primary btn-lg">Стать партнёром</a>
+        <a href="#how" class="btn btn-ghost btn-lg">Как это работает</a>
+      </div>
+      <ul class="hero-meta">
+        <li><svg class="icon"><use href="#i-check"/></svg>Бесплатное подключение</li>
+        <li><svg class="icon"><use href="#i-check"/></svg>Без минимального размера аудитории</li>
+        <li><svg class="icon"><use href="#i-check"/></svg>Статистика в реальном времени</li>
+      </ul>
+    </div>
+    <div class="hero-visual">
+      <div class="glass hero-card" style="box-shadow:var(--shadow-glow)">
+        <div class="hero-card-top">
+          <span class="hero-card-title">Кабинет партнёра</span>
+          <span class="live-pill"><i></i>ОБНОВЛЯЕТСЯ В РЕАЛЬНОМ ВРЕМЕНИ</span>
+        </div>
+        <div class="stat-grid">
+          <div class="stat-tile"><div class="k">Переходы</div><div class="v tabnum">1 284</div></div>
+          <div class="stat-tile"><div class="k">Регистрации</div><div class="v tabnum">403</div></div>
+          <div class="stat-tile"><div class="k">Оплаты</div><div class="v tabnum">37</div></div>
+          <div class="stat-tile"><div class="k">Доход партнёра</div><div class="v accent tabnum">8 547 ₽</div></div>
+        </div>
+        <div class="glass hero-chart" style="border-color:var(--border-soft)">
+          <div class="hero-chart-head"><span>Динамика оплат · 14 дней</span><b>+22%</b></div>
+          <svg viewBox="0 0 300 70" width="100%" height="70" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="hg" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#8B7CF7" stop-opacity=".55"/>
+                <stop offset="100%" stop-color="#8B7CF7" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <polyline points="0,55 25,50 50,52 75,40 100,44 125,34 150,37 175,26 200,30 225,20 250,24 275,12 300,16" fill="none" stroke="#8B7CF7" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            <polygon points="0,55 25,50 50,52 75,40 100,44 125,34 150,37 175,26 200,30 225,20 250,24 275,12 300,16 300,70 0,70" fill="url(#hg)"/>
+          </svg>
+        </div>
+        <div class="demo-note">Демонстрационные данные интерфейса</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ HOW IT WORKS ══════════════════════════ -->
+<section class="section" id="how">
+  <div class="shell">
+    <div class="section-head center reveal">
+      <span class="eyebrow">Процесс</span>
+      <h2 class="section-title">Четыре шага — и всё готово</h2>
+      <p class="section-sub">От регистрации до первой выплаты — без звонков менеджеру и согласования интеграции.</p>
+    </div>
+    <div class="steps">
+      <div class="glass step reveal">
+        <div class="step-num tabnum">01</div>
+        <h3>Получите свою ссылку</h3>
+        <p>Зарегистрируйтесь в партнёрской программе и получите уникальную реферальную ссылку Enma.</p>
+      </div>
+      <div class="glass step reveal">
+        <div class="step-num tabnum">02</div>
+        <h3>Выберите материал</h3>
+        <p>Используйте готовый пост, видео, изображение или создайте собственную интеграцию.</p>
+      </div>
+      <div class="glass step reveal">
+        <div class="step-num tabnum">03</div>
+        <h3>Расскажите аудитории</h3>
+        <p>Опубликуйте материал в Telegram, соцсетях, блоге или другом источнике трафика.</p>
+      </div>
+      <div class="glass step reveal">
+        <div class="step-num tabnum">04</div>
+        <h3>Получайте комиссию</h3>
+        <p>Следите за переходами, регистрациями, покупками и заработком в личном кабинете.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ COMMISSION ══════════════════════════ -->
+<section class="section">
+  <div class="shell">
+    <div class="glass commission reveal">
+      <div class="commission-num">30%</div>
+      <div class="commission-body">
+        <p class="lead">с платежей привлечённых пользователей</p>
+        <p>Вы получаете комиссию не за просмотры и не за клики, а когда привлечённый вами пользователь становится клиентом Enma и оплачивает подписку.</p>
+        <p>Пока этот пользователь продолжает оплачивать Enma в рамках партнёрского периода, установленного правилами программы, вы продолжаете получать комиссию с его платежей.</p>
+        <div class="commission-quote">Мы зарабатываем вместе: Enma получает клиента — вы получаете свою долю.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ CALCULATOR ══════════════════════════ -->
+<section class="section" id="calculator">
+  <div class="shell">
+    <div class="section-head center reveal">
+      <span class="eyebrow">Калькулятор</span>
+      <h2 class="section-title">Посчитайте потенциальный доход</h2>
+      <p class="section-sub">Передвиньте ползунки под параметры своей аудитории — расчёт обновится сразу.</p>
+    </div>
+    <div class="glass calc reveal">
+      <div class="calc-col">
+        <div class="calc-field">
+          <div class="calc-label"><span>Размер аудитории</span><b id="vAudience" class="tabnum">10 000</b></div>
+          <input type="range" id="rAudience" min="500" max="200000" step="500" value="10000">
+        </div>
+        <div class="calc-field">
+          <div class="calc-label"><span>Сколько человек перейдёт по ссылке</span><b id="vClick" class="tabnum">3%</b></div>
+          <input type="range" id="rClick" min="0.5" max="15" step="0.5" value="3">
+        </div>
+        <div class="calc-field">
+          <div class="calc-label"><span>Сколько из них оформит подписку</span><b id="vBuy" class="tabnum">10%</b></div>
+          <input type="range" id="rBuy" min="1" max="30" step="1" value="10">
+        </div>
+        <div class="calc-field">
+          <div class="calc-label"><span>Стоимость подписки</span></div>
+          <div class="price-input-wrap">
+            <input type="number" class="price-input" id="rPrice" min="100" step="10" value="990">
+          </div>
+        </div>
+      </div>
+      <div class="calc-col">
+        <div class="calc-results">
+          <div class="res-row"><span class="rk">Переходов по ссылке</span><span class="rv tabnum" id="oClicks">300</span></div>
+          <div class="res-row"><span class="rk">Новых подписчиков Enma</span><span class="rv tabnum" id="oBuyers">30</span></div>
+          <div class="res-row"><span class="rk">Выручка Enma</span><span class="rv tabnum" id="oRevenue">297 000 ₽</span></div>
+          <div class="res-hero res-row"><span class="rk">Ваша комиссия · 30%</span><span class="rv tabnum" id="oCommission">89 100 ₽</span></div>
+        </div>
+      </div>
+      <p class="calc-disclaimer">Расчёт является примером и не гарантирует конкретный доход. Фактический результат зависит от аудитории, формата интеграции, конверсии и других факторов.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ MATERIALS ══════════════════════════ -->
+<section class="section" id="materials">
+  <div class="shell">
+    <div class="section-head center reveal">
+      <span class="eyebrow">Материалы</span>
+      <h2 class="section-title">Не нужно придумывать рекламу с нуля</h2>
+      <p class="section-sub">Выберите подходящий формат и адаптируйте его под свою аудиторию.</p>
+    </div>
+    <div class="grid-3">
+      <div class="glass card reveal">
+        <div class="card-icon"><svg class="icon" style="font-size:22px"><use href="#i-doc"/></svg></div>
+        <h3>Telegram-посты</h3>
+        <p>Готовые тексты для разных типов каналов — от нейтральных обзоров до личных историй.</p>
+      </div>
+      <div class="glass card reveal">
+        <div class="card-icon"><svg class="icon" style="font-size:22px"><use href="#i-play"/></svg></div>
+        <h3>Короткие видео</h3>
+        <p>Демонстрации возможностей Enma для Shorts, Reels, Clips и Telegram-видео.</p>
+      </div>
+      <div class="glass card reveal">
+        <div class="card-icon"><svg class="icon" style="font-size:22px"><use href="#i-image"/></svg></div>
+        <h3>Изображения</h3>
+        <p>Готовые визуалы и скриншоты продукта для постов, сторис и карточек.</p>
+      </div>
+      <div class="glass card reveal">
+        <div class="card-icon"><svg class="icon" style="font-size:22px"><use href="#i-route"/></svg></div>
+        <h3>Сценарии интеграций</h3>
+        <p>Идеи нативной подачи Enma под разные форматы и аудитории.</p>
+      </div>
+      <div class="glass card reveal">
+        <div class="card-icon"><svg class="icon" style="font-size:22px"><use href="#i-tag"/></svg></div>
+        <h3>Deep links</h3>
+        <p>Отдельные ссылки для отслеживания каждой площадки или публикации.</p>
+      </div>
+    </div>
+    <div class="materials-cta reveal">
+      <a href="#dashboard" class="btn btn-ghost">Посмотреть материалы<svg class="icon"><use href="#i-arrow"/></svg></a>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ NICHES ══════════════════════════ -->
+<section class="section">
+  <div class="shell">
+    <div class="section-head center reveal">
+      <span class="eyebrow">Аудитории</span>
+      <h2 class="section-title">Enma можно рекомендовать разной аудитории</h2>
+    </div>
+    <div class="grid-6">
+      <div class="glass card reveal">
+        <div class="card-icon"><svg class="icon" style="font-size:22px"><use href="#i-checklist"/></svg></div>
+        <h3>Productivity</h3>
+        <p>Задачи, напоминания, привычки и организация дня в одном чате.</p>
+      </div>
+      <div class="glass card reveal">
+        <div class="card-icon"><svg class="icon" style="font-size:22px"><use href="#i-wallet"/></svg></div>
+        <h3>Личные финансы</h3>
+        <p>Удобная запись расходов и доходов обычным сообщением.</p>
+      </div>
+      <div class="glass card reveal">
+        <div class="card-icon"><svg class="icon" style="font-size:22px"><use href="#i-cap"/></svg></div>
+        <h3>Студенты</h3>
+        <p>Дедлайны, задачи, заметки, учёба и контроль расходов.</p>
+      </div>
+      <div class="glass card reveal">
+        <div class="card-icon"><svg class="icon" style="font-size:22px"><use href="#i-cpu"/></svg></div>
+        <h3>AI и технологии</h3>
+        <p>Практическое применение AI прямо внутри Telegram.</p>
+      </div>
+      <div class="glass card reveal">
+        <div class="card-icon"><svg class="icon" style="font-size:22px"><use href="#i-leaf"/></svg></div>
+        <h3>Lifestyle</h3>
+        <p>Повседневные задачи, планы, привычки и личная организация.</p>
+      </div>
+      <div class="glass card reveal">
+        <div class="card-icon"><svg class="icon" style="font-size:22px"><use href="#i-plane"/></svg></div>
+        <h3>Telegram</h3>
+        <p>Полезный сервис, который не требует устанавливать отдельное приложение.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ PRODUCT DEMO ══════════════════════════ -->
+<section class="section">
+  <div class="shell">
+    <div class="section-head center reveal">
+      <span class="eyebrow">Продукт</span>
+      <h2 class="section-title">Продукт, который легко показать аудитории</h2>
+    </div>
+    <div class="chats">
+      <div class="glass chat-card reveal">
+        <div class="chat-card-head"><span class="tag">РАСХОД</span></div>
+        <div class="bubble user">такси 840</div>
+        <div class="bubble bot">Записала расход: <b>такси — 840 ₽</b></div>
+      </div>
+      <div class="glass chat-card reveal">
+        <div class="chat-card-head"><span class="tag">НАПОМИНАНИЕ</span></div>
+        <div class="bubble user">Напомни завтра в 16:00 забрать заказ</div>
+        <div class="bubble bot">Готово. Напомню завтра в <b>16:00</b>.</div>
+      </div>
+      <div class="glass chat-card reveal">
+        <div class="chat-card-head"><span class="tag">АНАЛИТИКА</span></div>
+        <div class="bubble user">Сколько я потратил на такси в сентябре?</div>
+        <div class="bubble bot">В сентябре на такси ушло <b>6 240 ₽</b>, это 14 поездок.</div>
+      </div>
+    </div>
+    <p class="demo-text reveal">Пользователю не нужно изучать сложный интерфейс. Он просто пишет Enma как человеку — поэтому продукт легко объяснить даже в короткой рекламной интеграции.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════ DASHBOARD ══════════════════════════ -->
+<section class="section" id="dashboard">
+  <div class="shell">
+    <div class="section-head center reveal">
+      <span class="eyebrow">Кабинет</span>
+      <h2 class="section-title">Личный кабинет партнёра</h2>
+      <p class="section-sub">Все переходы, регистрации, оплаты и комиссии — в одном месте, без сторонних таблиц.</p>
+    </div>
+    <div class="glass dash reveal">
+      <div class="dash-head">
+        <h3>Обзор · последние 30 дней</h3>
+        <span class="demo-badge">Демо-данные</span>
+      </div>
+      <div class="dash-stats">
+        <div class="dash-tile"><div class="k">Переходы</div><div class="v tabnum">1 284</div></div>
+        <div class="dash-tile"><div class="k">Регистрации</div><div class="v tabnum">403</div></div>
+        <div class="dash-tile"><div class="k">Активировано</div><div class="v tabnum">268</div></div>
+        <div class="dash-tile"><div class="k">Покупки</div><div class="v tabnum">37</div></div>
+        <div class="dash-tile"><div class="k">Конверсия в оплату</div><div class="v accent tabnum">9,2%</div></div>
+        <div class="dash-tile"><div class="k">Заработано</div><div class="v pos tabnum">8 547 ₽</div></div>
+        <div class="dash-tile"><div class="k">Доступно к выплате</div><div class="v pos tabnum">6 120 ₽</div></div>
+        <div class="dash-tile"><div class="k">Выплачено всего</div><div class="v tabnum">22 340 ₽</div></div>
+      </div>
+
+      <div class="dash-table-wrap">
+        <table class="dash-table">
+          <thead><tr><th>Источник</th><th>Клики</th><th>Регистрации</th><th>Оплаты</th><th>Доход</th></tr></thead>
+          <tbody>
+            <tr><td class="src"><svg class="icon"><use href="#i-plane"/></svg>Telegram Channel</td><td class="tabnum">724</td><td class="tabnum">216</td><td class="tabnum">21</td><td class="rev tabnum">4 830 ₽</td></tr>
+            <tr><td class="src"><svg class="icon"><use href="#i-play"/></svg>Shorts</td><td class="tabnum">319</td><td class="tabnum">103</td><td class="tabnum">9</td><td class="rev tabnum">2 070 ₽</td></tr>
+            <tr><td class="src"><svg class="icon"><use href="#i-link"/></svg>Referral</td><td class="tabnum">241</td><td class="tabnum">84</td><td class="tabnum">7</td><td class="rev tabnum">1 647 ₽</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="link-tool">
+        <div class="link-tool-head">Создать ссылку для отслеживания</div>
+        <div class="platform-pills" id="platformPills">
+          <button class="p-pill active" data-p="tg" data-code="tg"><svg class="icon"><use href="#i-plane"/></svg>Telegram</button>
+          <button class="p-pill" data-p="yt" data-code="yt"><svg class="icon"><use href="#i-play"/></svg>YouTube</button>
+          <button class="p-pill" data-p="vk" data-code="vk"><svg class="icon"><use href="#i-users"/></svg>VK</button>
+          <button class="p-pill" data-p="ig" data-code="ig"><svg class="icon"><use href="#i-camera"/></svg>Instagram</button>
+          <button class="p-pill" data-p="other" data-code="src"><svg class="icon"><use href="#i-globe"/></svg>Другое</button>
+        </div>
+        <div class="link-out">
+          <code id="linkOut" class="tabnum">t.me/ENMA_BOT?start=ref_DEMO482_tg</code>
+          <button class="copy-btn" id="copyBtn" aria-label="Скопировать ссылку"><svg class="icon"><use href="#i-copy"/></svg></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ BENEFITS ══════════════════════════ -->
+<section class="section" id="benefits">
+  <div class="shell">
+    <div class="section-head center reveal">
+      <span class="eyebrow">Преимущества</span>
+      <h2 class="section-title">Почему партнёрам удобно работать с Enma</h2>
+    </div>
+    <div class="grid-3">
+      <div class="glass card reveal">
+        <div class="card-icon"><svg class="icon" style="font-size:22px"><use href="#i-percent"/></svg></div>
+        <h3>30% комиссии</h3>
+        <p>Получайте долю от платежей привлечённых клиентов — не за клики, а за результат.</p>
+      </div>
+      <div class="glass card reveal">
+        <div class="card-icon"><svg class="icon" style="font-size:22px"><use href="#i-bolt"/></svg></div>
+        <h3>Без вложений</h3>
+        <p>Подключение к программе бесплатное — платить или что-то закупать не нужно.</p>
+      </div>
+      <div class="glass card reveal">
+        <div class="card-icon"><svg class="icon" style="font-size:22px"><use href="#i-chart"/></svg></div>
+        <h3>Прозрачная аналитика</h3>
+        <p>Переходы, регистрации, оплаты и комиссии — в одном кабинете, без задержек.</p>
+      </div>
+      <div class="glass card reveal">
+        <div class="card-icon"><svg class="icon" style="font-size:22px"><use href="#i-layers"/></svg></div>
+        <h3>Готовый контент</h3>
+        <p>Не нужно самостоятельно придумывать интеграцию с нуля — есть база материалов.</p>
+      </div>
+      <div class="glass card reveal">
+        <div class="card-icon"><svg class="icon" style="font-size:22px"><use href="#i-gift"/></svg></div>
+        <h3>Полезный продукт</h3>
+        <p>Вы рекомендуете аудитории сервис, которым можно пользоваться каждый день.</p>
+      </div>
+      <div class="glass card reveal">
+        <div class="card-icon"><svg class="icon" style="font-size:22px"><use href="#i-plane"/></svg></div>
+        <h3>Telegram-native</h3>
+        <p>После перехода пользователь сразу оказывается внутри Telegram — без установки приложений.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ FOR WHOM ══════════════════════════ -->
+<section class="section" id="forwhom">
+  <div class="shell">
+    <div class="section-head reveal">
+      <span class="eyebrow">Для кого</span>
+      <h2 class="section-title">Партнёрская программа подходит</h2>
+    </div>
+    <ul class="forwhom-list reveal">
+      <li><svg class="icon"><use href="#i-check"/></svg>владельцам Telegram-каналов</li>
+      <li><svg class="icon"><use href="#i-check"/></svg>блогерам</li>
+      <li><svg class="icon"><use href="#i-check"/></svg>авторам Shorts / Reels / Clips</li>
+      <li><svg class="icon"><use href="#i-check"/></svg>администраторам сообществ</li>
+      <li><svg class="icon"><use href="#i-check"/></svg>владельцам тематических сайтов</li>
+      <li><svg class="icon"><use href="#i-check"/></svg>авторам образовательных продуктов</li>
+      <li><svg class="icon"><use href="#i-check"/></svg>создателям контента</li>
+      <li><svg class="icon"><use href="#i-check"/></svg>пользователям Enma, которые хотят рекомендовать сервис своей аудитории</li>
+    </ul>
+    <div class="glass callout reveal">
+      <svg class="icon"><use href="#i-shield"/></svg>
+      <p><strong>Для подключения не нужна огромная аудитория.</strong> Мы заинтересованы в том числе в небольших тематических сообществах с качественной и активной аудиторией.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ FAQ ══════════════════════════ -->
+<section class="section" id="faq">
+  <div class="shell">
+    <div class="section-head center reveal">
+      <span class="eyebrow">Вопросы</span>
+      <h2 class="section-title">FAQ</h2>
+    </div>
+    <div class="faq-list reveal">
+      <details class="glass faq-item" open>
+        <summary>Сколько стоит участие?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
+        <div class="faq-a">Участие в партнёрской программе бесплатное. Никаких вступительных взносов или обязательных платежей.</div>
+      </details>
+      <details class="glass faq-item">
+        <summary>Какая комиссия?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
+        <div class="faq-a">Партнёр получает 30% с платежей привлечённых пользователей в соответствии с действующими условиями партнёрской программы.</div>
+      </details>
+      <details class="glass faq-item">
+        <summary>Как Enma понимает, что пользователь пришёл от меня?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
+        <div class="faq-a">Каждый партнёр получает уникальную реферальную ссылку, по которой фиксируется источник привлечения — эта привязка сохраняется на весь партнёрский период.</div>
+      </details>
+      <details class="glass faq-item">
+        <summary>Можно ли создать несколько ссылок?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
+        <div class="faq-a">Да. Это позволяет отдельно отслеживать разные каналы, публикации и рекламные форматы — прямо в кабинете партнёра.</div>
+      </details>
+      <details class="glass faq-item">
+        <summary>Мне обязательно иметь Telegram-канал?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
+        <div class="faq-a">Нет. Enma можно рекомендовать через социальные сети, сайты, блоги, сообщества и другие разрешённые источники.</div>
+      </details>
+      <details class="glass faq-item">
+        <summary>Нужно ли согласовывать каждую публикацию?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
+        <div class="faq-a">Если вы используете разрешённые правилами программы материалы и способы продвижения — нет, согласование не требуется.</div>
+      </details>
+      <details class="glass faq-item">
+        <summary>Когда производится выплата?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
+        <div class="faq-a">Точные сроки и порядок выплат фиксируются в условиях партнёрской программы, доступных после регистрации. В кабинете партнёра всегда видно, сколько уже доступно к выплате.</div>
+      </details>
+      <details class="glass faq-item">
+        <summary>Что запрещено?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
+        <div class="faq-a">Запрещены спам, введение пользователей в заблуждение, накрутка регистраций, создание фиктивных аккаунтов, мотивированный фрод и другие способы искусственного получения комиссии.</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ FINAL CTA ══════════════════════════ -->
+<section class="section" id="cta">
+  <div class="shell">
+    <div class="glass cta-final reveal">
+      <h2>Ваша аудитория может приносить доход уже с первой рекомендации</h2>
+      <p>Подключитесь к партнёрской программе Enma, получите персональную ссылку и выберите готовый материал для первой публикации.</p>
+      <a href="#" class="btn btn-primary btn-lg" id="ctaFinalBtn">Стать партнёром</a>
+      <div class="fine">Подключение бесплатно</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ FOOTER ══════════════════════════ -->
+<footer>
+  <div class="shell footer-grid">
+    <div class="footer-brand">
+      <a class="brand" href="#top"><span class="brand-mark">E</span>Enma</a>
+      <p>Персональный AI-ассистент внутри Telegram: задачи, напоминания, заметки и финансы в одном чате.</p>
+    </div>
+    <div class="footer-links">
+      <div class="footer-col">
+        <h4>Партнёрам</h4>
+        <a href="#top">Партнёрская программа</a>
+        <a href="#faq">Условия программы</a>
+        <a href="#dashboard">Кабинет партнёра</a>
+      </div>
+      <div class="footer-col">
+        <h4>Компания</h4>
+        <a href="/privacy.html">Политика конфиденциальности</a>
+        <a href="#faq">Поддержка</a>
+        <a href="https://t.me/ENMA_BOT">Telegram Enma</a>
+      </div>
+    </div>
+  </div>
+  <div class="shell footer-bottom">
+    <span>© Enma, 2026</span>
+    <span>Партнёрская программа Enma</span>
+  </div>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ── Mobile nav ──────────────────────────────────────────────────────────
+  var burger = document.getElementById('burger');
+  var navMobile = document.getElementById('navMobile');
+  burger.addEventListener('click', function(){
+    var open = navMobile.classList.toggle('open');
+    burger.classList.toggle('open', open);
+    burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  navMobile.querySelectorAll('a').forEach(function(a){
+    a.addEventListener('click', function(){
+      navMobile.classList.remove('open');
+      burger.classList.remove('open');
+      burger.setAttribute('aria-expanded','false');
+    });
+  });
+
+  // ── Scroll reveal ───────────────────────────────────────────────────────
+  var reveals = document.querySelectorAll('.reveal');
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+      });
+    }, { threshold: .12, rootMargin: '0px 0px -8% 0px' });
+    reveals.forEach(function(el){ io.observe(el); });
+  } else {
+    reveals.forEach(function(el){ el.classList.add('in'); });
+  }
+
+  // ── Toast ───────────────────────────────────────────────────────────────
+  var toastEl = document.getElementById('toast');
+  var toastTimer = null;
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.classList.remove('show'); }, 2200);
+  }
+
+  // ── "Войти" preview ─────────────────────────────────────────────────────
+  document.querySelectorAll('a[href="#dashboard"]').forEach(function(a){
+    a.addEventListener('click', function(){ setTimeout(function(){ toast('Так выглядит кабинет партнёра после входа'); }, 500); });
+  });
+
+  // ── Income calculator ───────────────────────────────────────────────────
+  var rAudience = document.getElementById('rAudience');
+  var rClick    = document.getElementById('rClick');
+  var rBuy      = document.getElementById('rBuy');
+  var rPrice    = document.getElementById('rPrice');
+  var vAudience = document.getElementById('vAudience');
+  var vClick    = document.getElementById('vClick');
+  var vBuy      = document.getElementById('vBuy');
+  var oClicks     = document.getElementById('oClicks');
+  var oBuyers     = document.getElementById('oBuyers');
+  var oRevenue    = document.getElementById('oRevenue');
+  var oCommission = document.getElementById('oCommission');
+
+  function fmt(n){ return Math.round(n).toLocaleString('ru-RU'); }
+  function fillPct(input){
+    var min = +input.min, max = +input.max, val = +input.value;
+    input.style.setProperty('--fill', ((val - min) / (max - min) * 100) + '%');
+  }
+  function recalc(){
+    var audience = +rAudience.value;
+    var clickPct = +rClick.value;
+    var buyPct   = +rBuy.value;
+    var price    = Math.max(0, +rPrice.value || 0);
+
+    var clicks   = audience * (clickPct / 100);
+    var buyers   = clicks * (buyPct / 100);
+    var revenue  = buyers * price;
+    var commission = revenue * 0.30;
+
+    vAudience.textContent = fmt(audience);
+    vClick.textContent = clickPct + '%';
+    vBuy.textContent = buyPct + '%';
+    oClicks.textContent = fmt(clicks);
+    oBuyers.textContent = fmt(buyers);
+    oRevenue.textContent = fmt(revenue) + ' ₽';
+    oCommission.textContent = fmt(commission) + ' ₽';
+
+    fillPct(rAudience); fillPct(rClick); fillPct(rBuy);
+  }
+  [rAudience, rClick, rBuy, rPrice].forEach(function(el){
+    el.addEventListener('input', recalc);
+  });
+  recalc();
+
+  // ── Tracking link generator ─────────────────────────────────────────────
+  var PARTNER_ID = 'DEMO482'; // demo id — a real partner's own id after registration
+  var BOT_USERNAME = 'ENMA_BOT'; // placeholder — set from Enma bot config
+  var pills = document.querySelectorAll('#platformPills .p-pill');
+  var linkOut = document.getElementById('linkOut');
+  function buildLink(code){
+    return 't.me/' + BOT_USERNAME + '?start=ref_' + PARTNER_ID + '_' + code;
+  }
+  pills.forEach(function(p){
+    p.addEventListener('click', function(){
+      pills.forEach(function(x){ x.classList.remove('active'); });
+      p.classList.add('active');
+      linkOut.textContent = buildLink(p.dataset.code);
+    });
+  });
+
+  var copyBtn = document.getElementById('copyBtn');
+  copyBtn.addEventListener('click', function(){
+    var text = linkOut.textContent;
+    function done(){
+      copyBtn.classList.add('copied');
+      toast('Ссылка скопирована');
+      setTimeout(function(){ copyBtn.classList.remove('copied'); }, 1600);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function(){ toast('Не удалось скопировать'); });
+    } else {
+      toast('Скопируйте вручную: ' + text);
+    }
+  });
+
+  // ── Analytics event hooks (wire to the real tracker in production) ──────
+  function track(name, data){
+    if (window.dataLayer) { window.dataLayer.push(Object.assign({event:name}, data||{})); }
+  }
+  track('partner_page_view');
+  document.querySelectorAll('a.btn-primary, #ctaFinalBtn').forEach(function(a){
+    a.addEventListener('click', function(){ track('partner_signup_started'); });
+  });
+  document.querySelectorAll('.p-pill').forEach(function(p){
+    p.addEventListener('click', function(){ track('referral_link_created', { platform: p.dataset.p }); });
+  });
+  document.querySelectorAll('a[href="#dashboard"]').forEach(function(a){
+    a.addEventListener('click', function(){ track('promo_material_opened'); });
+  });
+})();
+</script>
+</body>
+</html>
