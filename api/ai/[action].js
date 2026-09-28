@@ -454,7 +454,9 @@ async function handlePartnerLogin(req, res) {
 }
 
 async function handlePartnerMe(req, res) {
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  // Every action on this route is POST-only (enforced by the router above) —
+  // no separate GET method here, unlike the dashboard summary's original
+  // standalone-route design.
   const code = await requirePartner(req, res);
   if (!code) return;
   try {

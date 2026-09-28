@@ -1135,8 +1135,9 @@
     opts = opts || {};
     var headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
     if (state.token) headers.Authorization = 'Bearer ' + state.token;
+    // Every /api/ai/... action is POST-only, params (if any) go in the body.
     var endpoint = '/api/ai/partner' + action.charAt(0).toUpperCase() + action.slice(1);
-    return fetch(endpoint, Object.assign({ method: 'GET' }, opts, { headers: headers }))
+    return fetch(endpoint, Object.assign({ method: 'POST' }, opts, { headers: headers }))
       .then(function(resp){ return resp.json().then(function(data){ return { ok: resp.ok, status: resp.status, data: data }; }); });
   }
 
