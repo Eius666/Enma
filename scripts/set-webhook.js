@@ -1,7 +1,8 @@
 const fetch = require('node-fetch');
+const { APP_URL } = require('../api/_lib/appUrl');
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const WEBHOOK_URL = 'https://enma-silk.vercel.app/api/telegram/webhook';
+const WEBHOOK_URL = `${APP_URL}/api/telegram/webhook`;
 
 async function setWebhook() {
   if (!TELEGRAM_BOT_TOKEN) {
