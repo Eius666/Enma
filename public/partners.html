@@ -407,12 +407,17 @@
 
   /* ── Toast ── */
   .toast{
-    position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%) translateY(140%);
+    position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom,0px));
+    /* translateY(100% + fixed px) fully clears the box below the viewport regardless
+       of its rendered height (a percentage-only offset like 140% isn't enough for a
+       short, empty-by-default pill — it was left permanently peeking above the fold). */
+    transform:translateX(-50%) translateY(calc(100% + 40px));
     background:var(--surface-solid); border:1px solid var(--border-strong); color:var(--text);
     padding:13px 20px; border-radius:var(--r-pill); font-size:13.5px; font-weight:600; z-index:200;
     box-shadow:0 20px 40px -10px rgba(0,0,0,.6); transition:transform .35s var(--ease); pointer-events:none;
+    opacity:0; visibility:hidden;
   }
-  .toast.show{ transform:translateX(-50%) translateY(0); }
+  .toast.show{ transform:translateX(-50%) translateY(0); opacity:1; visibility:visible; }
 
   /* ══ Responsive ══ */
   @media (max-width:980px){
