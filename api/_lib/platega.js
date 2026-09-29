@@ -1,9 +1,9 @@
 'use strict';
 
 const { db, admin } = require('./firebaseAdmin');
+const { APP_URL }   = require('./appUrl');
 
 const PLATEGA_BASE  = 'https://app.platega.io';
-const APP_URL       = process.env.REACT_APP_URL || 'https://enma-silk.vercel.app';
 const BASE_PRICE    = 1000;
 
 /**

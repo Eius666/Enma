@@ -44,7 +44,12 @@ export const env = {
   // ---------------------------------------------------------------------------
   // App metadata
   // ---------------------------------------------------------------------------
-  appUrl: optional('REACT_APP_URL', 'https://enma.vercel.app'),
+  // Falls back to the browser's own origin so this stays correct on whichever
+  // domain actually served the app (old or new), instead of a hardcoded guess.
+  appUrl: optional(
+    'REACT_APP_URL',
+    typeof window !== 'undefined' ? window.location.origin : 'https://enma.su'
+  ),
 } as const;
 
 // Export individual values for convenient destructuring.

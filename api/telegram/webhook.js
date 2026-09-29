@@ -15,6 +15,7 @@ const { processSubscriptionPayment }                       = require('../_lib/re
 const { saveMessage, loadHistory }                         = require('../_lib/ai/chatHistory');
 const { createSbpPayment, BASE_PRICE }                     = require('../_lib/platega');
 const { validatePromoCode, applyPromoToUser, getUserPromo } = require('../_lib/promoCodes');
+const { APP_URL }                                           = require('../_lib/appUrl');
 
 const TG = 'https://api.telegram.org';
 
@@ -45,8 +46,6 @@ const answerCbQuery = (token, id, text) =>
   tg(token, 'answerCallbackQuery', { callback_query_id: id, text }).catch(() => {});
 
 // ── Subscription prompt helpers ───────────────────────────────────────────────
-
-const APP_URL = process.env.REACT_APP_URL || 'https://enma-silk.vercel.app';
 
 const subscriptionKeyboard = () => ({
   inline_keyboard: [[{ text: 'Оформить подписку', web_app: { url: `${APP_URL}/#settings` } }]],

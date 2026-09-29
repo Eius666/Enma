@@ -15,9 +15,11 @@ if (window.location.pathname.startsWith('/admin')) {
     import('./App'),
     import('@tonconnect/ui-react'),
   ]).then(([{ default: App }, { TonConnectUIProvider }]) => {
+    // Falls back to the current origin so this resolves correctly on whichever
+    // domain actually served the app (old or new), instead of a hardcoded one.
     const TONCONNECT_MANIFEST_URL =
       process.env.REACT_APP_TONCONNECT_MANIFEST ||
-      'https://enma-silk.vercel.app/tonconnect-manifest.json';
+      `${window.location.origin}/tonconnect-manifest.json`;
     root.render(
       <TonConnectUIProvider manifestUrl={TONCONNECT_MANIFEST_URL}>
         <App />

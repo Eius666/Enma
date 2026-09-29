@@ -10,6 +10,14 @@
     "api/insights/[action].js":     { "maxDuration": 15 },
     "api/payment/[action].js":      { "maxDuration": 30 }
   },
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "www.enma.su" }],
+      "destination": "https://enma.su/$1",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]

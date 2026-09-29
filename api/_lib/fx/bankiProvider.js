@@ -19,9 +19,11 @@
 // A normal row has buy <= sale; rows violating that are inverted/garbage and
 // are dropped before aggregation.
 
+const { APP_URL } = require('../appUrl');
+
 const REGION = 'moskva';
 const TIMEOUT_MS = 8000;
-const UA = 'Mozilla/5.0 (compatible; ENMA-FX/1.0; +https://enma-silk.vercel.app)';
+const UA = `Mozilla/5.0 (compatible; ENMA-FX/1.0; +${APP_URL})`;
 const SUPPORTED = new Set(['USD', 'EUR', 'CNY', 'GBP', 'KZT', 'TRY', 'AED', 'JPY', 'CHF']);
 const MAX_AGE_MS = 48 * 3600 * 1000;
 
