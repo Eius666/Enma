@@ -1107,6 +1107,84 @@ async function handleAdminAiUsage(req, res) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Admin: Stars canary diagnostics (read-only — Telegram Stars live canary)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Never returns the bot token, a full charge id, initData or any secret —
+// charge ids are masked, and nothing here does a write.
+
+function maskChargeId(id) {
+  if (!id || typeof id !== 'string') return null;
+  if (id.length <= 8) return '***';
+  return `${id.slice(0, 4)}…${id.slice(-4)}`;
+}
+
+async function handleAdminStarsDiagnostics(req, res) {
+  if (!requireAdmin(req, res)) return;
+
+  const { STARS_MINIAPP_ENABLED } = require('../_lib/stars/config');
+  const { canaryIds } = require('../_lib/stars/canary');
+
+  const latestPaySnap = await db.collection('payments')
+    .where('method', '==', 'stars')
+    .orderBy('createdAt', 'desc')
+    .limit(1)
+    .get();
+  const latestPayment = latestPaySnap.empty ? null : latestPaySnap.docs[0].data();
+  const latestPaymentId = latestPaySnap.empty ? null : latestPaySnap.docs[0].id;
+
+  let latestSession = null;
+  if (latestPayment?.paymentSessionId) {
+    const sSnap = await db.collection('stars_payment_sessions').doc(latestPayment.paymentSessionId).get();
+    latestSession = sSnap.exists ? sSnap.data() : null;
+  }
+
+  let latestSubscription = null;
+  if (latestPayment?.userId) {
+    const subSnap = await db.collection('subscriptions').doc(latestPayment.userId).get();
+    latestSubscription = subSnap.exists ? subSnap.data() : null;
+  }
+
+  return res.status(200).json({
+    ok: true,
+    starsMiniAppGlobalEnabled: STARS_MINIAPP_ENABLED,
+    canaryConfigured: canaryIds().size > 0,
+    canaryCount: canaryIds().size,
+    latestPayment: latestPayment ? {
+      docId:    latestPaymentId,
+      status:   latestPayment.status,
+      amount:   latestPayment.amount,
+      currency: latestPayment.currency,
+      plan:     latestPayment.plan,
+      period:   latestPayment.period,
+      isRecurring: latestPayment.is_recurring ?? false,
+      createdAt: latestPayment.createdAt?.toDate?.()?.toISOString?.() || null,
+    } : null,
+    latestPaymentStatus: latestPayment?.status || null,
+    latestPaymentChargeIdMasked: maskChargeId(latestPayment?.telegram_payment_charge_id),
+    latestSession: latestSession ? {
+      status: latestSession.status,
+      plan: latestSession.plan,
+      period: latestSession.period,
+      starsAmount: latestSession.starsAmount,
+      expiresAtMs: latestSession.expiresAtMs,
+    } : null,
+    latestSessionStatus: latestSession?.status || null,
+    latestSubscription: latestSubscription ? {
+      status: latestSubscription.status,
+      plan: latestSubscription.plan,
+      endDate: latestSubscription.endDate,
+      endDateMs: latestSubscription.endDateMs,
+      lastPaymentMethod: latestSubscription.lastPaymentMethod,
+    } : null,
+    // Reconciliation against Telegram's own ledger is a separate, explicit,
+    // manual call (_lib/stars/reconcile.js:reconcileStarsTransactions) — this
+    // read-only diagnostics endpoint never calls out to Telegram itself.
+    telegramReconciliation: 'not run automatically — call reconcileStarsTransactions() manually',
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Admin: TOTP 2FA — verify and setup
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1325,6 +1403,7 @@ module.exports = async (req, res) => {
       case 'adminPromoCodes':       return await handleAdminPromoCodes(req, res);
       case 'adminMessages':         return await handleAdminMessages(req, res);
       case 'adminAiUsage':          return await handleAdminAiUsage(req, res);
+      case 'adminStarsDiagnostics': return await handleAdminStarsDiagnostics(req, res);
       default:
         return res.status(404).json({ error: `Unknown AI action: ${action}` });
     }

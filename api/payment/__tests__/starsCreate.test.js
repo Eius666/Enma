@@ -19,6 +19,7 @@ const MODULE_PATHS = [
   '../../_lib/subscription/extend',
   '../../_lib/stars/config',
   '../../_lib/stars/sessions',
+  '../../_lib/stars/canary',
   '../../_lib/verifyWebhookSig',
   '../../_lib/rateLimit',
 ];
@@ -67,7 +68,7 @@ function mockRes() {
   return res;
 }
 
-test('starsPlans: returns the canonical server-side price and starsEnabled flag', async () => {
+test('starsPlans: returns the canonical server-side price and starsEnabled=false with no auth at all', async () => {
   const db = injectMockDb({});
   try {
     const handler = require('../[action]');
@@ -77,8 +78,25 @@ test('starsPlans: returns the canonical server-side price and starsEnabled flag'
 
     assert.equal(res.statusCode, 200);
     assert.equal(res.body.pro.month.starsPrice, 1000);
-    assert.equal(res.body.starsEnabled, false, 'default-off until the owner flips the flag');
+    assert.equal(res.body.starsEnabled, false, 'default-off until the owner flips the flag or lists this user');
   } finally { teardown(); }
+});
+
+test('starsPlans: starsEnabled reflects THIS caller — true for a canary id, false for everyone else', async () => {
+  const db = injectMockDb({}, { STARS_CANARY_TELEGRAM_IDS: '555' });
+  try {
+    const handler = require('../[action]');
+
+    const reqCanary = mockReq({ action: 'starsPlans', method: 'GET', headers: { 'x-telegram-init-data': initDataFor(555) } });
+    const resCanary = mockRes();
+    await handler(reqCanary, resCanary);
+    assert.equal(resCanary.body.starsEnabled, true);
+
+    const reqOther = mockReq({ action: 'starsPlans', method: 'GET', headers: { 'x-telegram-init-data': initDataFor(999) } });
+    const resOther = mockRes();
+    await handler(reqOther, resOther);
+    assert.equal(resOther.body.starsEnabled, false);
+  } finally { teardown(['STARS_CANARY_TELEGRAM_IDS']); }
 });
 
 test('starsCreate: rejects a request with no initData', async () => {
@@ -92,7 +110,7 @@ test('starsCreate: rejects a request with no initData', async () => {
   } finally { teardown(['STARS_MINIAPP_ENABLED']); }
 });
 
-test('starsCreate: refuses even with valid initData while STARS_MINIAPP_ENABLED is false (backend enforces the flag too)', async () => {
+test('starsCreate: refuses a non-canary user while STARS_MINIAPP_ENABLED is false (backend enforces the allowlist too)', async () => {
   const db = injectMockDb({ 'users/u1': { chatId: 555 } });
   try {
     const handler = require('../[action]');
@@ -103,8 +121,64 @@ test('starsCreate: refuses even with valid initData while STARS_MINIAPP_ENABLED 
     const res = mockRes();
     await handler(req, res);
     assert.equal(res.statusCode, 403);
-    assert.equal(res.body.error, 'stars_miniapp_disabled');
+    assert.equal(res.body.error, 'STARS_NOT_ENABLED');
+    assert.equal(db._keys('stars_payment_sessions/').length, 0, 'no session for a non-canary user, even server-side');
   } finally { teardown(); }
+});
+
+test('starsCreate: a CANARY-listed user succeeds even while STARS_MINIAPP_ENABLED is false', async () => {
+  const db = injectMockDb(
+    { 'users/u1': { chatId: 555 } },
+    { STARS_CANARY_TELEGRAM_IDS: '111,555,999' }
+  );
+  const originalFetch = global.fetch;
+  try {
+    global.fetch = async () => ({ json: async () => ({ ok: true, result: 'https://t.me/invoice/fake' }) });
+    const handler = require('../[action]');
+    const req = mockReq({
+      action: 'starsCreate', body: { plan: 'pro', period: 'month' },
+      headers: { 'x-telegram-init-data': initDataFor(555) },
+    });
+    const res = mockRes();
+    await handler(req, res);
+    assert.equal(res.statusCode, 200);
+    assert.ok(res.body.sessionId);
+  } finally { global.fetch = originalFetch; teardown(['STARS_CANARY_TELEGRAM_IDS']); }
+});
+
+test('starsCreate: a user NOT in the canary list is still refused even when the list is non-empty', async () => {
+  const db = injectMockDb(
+    { 'users/u1': { chatId: 555 } },
+    { STARS_CANARY_TELEGRAM_IDS: '111,222' }
+  );
+  try {
+    const handler = require('../[action]');
+    const req = mockReq({
+      action: 'starsCreate', body: { plan: 'pro', period: 'month' },
+      headers: { 'x-telegram-init-data': initDataFor(555) },
+    });
+    const res = mockRes();
+    await handler(req, res);
+    assert.equal(res.statusCode, 403);
+    assert.equal(res.body.error, 'STARS_NOT_ENABLED');
+  } finally { teardown(['STARS_CANARY_TELEGRAM_IDS']); }
+});
+
+test('starsCreate: malformed/non-numeric canary entries are ignored, never partially matched', async () => {
+  const db = injectMockDb(
+    { 'users/u1': { chatId: 555 } },
+    { STARS_CANARY_TELEGRAM_IDS: '55, owner, 5a5, ' } // "55" must NOT match 555
+  );
+  try {
+    const handler = require('../[action]');
+    const req = mockReq({
+      action: 'starsCreate', body: { plan: 'pro', period: 'month' },
+      headers: { 'x-telegram-init-data': initDataFor(555) },
+    });
+    const res = mockRes();
+    await handler(req, res);
+    assert.equal(res.statusCode, 403);
+  } finally { teardown(['STARS_CANARY_TELEGRAM_IDS']); }
 });
 
 test('starsCreate: valid initData + registered user + valid plan creates a session and an invoice link', async () => {
@@ -171,20 +245,71 @@ test('starsCreate: a Telegram user with no Enma account is rejected', async () =
   } finally { teardown(['STARS_MINIAPP_ENABLED']); }
 });
 
-test('starsSession: unknown session id is 404, known session reports its status', async () => {
-  const db = injectMockDb({ 'stars_payment_sessions/abc': { status: 'paid' } });
+test('starsSession: requires initData at all', async () => {
+  const db = injectMockDb({ 'stars_payment_sessions/abc': { status: 'paid', telegramUserId: 555 } });
   try {
     const handler = require('../[action]');
+    const req = mockReq({ action: 'starsSession', method: 'GET', query: { sessionId: 'abc' }, headers: {} });
+    const res = mockRes();
+    await handler(req, res);
+    assert.equal(res.statusCode, 401);
+  } finally { teardown(); }
+});
 
-    const req1 = mockReq({ action: 'starsSession', method: 'GET', query: { sessionId: 'nope' } });
+test('starsSession: refuses a non-canary caller even for their own session, once the allowlist is non-empty', async () => {
+  const db = injectMockDb(
+    { 'stars_payment_sessions/abc': { status: 'created', telegramUserId: 555 } },
+    { STARS_CANARY_TELEGRAM_IDS: '111' }
+  );
+  try {
+    const handler = require('../[action]');
+    const req = mockReq({
+      action: 'starsSession', method: 'GET', query: { sessionId: 'abc' },
+      headers: { 'x-telegram-init-data': initDataFor(555) },
+    });
+    const res = mockRes();
+    await handler(req, res);
+    assert.equal(res.statusCode, 403);
+    assert.equal(res.body.error, 'STARS_NOT_ENABLED');
+  } finally { teardown(['STARS_CANARY_TELEGRAM_IDS']); }
+});
+
+test('starsSession: a canary caller cannot poll a DIFFERENT user\'s session', async () => {
+  const db = injectMockDb(
+    { 'stars_payment_sessions/abc': { status: 'created', telegramUserId: 555 } },
+    { STARS_CANARY_TELEGRAM_IDS: '555,999' }
+  );
+  try {
+    const handler = require('../[action]');
+    const req = mockReq({
+      action: 'starsSession', method: 'GET', query: { sessionId: 'abc' },
+      headers: { 'x-telegram-init-data': initDataFor(999) }, // different, also-canary user
+    });
+    const res = mockRes();
+    await handler(req, res);
+    assert.equal(res.statusCode, 403);
+    assert.equal(res.body.error, 'forbidden');
+  } finally { teardown(['STARS_CANARY_TELEGRAM_IDS']); }
+});
+
+test('starsSession: unknown session id is 404, the owner\'s own known session reports its status', async () => {
+  const db = injectMockDb(
+    { 'stars_payment_sessions/abc': { status: 'paid', telegramUserId: 555 } },
+    { STARS_CANARY_TELEGRAM_IDS: '555' }
+  );
+  try {
+    const handler = require('../[action]');
+    const headers = { 'x-telegram-init-data': initDataFor(555) };
+
+    const req1 = mockReq({ action: 'starsSession', method: 'GET', query: { sessionId: 'nope' }, headers });
     const res1 = mockRes();
     await handler(req1, res1);
     assert.equal(res1.statusCode, 404);
 
-    const req2 = mockReq({ action: 'starsSession', method: 'GET', query: { sessionId: 'abc' } });
+    const req2 = mockReq({ action: 'starsSession', method: 'GET', query: { sessionId: 'abc' }, headers });
     const res2 = mockRes();
     await handler(req2, res2);
     assert.equal(res2.statusCode, 200);
     assert.equal(res2.body.status, 'paid');
-  } finally { teardown(); }
+  } finally { teardown(['STARS_CANARY_TELEGRAM_IDS']); }
 });

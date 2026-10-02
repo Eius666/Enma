@@ -17,6 +17,7 @@ const {
   STARS_MINIAPP_ENABLED, STARS_RECURRING_ENABLED, STARS_SUBSCRIPTION_PERIOD_SECONDS,
 } = require('../_lib/stars/config');
 const { createPaymentSession, getPaymentSession } = require('../_lib/stars/sessions');
+const { isStarsEnabledForUser }                    = require('../_lib/stars/canary');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TRIAL_DAYS = 7;
@@ -425,12 +426,23 @@ async function handleTrial(req, res) {
 // calculator in src/subscription.ts is dead and deprecated) — it fetches the
 // real number from here, which reads the same STAR_PRICE_MONTHLY env var the
 // backend has always used.
+//
+// starsEnabled reflects THIS caller specifically (canary allowlist) — not
+// just the global flag — so the Mini App only shows the Stars method to
+// users the backend actually agrees to let use it. initData is optional
+// here (an unauthenticated/non-Telegram caller just sees the global state,
+// never an error) but when present it is verified, never trusted raw.
 
 async function handleStarsPlans(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'Method not allowed' });
+
+  const initData = req.headers['x-telegram-init-data'] ?? '';
+  const auth = initData ? verifyInitData(initData) : { ok: false };
+  const telegramUserId = auth.ok ? auth.user?.id : null;
+
   return res.status(200).json({
     ok: true,
-    starsEnabled: STARS_MINIAPP_ENABLED,
+    starsEnabled: isStarsEnabledForUser(telegramUserId),
     pro: { month: { starsPrice: starsPriceFor('pro', 'month') } },
   });
 }
@@ -440,14 +452,12 @@ async function handleStarsPlans(req, res) {
 // Caller authentication is Telegram Mini App initData ONLY — never a
 // client-supplied userId. plan/period are validated against the single
 // server-side source of truth; nothing about the price, plan or paying user
-// is ever accepted from the request body as fact.
+// is ever accepted from the request body as fact. The canary allowlist is
+// enforced HERE, server-side, regardless of what the frontend chose to show
+// — calling this endpoint directly can never bypass it.
 
 async function handleStarsCreate(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
-
-  if (!STARS_MINIAPP_ENABLED) {
-    return res.status(403).json({ ok: false, error: 'stars_miniapp_disabled' });
-  }
 
   const ip = getClientIp(req);
   if (!await rateLimit(`starsCreate:${ip}`, 10, 60_000)) {
@@ -460,6 +470,10 @@ async function handleStarsCreate(req, res) {
     return res.status(401).json({ ok: false, error: 'unauthorized' });
   }
   const telegramUserId = auth.user.id;
+
+  if (!isStarsEnabledForUser(telegramUserId)) {
+    return res.status(403).json({ ok: false, error: 'STARS_NOT_ENABLED' });
+  }
 
   const userSnap = await db.collection('users').where('chatId', '==', telegramUserId).limit(1).get();
   if (userSnap.empty) {
@@ -516,14 +530,33 @@ async function handleStarsCreate(req, res) {
 }
 
 // ── /api/payment/starsSession — poll session status from the Mini App ──────
+//
+// Same canary + initData rules as starsCreate, PLUS the caller must be the
+// session's own owner — one user polling another's session id is refused
+// even if both happen to be canary-allowed.
 
 async function handleStarsSession(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'Method not allowed' });
+
+  const initData = req.headers['x-telegram-init-data'] ?? '';
+  const auth     = verifyInitData(initData);
+  if (!auth.ok || !auth.user?.id) {
+    return res.status(401).json({ ok: false, error: 'unauthorized' });
+  }
+  const telegramUserId = auth.user.id;
+
+  if (!isStarsEnabledForUser(telegramUserId)) {
+    return res.status(403).json({ ok: false, error: 'STARS_NOT_ENABLED' });
+  }
+
   const { sessionId } = req.query;
   if (!sessionId) return res.status(400).json({ ok: false, error: 'missing_sessionId' });
 
   const session = await getPaymentSession(sessionId);
   if (!session) return res.status(404).json({ ok: false, error: 'not_found' });
+  if (Number(session.telegramUserId) !== Number(telegramUserId)) {
+    return res.status(403).json({ ok: false, error: 'forbidden' });
+  }
 
   return res.status(200).json({ ok: true, status: session.status });
 }

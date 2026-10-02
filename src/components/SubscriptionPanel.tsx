@@ -257,7 +257,13 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
   }, [method]);
 
   useEffect(() => {
-    fetch('/api/payment/starsPlans')
+    // starsEnabled reflects THIS caller (canary allowlist, see Telegram
+    // Stars live-canary work) — sending initData, when we have it, is what
+    // lets the backend answer per-user instead of only the global flag.
+    const tgWebApp = getTelegramWebApp();
+    fetch('/api/payment/starsPlans', {
+      headers: tgWebApp?.initData ? { 'x-telegram-init-data': tgWebApp.initData } : {},
+    })
       .then(r => r.json())
       .then(d => {
         if (!d.ok) return;
@@ -511,7 +517,9 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
           // only flips to 'paid' after a verified successful_payment.
           pollRef.current = setInterval(async () => {
             try {
-              const r = await fetch(`/api/payment/starsSession?sessionId=${data.sessionId}`);
+              const r = await fetch(`/api/payment/starsSession?sessionId=${data.sessionId}`, {
+                headers: { 'x-telegram-init-data': tgWebApp.initData },
+              });
               const d = await r.json();
               if (d.status === 'paid') {
                 stopPoll();

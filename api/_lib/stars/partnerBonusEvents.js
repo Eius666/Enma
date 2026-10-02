@@ -18,4 +18,16 @@
 //   createdAt
 //
 // This collection intentionally receives NO writes from product code today.
-module.exports = {};
+
+// Config only — read nowhere else yet. Defaults OFF; milestones are
+// configurable so the numbers can be discussed without touching code, but no
+// reward amount is defined anywhere (deliberately — that's a business
+// decision, not a default to invent).
+const PARTNER_BONUS_ENABLED = process.env.PARTNER_BONUS_ENABLED === 'true';
+
+const PARTNER_BONUS_MILESTONES = (process.env.PARTNER_BONUS_MILESTONES || '5,15,30')
+  .split(',')
+  .map((s) => parseInt(s.trim(), 10))
+  .filter((n) => Number.isFinite(n) && n > 0);
+
+module.exports = { PARTNER_BONUS_ENABLED, PARTNER_BONUS_MILESTONES };
