@@ -257,30 +257,51 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
   }, [method]);
 
   useEffect(() => {
-    // starsEnabled reflects THIS caller (canary allowlist, see Telegram
-    // Stars live-canary work) — sending initData, when we have it, is what
-    // lets the backend answer per-user instead of only the global flag.
+    // starsEnabled reflects THIS caller — true for everyone once
+    // STARS_MINIAPP_ENABLED is on, or per-id while a canary allowlist is in
+    // effect; sending initData, when we have it, is what lets the backend
+    // answer per-user instead of only the global flag.
     const tgWebApp = getTelegramWebApp();
+    const isTelegram = !!tgWebApp;
+    const initDataPresent = !!tgWebApp?.initData;
     fetch('/api/payment/starsPlans', {
-      headers: tgWebApp?.initData ? { 'x-telegram-init-data': tgWebApp.initData } : {},
+      headers: initDataPresent ? { 'x-telegram-init-data': tgWebApp!.initData } : {},
     })
       .then(r => r.json())
       .then(d => {
         if (!d.ok) return;
         setStarsEnabled(!!d.starsEnabled);
         setStarsPrice(d.pro?.month?.starsPrice ?? null);
+        // TEMPORARY — production rollout debugging only. No initData, no
+        // Telegram id, no tokens. Safe to remove once Stars visibility in
+        // the real Mini App is confirmed stable.
+        console.info('[Stars UI]', {
+          starsEnabled: !!d.starsEnabled,
+          starsPrice: d.pro?.month?.starsPrice ?? null,
+          isTelegram,
+          initDataPresent,
+        });
       })
       .catch(() => {});
   }, []);
 
+  // The method is visible whenever the backend says Stars exist at all —
+  // it must NOT also depend on which plan/period happens to be selected
+  // right now (that previously hid Stars entirely whenever the user had,
+  // say, Premium or Year selected, while SBP/TON/USDT stayed visible with
+  // no such restriction — a confusing, state-dependent disappearance, not a
+  // real "unavailable" state). starsEnabled/starsPrice are the only source
+  // of truth for VISIBILITY.
+  const starsAvailable = starsEnabled && starsPrice !== null;
+
   // The only real Stars product today is Pro / 1 month (Telegram Stars
-  // Audit §10) — never invent a price for other combos. If the user had
-  // Stars selected and then changes plan/period away from that, fall back
-  // to SBP instead of silently charging the wrong thing.
-  const starsAvailable = starsEnabled && starsPrice !== null && plan === 'pro' && period === 'month';
+  // Audit §10) — rather than hiding the method when some other plan/period
+  // is selected, selecting Stars forces the one combination it can actually
+  // sell. Changing plan/period AWAY from Pro/month while Stars is selected
+  // falls back to SBP instead of silently trying to charge the wrong thing.
   useEffect(() => {
-    if (method === 'stars' && !starsAvailable) setMethod('sbp');
-  }, [method, starsAvailable]);
+    if (method === 'stars' && (plan !== 'pro' || period !== 'month')) setMethod('sbp');
+  }, [method, plan, period]);
 
   const visibleMethods = useMemo(
     () => METHODS.filter(m => m.id !== 'stars' || starsAvailable),
@@ -856,7 +877,16 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
                 key={m.id}
                 type="button"
                 className={`subscription-panel__method-btn${method === m.id ? ' subscription-panel__method-btn--active' : ''}`}
-                onClick={() => { setMethod(m.id); setPayStatus('idle'); stopPoll(); }}
+                onClick={() => {
+                  setMethod(m.id);
+                  // Stars only ever sells Pro / 1 month — force the only
+                  // combination it can actually fulfil instead of leaving
+                  // the user on an unsupported plan/period with Stars
+                  // selected (see the plan/period effect above).
+                  if (m.id === 'stars') { setPlan('pro'); setPeriod('month'); }
+                  setPayStatus('idle');
+                  stopPoll();
+                }}
               >
                 <span className="subscription-panel__method-icon">{m.icon}</span>
                 <span className="subscription-panel__method-label">{m.label}</span>
