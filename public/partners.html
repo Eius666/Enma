@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0B0E14" />
 <meta name="color-scheme" content="dark" />
 <title>Партнёрская программа — Enma</title>
-<meta name="description" content="Получайте 30% с платежей пользователей, которых вы приводите в Enma. Персональная реферальная ссылка, готовые материалы и статистика в реальном времени." />
+<meta name="description" content="Для блогеров и владельцев Telegram-каналов: получайте 30% с платежей пользователей, которые приходят по вашей партнёрской ссылке на AI-ассистента Enma. Персональная ссылка, готовые материалы и статистика в реальном времени." />
 <link rel="icon" href="/favicon.ico" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -45,7 +45,7 @@
   }
 
   *,*::before,*::after{ box-sizing:border-box; margin:0; padding:0; }
-  html{ background:var(--bg); }
+  html{ background:var(--bg); scroll-padding-top:84px; } /* clears the sticky nav when jumping to an anchor (#how, #faq, #dashboard, etc.) */
   body{
     background:
       radial-gradient(1100px 620px at 82% -8%, rgba(79,70,229,.30), transparent 60%),
@@ -169,10 +169,13 @@
     -webkit-background-clip:text; background-clip:text; color:transparent;
   }
   .hero-lede{ margin-top:22px; font-size:1.14rem; color:var(--text-dim); max-width:52ch; }
-  .hero-actions{ display:flex; gap:14px; flex-wrap:wrap; margin-top:32px; }
+  .hero-lede strong{ color:var(--text); }
+  .hero-chips{ display:flex; flex-wrap:wrap; gap:10px; margin-top:20px; }
+  .hero-actions{ display:flex; gap:14px; flex-wrap:wrap; margin-top:28px; }
   .hero-meta{ display:flex; flex-wrap:wrap; gap:18px; margin-top:28px; }
   .hero-meta li{ display:flex; align-items:center; gap:8px; font-size:13.5px; color:var(--text-faint); font-weight:600; }
   .hero-meta .icon{ color:var(--success); }
+  .fine-note{ font-size:12.5px; color:var(--text-faint); line-height:1.6; margin-top:10px; }
 
   .hero-visual{ position:relative; }
   .hero-card{ padding:22px; }
@@ -511,11 +514,16 @@
   <div class="shell hero-grid">
     <div class="hero-copy">
       <span class="badge"><span class="dot"></span>Партнёрская программа Enma</span>
-      <h1>Получайте <span class="hl">30%</span> с пользователей<span style="white-space:nowrap">, которых</span> приводите в Enma</h1>
-      <p class="hero-lede">Рекомендуйте AI-ассистента своей аудитории и получайте часть выручки с привлечённых пользователей. Мы даём персональную ссылку, готовые материалы и прозрачную статистику по каждой оплате.</p>
+      <h1>Зарабатывайте на рекомендациях Enma своей аудитории</h1>
+      <p class="hero-lede"><strong>Есть аудитория? Монетизируйте рекомендации полезного AI-продукта.</strong> Получайте 30% с платежей пользователей, которые приходят по вашей партнёрской ссылке. Без оплаты за подключение, минимального размера аудитории и переговоров с менеджером.</p>
+      <div class="hero-chips">
+        <span class="badge" style="margin-bottom:0"><span class="dot"></span>30% с платежей</span>
+        <span class="badge" style="margin-bottom:0" id="heroCommissionChip"><span class="dot"></span>— ₽ с одного платежа*</span>
+      </div>
+      <p class="fine-note">*Размер комиссии зависит от действующего тарифа пользователя — расчёт ниже.</p>
       <div class="hero-actions">
-        <a href="#cta" class="btn btn-primary btn-lg js-partner-cta">Стать партнёром</a>
-        <a href="#how" class="btn btn-ghost btn-lg">Как это работает</a>
+        <a href="#cta" class="btn btn-primary btn-lg js-partner-cta">Получить партнёрскую ссылку</a>
+        <a href="#calculator" class="btn btn-ghost btn-lg">Посчитать доход</a>
       </div>
       <ul class="hero-meta">
         <li><svg class="icon"><use href="#i-check"/></svg>Бесплатное подключение</li>
@@ -529,11 +537,11 @@
           <span class="hero-card-title">Кабинет партнёра</span>
           <span class="live-pill"><i></i>ОБНОВЛЯЕТСЯ В РЕАЛЬНОМ ВРЕМЕНИ</span>
         </div>
-        <div class="stat-grid">
-          <div class="stat-tile"><div class="k">Переходы</div><div class="v tabnum">1 284</div></div>
-          <div class="stat-tile"><div class="k">Регистрации</div><div class="v tabnum">403</div></div>
-          <div class="stat-tile"><div class="k">Оплаты</div><div class="v tabnum">37</div></div>
-          <div class="stat-tile"><div class="k">Доход партнёра</div><div class="v accent tabnum">8 547 ₽</div></div>
+        <div class="stat-grid" id="heroStatGrid">
+          <div class="stat-tile"><div class="k">Переходы</div><div class="v tabnum" id="heroClicks">—</div></div>
+          <div class="stat-tile"><div class="k">Регистрации</div><div class="v tabnum" id="heroRegs">—</div></div>
+          <div class="stat-tile"><div class="k">Оплаты</div><div class="v tabnum" id="heroPays">—</div></div>
+          <div class="stat-tile"><div class="k">Доход партнёра</div><div class="v accent tabnum" id="heroRevenue">—</div></div>
         </div>
         <div class="glass hero-chart" style="border-color:var(--border-soft)">
           <div class="hero-chart-head"><span>Динамика оплат · 14 дней</span><b>+22%</b></div>
@@ -551,6 +559,35 @@
         <div class="demo-note">Демонстрационные данные интерфейса</div>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ REVENUE PER CLIENT ══════════════════════════ -->
+<section class="section" id="revenue">
+  <div class="shell">
+    <div class="section-head center reveal">
+      <span class="eyebrow">Экономика</span>
+      <h2 class="section-title">Сколько приносит один клиент</h2>
+      <p class="section-sub">Без абстрактных процентов — расчёт по реальным тарифам Enma.</p>
+    </div>
+    <div class="dash-table-wrap reveal">
+      <table class="dash-table" id="planTable">
+        <thead><tr><th>Тариф</th><th>Период</th><th>Стоимость</th><th>Ваша комиссия (30%)</th></tr></thead>
+        <tbody id="planTableBody"></tbody>
+      </table>
+    </div>
+    <div class="section-head reveal" style="margin-top:44px; margin-bottom:20px;">
+      <span class="eyebrow">Если клиент продолжает платить</span>
+      <h3 style="font-family:var(--ff-display); font-weight:700; font-size:1.3rem; margin-top:10px;">Комиссия начисляется на каждый платёж</h3>
+      <p class="section-sub" id="recurNote"></p>
+    </div>
+    <div class="dash-table-wrap reveal">
+      <table class="dash-table" id="recurTable">
+        <thead><tr><th>Платежей</th><th>Ваш доход</th></tr></thead>
+        <tbody id="recurTableBody"></tbody>
+      </table>
+    </div>
+    <p class="fine-note reveal" id="recurFine"></p>
   </div>
 </section>
 
@@ -590,13 +627,35 @@
 <!-- ══════════════════════════ COMMISSION ══════════════════════════ -->
 <section class="section">
   <div class="shell">
+    <div class="section-head center reveal">
+      <span class="eyebrow">Модель заработка</span>
+      <h2 class="section-title">Вы зарабатываете вместе с продуктом</h2>
+      <p class="section-sub">Мы не оплачиваем сам факт публикации. Вместо этого делимся выручкой, которую приносит ваша аудитория.</p>
+    </div>
     <div class="glass commission reveal">
       <div class="commission-num">30%</div>
       <div class="commission-body">
         <p class="lead">с платежей привлечённых пользователей</p>
         <p>Вы получаете комиссию не за просмотры и не за клики, а когда привлечённый вами пользователь становится клиентом Enma и оплачивает подписку.</p>
-        <p>Пока этот пользователь продолжает оплачивать Enma в рамках партнёрского периода, установленного правилами программы, вы продолжаете получать комиссию с его платежей.</p>
+        <p id="attributionDurationText"></p>
         <div class="commission-quote">Мы зарабатываем вместе: Enma получает клиента — вы получаете свою долю.</div>
+      </div>
+    </div>
+    <div class="grid-3" style="margin-top:28px">
+      <div class="glass card reveal">
+        <div class="card-icon"><svg class="icon" style="font-size:22px"><use href="#i-chart"/></svg></div>
+        <h3>Нет потолка одной рекламной выплаты</h3>
+        <p>Доход зависит от результата рекомендации, а не от фиксированной ставки за пост.</p>
+      </div>
+      <div class="glass card reveal">
+        <div class="card-icon"><svg class="icon" style="font-size:22px"><use href="#i-route"/></svg></div>
+        <h3>Прозрачная статистика</h3>
+        <p>Видно переходы, регистрации, оплаты и начисленные комиссии — по каждой ссылке отдельно.</p>
+      </div>
+      <div class="glass card reveal">
+        <div class="card-icon"><svg class="icon" style="font-size:22px"><use href="#i-tag"/></svg></div>
+        <h3>Можно тестировать разные форматы</h3>
+        <p>Отдельная ссылка для каждого Telegram-канала, видео или публикации.</p>
       </div>
     </div>
   </div>
@@ -608,38 +667,63 @@
     <div class="section-head center reveal">
       <span class="eyebrow">Калькулятор</span>
       <h2 class="section-title">Посчитайте потенциальный доход</h2>
-      <p class="section-sub">Передвиньте ползунки под параметры своей аудитории — расчёт обновится сразу.</p>
+      <p class="section-sub">Передвиньте ползунки под параметры своей аудитории — увидите всю воронку целиком, от охвата до дохода.</p>
     </div>
     <div class="glass calc reveal">
       <div class="calc-col">
+        <div class="calc-field">
+          <div class="calc-label"><span>Формат</span></div>
+          <div class="platform-pills" id="calcModePills">
+            <button class="p-pill active" data-mode="once" type="button">Разовая публикация</button>
+            <button class="p-pill" data-mode="recurring" type="button">Регулярные рекомендации</button>
+          </div>
+        </div>
         <div class="calc-field">
           <div class="calc-label"><span>Размер аудитории</span><b id="vAudience" class="tabnum">10 000</b></div>
           <input type="range" id="rAudience" min="500" max="200000" step="500" value="10000">
         </div>
         <div class="calc-field">
-          <div class="calc-label"><span>Сколько человек перейдёт по ссылке</span><b id="vClick" class="tabnum">3%</b></div>
-          <input type="range" id="rClick" min="0.5" max="15" step="0.5" value="3">
+          <div class="calc-label"><span>Охват публикации</span><b id="vReach" class="tabnum">30%</b></div>
+          <input type="range" id="rReach" min="5" max="100" step="5" value="30">
         </div>
         <div class="calc-field">
-          <div class="calc-label"><span>Сколько из них оформит подписку</span><b id="vBuy" class="tabnum">10%</b></div>
-          <input type="range" id="rBuy" min="1" max="30" step="1" value="10">
+          <div class="calc-label"><span>Перейдут по ссылке (от охвата)</span><b id="vClick" class="tabnum">5%</b></div>
+          <input type="range" id="rClick" min="0.5" max="20" step="0.5" value="5">
         </div>
         <div class="calc-field">
-          <div class="calc-label"><span>Стоимость подписки</span></div>
-          <div class="price-input-wrap">
-            <input type="number" class="price-input" id="rPrice" min="100" step="10" value="990">
+          <div class="calc-label"><span>Завершат регистрацию (от переходов)</span><b id="vReg" class="tabnum">50%</b></div>
+          <input type="range" id="rReg" min="5" max="100" step="5" value="50">
+        </div>
+        <div class="calc-field">
+          <div class="calc-label"><span>Оформят подписку (от регистраций)</span><b id="vBuy" class="tabnum">5%</b></div>
+          <input type="range" id="rBuy" min="0.5" max="30" step="0.5" value="5">
+        </div>
+        <div class="calc-field" id="calcAvgPaymentsField" style="display:none">
+          <div class="calc-label"><span>Платежей на одного клиента</span><b id="vAvgPay" class="tabnum">3</b></div>
+          <input type="range" id="rAvgPay" min="1" max="12" step="1" value="3">
+        </div>
+        <div class="calc-field">
+          <div class="calc-label"><span>Тариф пользователя</span></div>
+          <div class="platform-pills" id="calcPlanPills">
+            <button class="p-pill active" data-plan="pro" data-period="month" type="button">Pro · мес</button>
+            <button class="p-pill" data-plan="pro" data-period="year" type="button">Pro · год</button>
+            <button class="p-pill" data-plan="premium" data-period="month" type="button">Premium · мес</button>
+            <button class="p-pill" data-plan="premium" data-period="year" type="button">Premium · год</button>
           </div>
         </div>
       </div>
       <div class="calc-col">
         <div class="calc-results">
-          <div class="res-row"><span class="rk">Переходов по ссылке</span><span class="rv tabnum" id="oClicks">300</span></div>
-          <div class="res-row"><span class="rk">Новых подписчиков Enma</span><span class="rv tabnum" id="oBuyers">30</span></div>
-          <div class="res-row"><span class="rk">Выручка Enma</span><span class="rv tabnum" id="oRevenue">297 000 ₽</span></div>
-          <div class="res-hero res-row"><span class="rk">Ваша комиссия · 30%</span><span class="rv tabnum" id="oCommission">89 100 ₽</span></div>
+          <div class="res-row"><span class="rk">Охват публикации</span><span class="rv tabnum" id="oReach">—</span></div>
+          <div class="res-row"><span class="rk">Переходов по ссылке</span><span class="rv tabnum" id="oClicks">—</span></div>
+          <div class="res-row"><span class="rk">Регистраций</span><span class="rv tabnum" id="oRegs">—</span></div>
+          <div class="res-row"><span class="rk">Платящих пользователей</span><span class="rv tabnum" id="oBuyers">—</span></div>
+          <div class="res-row" id="oPaymentsRow" style="display:none"><span class="rk">Количество платежей</span><span class="rv tabnum" id="oPayments">—</span></div>
+          <div class="res-row"><span class="rk">Выручка Enma</span><span class="rv tabnum" id="oRevenue">—</span></div>
+          <div class="res-hero res-row"><span class="rk" id="oCommissionLabel">Ваша комиссия · 30%</span><span class="rv tabnum" id="oCommission">—</span></div>
         </div>
       </div>
-      <p class="calc-disclaimer">Расчёт является примером и не гарантирует конкретный доход. Фактический результат зависит от аудитории, формата интеграции, конверсии и других факторов.</p>
+      <p class="calc-disclaimer">Это модель, а не прогноз. Мы не гарантируем конкретную конверсию или доход — фактический результат зависит от аудитории, формата интеграции и множества факторов вне нашего контроля.</p>
     </div>
   </div>
 </section>
@@ -727,31 +811,39 @@
   </div>
 </section>
 
-<!-- ══════════════════════════ PRODUCT DEMO ══════════════════════════ -->
-<section class="section">
+<!-- ══════════════════════════ FOR BLOGGERS ══════════════════════════ -->
+<section class="section" id="forbloggers">
   <div class="shell">
     <div class="section-head center reveal">
-      <span class="eyebrow">Продукт</span>
-      <h2 class="section-title">Продукт, который легко показать аудитории</h2>
+      <span class="eyebrow">Для блогеров</span>
+      <h2 class="section-title">Не нужно превращать блог в рекламную витрину</h2>
+      <p class="section-sub">Enma можно показать нативно — через реальный сценарий использования.</p>
     </div>
     <div class="chats">
       <div class="glass chat-card reveal">
-        <div class="chat-card-head"><span class="tag">РАСХОД</span></div>
-        <div class="bubble user">такси 840</div>
-        <div class="bubble bot">Записала расход: <b>такси — 840 ₽</b></div>
+        <div class="chat-card-head"><span class="tag">PRODUCTIVITY</span></div>
+        <div class="bubble user">завтра зал в 19:00 и не забыть заказать линзы</div>
+        <div class="bubble bot">Записала: <b>зал — завтра, 19:00</b>. Добавила задачу <b>«заказать линзы»</b>.</div>
       </div>
       <div class="glass chat-card reveal">
-        <div class="chat-card-head"><span class="tag">НАПОМИНАНИЕ</span></div>
-        <div class="bubble user">Напомни завтра в 16:00 забрать заказ</div>
-        <div class="bubble bot">Готово. Напомню завтра в <b>16:00</b>.</div>
+        <div class="chat-card-head"><span class="tag">ЛИЧНЫЕ ФИНАНСЫ</span></div>
+        <div class="bubble user">кофе 350</div>
+        <div class="bubble user">такси 780</div>
+        <div class="bubble user">продукты 2 460</div>
+        <div class="bubble user">Сколько я потратил за неделю?</div>
+        <div class="bubble bot">За неделю — <b>3 590 ₽</b> по 3 категориям.</div>
       </div>
       <div class="glass chat-card reveal">
-        <div class="chat-card-head"><span class="tag">АНАЛИТИКА</span></div>
-        <div class="bubble user">Сколько я потратил на такси в сентябре?</div>
-        <div class="bubble bot">В сентябре на такси ушло <b>6 240 ₽</b>, это 14 поездок.</div>
+        <div class="chat-card-head"><span class="tag">СТУДЕНТЫ</span></div>
+        <div class="bubble user">курсовую сдать до пятницы</div>
+        <div class="bubble user">напомни завтра написать преподавателю</div>
+        <div class="bubble bot">Добавила дедлайн и напоминание на завтра.</div>
       </div>
     </div>
-    <p class="demo-text reveal">Пользователю не нужно изучать сложный интерфейс. Он просто пишет Enma как человеку — поэтому продукт легко объяснить даже в короткой рекламной интеграции.</p>
+    <p class="demo-text reveal">Вы можете использовать готовый сценарий или показать Enma своим способом.</p>
+    <div class="materials-cta reveal">
+      <a href="#materials" class="btn btn-primary">Получить материалы<svg class="icon"><use href="#i-arrow"/></svg></a>
+    </div>
   </div>
 </section>
 
@@ -768,24 +860,12 @@
         <h3 id="dashTitle">Обзор · демо-данные</h3>
         <span class="demo-badge" id="dashBadge">Демо-данные</span>
       </div>
-      <div class="dash-stats" id="dashStats">
-        <div class="dash-tile"><div class="k">Переходы</div><div class="v tabnum">1 284</div></div>
-        <div class="dash-tile"><div class="k">Регистрации</div><div class="v tabnum">403</div></div>
-        <div class="dash-tile"><div class="k">Оплаты</div><div class="v tabnum">37</div></div>
-        <div class="dash-tile"><div class="k">Конверсия в оплату</div><div class="v accent tabnum">9,2%</div></div>
-        <div class="dash-tile"><div class="k">Заработано</div><div class="v pos tabnum">8 547 ₽</div></div>
-        <div class="dash-tile"><div class="k">Доступно к выплате</div><div class="v pos tabnum">6 120 ₽</div></div>
-        <div class="dash-tile"><div class="k">Выплачено всего</div><div class="v tabnum">22 340 ₽</div></div>
-      </div>
+      <div class="dash-stats" id="dashStats"></div>
 
       <div class="dash-table-wrap">
         <table class="dash-table">
           <thead><tr><th>Источник</th><th>Клики</th><th>Регистрации</th><th>Оплаты</th><th>Доход</th></tr></thead>
-          <tbody id="dashTableBody">
-            <tr><td class="src"><svg class="icon"><use href="#i-plane"/></svg>Telegram Channel</td><td class="tabnum">724</td><td class="tabnum">216</td><td class="tabnum">21</td><td class="rev tabnum">4 830 ₽</td></tr>
-            <tr><td class="src"><svg class="icon"><use href="#i-play"/></svg>Shorts</td><td class="tabnum">319</td><td class="tabnum">103</td><td class="tabnum">9</td><td class="rev tabnum">2 070 ₽</td></tr>
-            <tr><td class="src"><svg class="icon"><use href="#i-link"/></svg>Referral</td><td class="tabnum">241</td><td class="tabnum">84</td><td class="tabnum">7</td><td class="rev tabnum">1 647 ₽</td></tr>
-          </tbody>
+          <tbody id="dashTableBody"></tbody>
         </table>
       </div>
 
@@ -811,6 +891,29 @@
     </div>
   </div>
 </section>
+
+<!-- ══════════════════════════ PAYOUTS ══════════════════════════ -->
+<section class="section" id="payouts">
+  <div class="shell">
+    <div class="section-head center reveal">
+      <span class="eyebrow">Условия</span>
+      <h2 class="section-title">Выплаты без сюрпризов</h2>
+      <p class="section-sub">Всё, что обычно узнают только после регистрации, — здесь, заранее.</p>
+    </div>
+    <div class="glass calc-results reveal" style="max-width:640px; margin-inline:auto; padding:28px 30px">
+      <div class="res-row"><span class="rk">Комиссия</span><span class="rv" id="poCommission">30%</span></div>
+      <div class="res-row"><span class="rk">Минимальная сумма выплаты</span><span class="rv" id="poMin">—</span></div>
+      <div class="res-row"><span class="rk">Выплаты</span><span class="rv" id="poSchedule" style="font-size:14px; text-align:right">—</span></div>
+      <div class="res-row"><span class="rk">Холд после оплаты</span><span class="rv" id="poHold">—</span></div>
+      <div class="res-row"><span class="rk">Способ выплаты</span><span class="rv" id="poMethod" style="font-size:14px; text-align:right">—</span></div>
+      <div class="res-row"><span class="rk">Статистика</span><span class="rv" style="font-size:14px; text-align:right">В кабинете партнёра</span></div>
+      <div class="res-row"><span class="rk">Атрибуция</span><span class="rv" id="poAttribution" style="font-size:14px; text-align:right">—</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════ FOUNDING PARTNERS (hidden unless enabled in config) ══════════════════════════ -->
+<section class="section" id="foundingPartners" style="display:none"></section>
 
 <!-- ══════════════════════════ BENEFITS ══════════════════════════ -->
 <section class="section" id="benefits">
@@ -887,32 +990,56 @@
     </div>
     <div class="faq-list reveal">
       <details class="glass faq-item" open>
+        <summary>Сколько я получу с одной оплаты?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
+        <div class="faq-a" id="faqPerPayment">—</div>
+      </details>
+      <details class="glass faq-item">
+        <summary>Сколько времени я получаю комиссию?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
+        <div class="faq-a" id="faqDuration">—</div>
+      </details>
+      <details class="glass faq-item">
+        <summary>Когда можно вывести деньги?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
+        <div class="faq-a" id="faqPayout">—</div>
+      </details>
+      <details class="glass faq-item">
+        <summary>Есть ли минимальная сумма выплаты?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
+        <div class="faq-a" id="faqMinPayout">—</div>
+      </details>
+      <details class="glass faq-item">
         <summary>Сколько стоит участие?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
         <div class="faq-a">Участие в партнёрской программе бесплатное. Никаких вступительных взносов или обязательных платежей.</div>
       </details>
       <details class="glass faq-item">
-        <summary>Какая комиссия?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
-        <div class="faq-a">Партнёр получает 30% с платежей привлечённых пользователей в соответствии с действующими условиями партнёрской программы.</div>
-      </details>
-      <details class="glass faq-item">
         <summary>Как Enma понимает, что пользователь пришёл от меня?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
-        <div class="faq-a">Каждый партнёр получает уникальную реферальную ссылку, по которой фиксируется источник привлечения — эта привязка сохраняется на весь партнёрский период.</div>
+        <div class="faq-a">Каждый партнёр получает уникальную реферальную ссылку. Переход фиксируется в момент открытия бота в Telegram по этой ссылке, а оплата привязывается к вам автоматически — без дополнительных действий с вашей стороны.</div>
       </details>
       <details class="glass faq-item">
-        <summary>Можно ли создать несколько ссылок?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
-        <div class="faq-a">Да. Это позволяет отдельно отслеживать разные каналы, публикации и рекламные форматы — прямо в кабинете партнёра.</div>
+        <summary>Можно ли рекламировать Enma несколько раз?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
+        <div class="faq-a">Да, если это соответствует правилам программы (без спама и введения аудитории в заблуждение).</div>
+      </details>
+      <details class="glass faq-item">
+        <summary>Можно ли создать разные ссылки?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
+        <div class="faq-a">Да. Отдельная ссылка на каждый канал, видео или публикацию — переходы и оплаты по каждой считаются отдельно в кабинете партнёра.</div>
+      </details>
+      <details class="glass faq-item">
+        <summary>Можно ли увидеть, откуда пришла продажа?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
+        <div class="faq-a">Да. В кабинете партнёра таблица источников показывает переходы, регистрации, оплаты и доход отдельно по каждой созданной вами ссылке.</div>
+      </details>
+      <details class="glass faq-item">
+        <summary>Что происходит при возврате платежа?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
+        <div class="faq-a" id="faqRefund">—</div>
+      </details>
+      <details class="glass faq-item">
+        <summary>Можно ли привести самого себя?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
+        <div class="faq-a">Нет. Система определяет и блокирует самостоятельное начисление комиссии с собственных платежей.</div>
+      </details>
+      <details class="glass faq-item">
+        <summary>Нужен ли договор или статус самозанятого / ИП?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
+        <div class="faq-a">Это уточняется индивидуально при первой выплате — сейчас мы не фиксируем единую обязательную юридическую форму для всех партнёров.</div>
       </details>
       <details class="glass faq-item">
         <summary>Мне обязательно иметь Telegram-канал?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
         <div class="faq-a">Нет. Enma можно рекомендовать через социальные сети, сайты, блоги, сообщества и другие разрешённые источники.</div>
-      </details>
-      <details class="glass faq-item">
-        <summary>Нужно ли согласовывать каждую публикацию?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
-        <div class="faq-a">Если вы используете разрешённые правилами программы материалы и способы продвижения — нет, согласование не требуется.</div>
-      </details>
-      <details class="glass faq-item">
-        <summary>Когда производится выплата?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
-        <div class="faq-a">Точные сроки и порядок выплат фиксируются в условиях партнёрской программы, доступных после регистрации. В кабинете партнёра всегда видно, сколько уже доступно к выплате.</div>
       </details>
       <details class="glass faq-item">
         <summary>Что запрещено?<span class="plus"><svg class="icon"><use href="#i-arrow"/></svg></span></summary>
@@ -926,10 +1053,11 @@
 <section class="section" id="cta">
   <div class="shell">
     <div class="glass cta-final reveal">
-      <h2>Ваша аудитория может приносить доход уже с первой рекомендации</h2>
-      <p>Подключитесь к партнёрской программе Enma, получите персональную ссылку и выберите готовый материал для первой публикации.</p>
-      <a href="#" class="btn btn-primary btn-lg js-partner-cta" id="ctaFinalBtn">Стать партнёром</a>
-      <div class="fine">Подключение бесплатно</div>
+      <h2>Попробуйте Enma на своей аудитории</h2>
+      <p>Получите персональную ссылку, выберите готовый материал и отслеживайте результат каждой публикации.</p>
+      <a href="#" class="btn btn-primary btn-lg js-partner-cta" id="ctaFinalBtn">Получить партнёрскую ссылку</a>
+      <div class="fine">Подключение бесплатно · Минимального размера аудитории нет</div>
+      <div class="fine" id="ctaFoundingLine" style="display:none"></div>
     </div>
   </div>
 </section>
@@ -977,9 +1105,13 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- Single source of truth for every financial number on this page — see
+     the file for the full citation of which backend value each one mirrors. -->
+<script src="/partners-calc.js"></script>
 <script>
 (function(){
   "use strict";
+  var C = window.EnmaPartnerCalc;
 
   // ── Mobile nav ──────────────────────────────────────────────────────────
   var burger = document.getElementById('burger');
@@ -1020,57 +1152,210 @@
     toastTimer = setTimeout(function(){ toastEl.classList.remove('show'); }, 2200);
   }
 
+  // ── Shared formatters ────────────────────────────────────────────────────
+  function fmt(n){ return Math.round(n || 0).toLocaleString('ru-RU'); }
+  function fmtRub(n){ return fmt(n) + ' ₽'; }
+
+  // ── Analytics event hooks (wire to the real tracker in production — no
+  //    destination is connected today, see audit report: this pushes to
+  //    window.dataLayer only, which nothing currently reads). ─────────────
+  function track(name, data){
+    if (window.dataLayer) { window.dataLayer.push(Object.assign({event:name}, data||{})); }
+  }
+  track('partner_landing_view');
+  document.getElementById('faq').addEventListener('click', function(){ track('partner_terms_viewed'); }, { once: true });
+  document.getElementById('materials').addEventListener('click', function(){ track('partner_materials_viewed'); }, { once: true });
+
+  // ── Revenue-per-client: plan price table + recurring table (sections
+  //    "Сколько приносит один клиент") — single source: partners-calc.js ──
+  (function renderRevenueBlock(){
+    var tbody = document.getElementById('planTableBody');
+    tbody.innerHTML = C.PLANS.map(function(plan){
+      return ['month', 'year'].map(function(period){
+        var price = plan[period];
+        var commission = C.commissionPerPayment(price, C.COMMISSION_RATE);
+        var periodLabel = period === 'year' ? 'год' : 'месяц';
+        return '<tr><td class="src" style="font-family:var(--ff-body); font-weight:700">' + plan.label + '</td>' +
+          '<td>' + periodLabel + '</td>' +
+          '<td class="tabnum">' + fmtRub(price) + '</td>' +
+          '<td class="rev tabnum">' + fmtRub(commission) + '</td></tr>';
+      }).join('');
+    }).join('');
+
+    var basePrice = C.priceFor(C.DEFAULT_PLAN_KEY, C.DEFAULT_PERIOD);
+    var planLabel = C.planByKey(C.DEFAULT_PLAN_KEY).label + ' · ' + (C.DEFAULT_PERIOD === 'year' ? 'год' : 'месяц');
+
+    document.getElementById('heroCommissionChip').innerHTML =
+      '<span class="dot"></span>' + fmtRub(C.commissionPerPayment(basePrice, C.COMMISSION_RATE)) + ' с одного платежа*';
+
+    if (C.ATTRIBUTION_HAS_TIME_LIMIT) {
+      document.getElementById('recurNote').textContent =
+        'Если тот же пользователь продолжает оплачивать Enma, комиссия начисляется на каждый платёж в течение ' + C.ATTRIBUTION_LIMIT_MONTHS + ' мес. после регистрации привлечённого пользователя.';
+      var recurRows = C.recurringTable(basePrice, C.COMMISSION_RATE);
+      document.getElementById('recurTableBody').innerHTML = recurRows.map(function(r){
+        return '<tr><td>' + r.payments + '</td><td class="rev tabnum">' + fmtRub(r.total) + '</td></tr>';
+      }).join('');
+      document.getElementById('recurFine').textContent =
+        'Расчёт на тарифе ' + planLabel + ' (' + fmtRub(basePrice) + '). Чтобы комиссия продолжала начисляться, пользователь должен продолжать оплачивать подписку — это не гарантировано.';
+    } else {
+      document.getElementById('recurNote').textContent =
+        'Привязка пользователя к вам не имеет срока действия в текущих правилах программы — пока она активна, каждый следующий платёж этого пользователя тоже учитывается.';
+      var recurRows2 = C.recurringTable(basePrice, C.COMMISSION_RATE);
+      document.getElementById('recurTableBody').innerHTML = recurRows2.map(function(r){
+        return '<tr><td>' + r.payments + '</td><td class="rev tabnum">' + fmtRub(r.total) + '</td></tr>';
+      }).join('');
+      document.getElementById('recurFine').textContent =
+        'Расчёт на тарифе ' + planLabel + ' (' + fmtRub(basePrice) + '). Это пример, а не гарантия: мы не обещаем, что пользователь продолжит платить.';
+    }
+
+    document.getElementById('attributionDurationText').textContent = C.ATTRIBUTION_HAS_TIME_LIMIT
+      ? 'Комиссия начисляется в течение ' + C.ATTRIBUTION_LIMIT_MONTHS + ' мес. после регистрации приведённого вами пользователя.'
+      : 'Привязка пользователя к вам сохраняется без срока действия в текущих правилах программы: пока она активна, каждый его следующий платёж тоже учитывается — покупателю не нужно вводить вашу ссылку заново.';
+  })();
+
+  // ── Payouts block ("Выплаты без сюрпризов") ──────────────────────────────
+  (function renderPayouts(){
+    document.getElementById('poMin').textContent = C.MIN_PAYOUT_RUB > 0 ? fmtRub(C.MIN_PAYOUT_RUB) : 'Не установлена';
+    document.getElementById('poSchedule').textContent = C.PAYOUT_SCHEDULE_LABEL;
+    document.getElementById('poHold').textContent = C.HOLD_DAYS + ' дней на случай возврата платежа';
+    document.getElementById('poMethod').textContent = C.PAYOUT_METHOD_LABEL;
+    document.getElementById('poAttribution').textContent = C.ATTRIBUTION_HAS_TIME_LIMIT
+      ? 'Переход в Telegram по вашей ссылке + регистрация, действует ' + C.ATTRIBUTION_LIMIT_MONTHS + ' мес.'
+      : 'Переход в Telegram по вашей ссылке + регистрация, без срока действия';
+  })();
+
+  // ── FAQ: answers computed from the same config, not typed by hand ───────
+  (function renderFaqAnswers(){
+    var basePrice = C.priceFor(C.DEFAULT_PLAN_KEY, C.DEFAULT_PERIOD);
+    var commission = C.commissionPerPayment(basePrice, C.COMMISSION_RATE);
+    var planLabel = C.planByKey(C.DEFAULT_PLAN_KEY).label;
+
+    document.getElementById('faqPerPayment').textContent =
+      'Зависит от тарифа пользователя. Например, на тарифе ' + planLabel + ' (' + fmtRub(basePrice) + '/мес) ваша комиссия — ' + fmtRub(commission) + ' с этого платежа. Полная таблица по всем тарифам — в разделе «Сколько приносит один клиент» выше.';
+
+    document.getElementById('faqDuration').textContent = C.ATTRIBUTION_HAS_TIME_LIMIT
+      ? 'Комиссия начисляется в течение ' + C.ATTRIBUTION_LIMIT_MONTHS + ' мес. после регистрации приведённого вами пользователя.'
+      : 'Привязка пользователя к вам не имеет срока действия в текущих правилах программы — комиссия продолжает начисляться на каждый его следующий платёж, пока эта привязка активна.';
+
+    document.getElementById('faqPayout').textContent = C.PAYOUT_SCHEDULE_LABEL + '. Минимальной суммы для вывода ' +
+      (C.MIN_PAYOUT_RUB > 0 ? ('нет ниже ' + fmtRub(C.MIN_PAYOUT_RUB)) : 'нет') + ' — доступный остаток всегда виден в кабинете партнёра.';
+
+    document.getElementById('faqMinPayout').textContent = C.MIN_PAYOUT_RUB > 0
+      ? fmtRub(C.MIN_PAYOUT_RUB)
+      : 'Нет — можно запросить выплату любой накопленной суммы.';
+
+    document.getElementById('faqRefund').textContent =
+      'Если пользователь отменяет или возвращает платёж в течение ' + C.HOLD_DAYS + ' дней с момента оплаты, начисленная с этого платежа комиссия отменяется. После этого срока комиссия с уже прошедших платежей остаётся за вами.';
+  })();
+
+  // ── Founding Partners — fully config-driven, renders nothing while disabled ──
+  (function renderFoundingPartners(){
+    var FP = C.FOUNDING_PARTNERS;
+    if (!FP.ENABLED) return;
+    var section = document.getElementById('foundingPartners');
+    section.style.display = '';
+    section.innerHTML =
+      '<div class="shell"><div class="glass commission reveal" style="grid-template-columns:1fr">' +
+      '<div class="commission-body"><span class="eyebrow">' + (FP.LIMIT ? 'Первые ' + FP.LIMIT + ' партнёров' : 'Ограниченное предложение') + '</span>' +
+      '<p class="lead" style="margin-top:14px">' + FP.TITLE + '</p>' +
+      '<p>' + (FP.DESCRIPTION || 'Мы формируем первую группу авторов и владельцев сообществ, которые будут развивать Enma вместе с нами.') + '</p>' +
+      (FP.COMMISSION_PERCENT ? '<div class="commission-quote">Повышенная комиссия ' + FP.COMMISSION_PERCENT + '%' + (FP.DURATION_MONTHS ? ' в течение первых ' + FP.DURATION_MONTHS + ' мес.' : '') + '</div>' : '') +
+      '</div></div></div>';
+
+    var ctaLine = document.getElementById('ctaFoundingLine');
+    ctaLine.style.display = '';
+    ctaLine.textContent = '+ специальные условия для первых ' + (FP.LIMIT || 'N') + ' партнёров';
+  })();
+
   // ── Income calculator ───────────────────────────────────────────────────
   var rAudience = document.getElementById('rAudience');
+  var rReach    = document.getElementById('rReach');
   var rClick    = document.getElementById('rClick');
+  var rReg      = document.getElementById('rReg');
   var rBuy      = document.getElementById('rBuy');
-  var rPrice    = document.getElementById('rPrice');
+  var rAvgPay   = document.getElementById('rAvgPay');
   var vAudience = document.getElementById('vAudience');
+  var vReach    = document.getElementById('vReach');
   var vClick    = document.getElementById('vClick');
+  var vReg      = document.getElementById('vReg');
   var vBuy      = document.getElementById('vBuy');
+  var vAvgPay   = document.getElementById('vAvgPay');
+  var oReach      = document.getElementById('oReach');
   var oClicks     = document.getElementById('oClicks');
+  var oRegs       = document.getElementById('oRegs');
   var oBuyers     = document.getElementById('oBuyers');
+  var oPaymentsRow = document.getElementById('oPaymentsRow');
+  var oPayments    = document.getElementById('oPayments');
   var oRevenue    = document.getElementById('oRevenue');
   var oCommission = document.getElementById('oCommission');
+  var oCommissionLabel = document.getElementById('oCommissionLabel');
+  var avgPayField = document.getElementById('calcAvgPaymentsField');
 
-  function fmt(n){ return Math.round(n).toLocaleString('ru-RU'); }
+  var calcState = { mode: 'once', planKey: C.DEFAULT_PLAN_KEY, period: C.DEFAULT_PERIOD };
+  var calcTracked = false;
+
   function fillPct(input){
     var min = +input.min, max = +input.max, val = +input.value;
     input.style.setProperty('--fill', ((val - min) / (max - min) * 100) + '%');
   }
+
   function recalc(){
-    var audience = +rAudience.value;
-    var clickPct = +rClick.value;
-    var buyPct   = +rBuy.value;
-    var price    = Math.max(0, +rPrice.value || 0);
+    var price = C.priceFor(calcState.planKey, calcState.period);
+    var recurring = calcState.mode === 'recurring';
+    var r = C.computeFunnel({
+      audience: +rAudience.value, reachPct: +rReach.value, clickPct: +rClick.value,
+      regPct: +rReg.value, buyPct: +rBuy.value, price: price, rate: C.COMMISSION_RATE,
+      recurring: recurring, avgPayments: +rAvgPay.value,
+    });
 
-    var clicks   = audience * (clickPct / 100);
-    var buyers   = clicks * (buyPct / 100);
-    var revenue  = buyers * price;
-    var commission = revenue * 0.30;
+    vAudience.textContent = fmt(+rAudience.value);
+    vReach.textContent = rReach.value + '%';
+    vClick.textContent = rClick.value + '%';
+    vReg.textContent = rReg.value + '%';
+    vBuy.textContent = rBuy.value + '%';
+    vAvgPay.textContent = rAvgPay.value;
 
-    vAudience.textContent = fmt(audience);
-    vClick.textContent = clickPct + '%';
-    vBuy.textContent = buyPct + '%';
-    oClicks.textContent = fmt(clicks);
-    oBuyers.textContent = fmt(buyers);
-    oRevenue.textContent = fmt(revenue) + ' ₽';
-    oCommission.textContent = fmt(commission) + ' ₽';
+    oReach.textContent = fmt(r.reach);
+    oClicks.textContent = fmt(r.clicks);
+    oRegs.textContent = fmt(r.registrations);
+    oBuyers.textContent = fmt(r.payers);
+    oPayments.textContent = fmt(r.payments);
+    oRevenue.textContent = fmtRub(r.revenue);
+    oCommission.textContent = fmtRub(r.commission);
+    oCommissionLabel.textContent = 'Ваша комиссия · ' + Math.round(C.COMMISSION_RATE * 100) + '%';
 
-    fillPct(rAudience); fillPct(rClick); fillPct(rBuy);
+    oPaymentsRow.style.display = recurring ? '' : 'none';
+    avgPayField.style.display = recurring ? '' : 'none';
+
+    fillPct(rAudience); fillPct(rReach); fillPct(rClick); fillPct(rReg); fillPct(rBuy); fillPct(rAvgPay);
+
+    if (!calcTracked) { calcTracked = true; track('partner_income_calculator_used'); }
   }
-  [rAudience, rClick, rBuy, rPrice].forEach(function(el){
+  [rAudience, rReach, rClick, rReg, rBuy, rAvgPay].forEach(function(el){
     el.addEventListener('input', recalc);
+  });
+  document.querySelectorAll('#calcModePills .p-pill').forEach(function(p){
+    p.addEventListener('click', function(){
+      document.querySelectorAll('#calcModePills .p-pill').forEach(function(x){ x.classList.remove('active'); });
+      p.classList.add('active');
+      calcState.mode = p.dataset.mode;
+      recalc();
+    });
+  });
+  document.querySelectorAll('#calcPlanPills .p-pill').forEach(function(p){
+    p.addEventListener('click', function(){
+      document.querySelectorAll('#calcPlanPills .p-pill').forEach(function(x){ x.classList.remove('active'); });
+      p.classList.add('active');
+      calcState.planKey = p.dataset.plan;
+      calcState.period = p.dataset.period;
+      recalc();
+    });
   });
   recalc();
 
-  // ── Analytics event hooks (wire to the real tracker in production) ──────
-  function track(name, data){
-    if (window.dataLayer) { window.dataLayer.push(Object.assign({event:name}, data||{})); }
-  }
-  track('partner_page_view');
-  document.querySelectorAll('.p-pill').forEach(function(p){
-    p.addEventListener('click', function(){ track('referral_link_created', { platform: p.dataset.p }); });
+  // ── Tracking-link pill clicks (the real deep-link tool, not the calculator) ──
+  document.querySelectorAll('#platformPills .p-pill').forEach(function(p){
+    p.addEventListener('click', function(){ track('partner_referral_link_created', { platform: p.dataset.p }); });
   });
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -1154,7 +1439,7 @@
 
   function openLoginModal(){
     if (state.token) { document.getElementById('dashboard').scrollIntoView({ behavior: 'smooth' }); return; }
-    track('partner_signup_started');
+    track('partner_signup_clicked');
     loginModal.classList.add('open');
     loginStatus.textContent = '';
     loginStatus.classList.remove('error');
@@ -1200,7 +1485,7 @@
         state.code  = res.data.partner.code;
         localStorage.setItem(TOKEN_KEY, state.token);
         localStorage.setItem(CODE_KEY, state.code);
-        track('partner_registered');
+        track('partner_signup_completed');
         closeLoginModal();
         toast('Добро пожаловать' + (res.data.partner.name ? ', ' + res.data.partner.name : '') + '!');
         loadDashboard();
@@ -1211,8 +1496,38 @@
       });
   };
 
+  // ── Demo dashboard + hero mock — both read the SAME dataset, so they can
+  //    never disagree with each other (or with the calculator) again. ──────
+  (function renderDemoMock(){
+    var d = C.buildDemoDataset();
+    document.getElementById('heroClicks').textContent = fmt(d.clicks);
+    document.getElementById('heroRegs').textContent = fmt(d.registrations);
+    document.getElementById('heroPays').textContent = fmt(d.payments);
+    document.getElementById('heroRevenue').textContent = fmtRub(d.partnerRevenue);
+
+    var conv = d.registrations > 0 ? Math.round((d.payments / d.registrations) * 1000) / 10 : 0;
+    document.getElementById('dashStats').innerHTML = [
+      ['Переходы', fmt(d.clicks)],
+      ['Регистрации', fmt(d.registrations)],
+      ['Оплаты', fmt(d.payments)],
+      ['Конверсия в оплату', conv.toLocaleString('ru-RU') + '%'],
+      ['Заработано', fmtRub(d.partnerRevenue)],
+      ['Доступно к выплате', fmtRub(d.pendingPayout)],
+      ['Выплачено всего', fmtRub(d.paidOutHistorical)],
+    ].map(function(kv){
+      return '<div class="dash-tile"><div class="k">' + kv[0] + '</div><div class="v tabnum">' + kv[1] + '</div></div>';
+    }).join('');
+
+    document.getElementById('dashTableBody').innerHTML = d.sources.map(function(s){
+      return '<tr><td class="src"><svg class="icon"><use href="#' + s.icon + '"/></svg>' + s.label + '</td>' +
+        '<td class="tabnum">' + fmt(s.clicks) + '</td>' +
+        '<td class="tabnum">' + fmt(s.registrations) + '</td>' +
+        '<td class="tabnum">' + fmt(s.payments) + '</td>' +
+        '<td class="rev tabnum">' + fmtRub(s.commission) + '</td></tr>';
+    }).join('');
+  })();
+
   // ── Live dashboard ────────────────────────────────────────────────────
-  var fmtRub = function(n){ return Math.round(n || 0).toLocaleString('ru-RU') + ' ₽'; };
   var PLATFORM_LABEL = { tg: 'Telegram', yt: 'YouTube', vk: 'VK', ig: 'Instagram', src: 'Другое', direct: 'Прямая ссылка' };
   var PLATFORM_ICON  = { tg: 'i-plane', yt: 'i-play', vk: 'i-users', ig: 'i-camera', src: 'i-globe', direct: 'i-link' };
 

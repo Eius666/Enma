@@ -130,10 +130,19 @@ async function processInfluencerCommission(userId, code, amountRub, subscription
 
   await recordInfluencerReferral(userId, codeUpper, platform);
 
-  const earnRef = db.collection('referralEarnings').doc();
-  const linkRef  = referrerRef.collection('links').doc(platform);
+  // Idempotency: one commission per payment, ever. Keyed deterministically by
+  // subscriptionId (the payment/transaction id) instead of a random doc id,
+  // so a duplicate webhook delivery or an accidental double-call can never
+  // create a second commission for the same payment — the transaction reads
+  // this exact doc first and no-ops if it already exists.
+  const earnId  = subscriptionId ? `pay_${subscriptionId}` : db.collection('referralEarnings').doc().id;
+  const earnRef = db.collection('referralEarnings').doc(earnId);
+  const linkRef = referrerRef.collection('links').doc(platform);
 
-  await db.runTransaction(async (tx) => {
+  const result = await db.runTransaction(async (tx) => {
+    const existing = await tx.get(earnRef);
+    if (existing.exists) return null; // already processed this exact payment
+
     tx.set(earnRef, {
       id:             earnRef.id,
       referrerId:     codeUpper,
@@ -154,9 +163,10 @@ async function processInfluencerCommission(userId, code, amountRub, subscription
       payments:   admin.firestore.FieldValue.increment(1),
       commission: admin.firestore.FieldValue.increment(commission),
     }, { merge: true });
+    return { commission, earnId: earnRef.id };
   });
 
-  return { commission, earnId: earnRef.id };
+  return result;
 }
 
 // Called on subscription cancellation / refund within the SBP payment flow.

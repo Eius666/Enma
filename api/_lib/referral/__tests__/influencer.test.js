@@ -146,6 +146,31 @@ test('processInfluencerCommission: unknown code is a safe no-op, never throws', 
   } finally { teardown(); }
 });
 
+test('processInfluencerCommission: idempotent — calling it twice for the same subscriptionId charges commission only once', async () => {
+  const db = injectMockDb({ 'referrers/SASHA1': { ...PARTNER } });
+  try {
+    const { processInfluencerCommission } = require('../influencer');
+    const first  = await processInfluencerCommission('payer1', 'sasha1', 1000, 'sub_dup');
+    const second = await processInfluencerCommission('payer1', 'sasha1', 1000, 'sub_dup');
+    assert.equal(first.commission, 300);
+    assert.equal(second, null, 'a duplicate call for the same payment must be a no-op, not a second commission');
+    assert.equal(db._get('referrers/SASHA1').totalEarned, 300, 'totals must not double-count the duplicate call');
+    assert.equal(db._get('referrers/SASHA1').pendingPayout, 300);
+    assert.equal(db._keys('referralEarnings/').length, 1, 'exactly one earning doc must exist for this payment');
+  } finally { teardown(); }
+});
+
+test('processInfluencerCommission: two different payments from the same partner each get their own commission', async () => {
+  const db = injectMockDb({ 'referrers/SASHA1': { ...PARTNER } });
+  try {
+    const { processInfluencerCommission } = require('../influencer');
+    await processInfluencerCommission('payer1', 'sasha1', 1000, 'sub_a');
+    await processInfluencerCommission('payer1', 'sasha1', 1000, 'sub_b');
+    assert.equal(db._get('referrers/SASHA1').totalEarned, 600);
+    assert.equal(db._keys('referralEarnings/').length, 2);
+  } finally { teardown(); }
+});
+
 // ── Self-referral guard ──────────────────────────────────────────────────────
 
 test('SECURITY: a partner cannot earn commission on their own payment', async () => {

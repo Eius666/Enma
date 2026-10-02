@@ -92,8 +92,21 @@ async function handleCreate(req, res) {
         }
       }
 
-      if (referralCode) {
-        const refResult = await validateInfluencerCode(referralCode, userId);
+      // Recurring payments: a payer attributed to a partner on an earlier
+      // payment must keep crediting that same partner on every later one too
+      // (renewal, upgrade, etc.) — otherwise "recurring commission" never
+      // actually recurs, since the checkout UI only sends `referralCode` when
+      // the payer manually types it. Explicit input still wins when present.
+      let effectiveReferralCode = referralCode || null;
+      if (!effectiveReferralCode) {
+        const existingAttribution = await db.collection('users').doc(userId).get();
+        if (existingAttribution.exists) {
+          effectiveReferralCode = existingAttribution.data().referredByInfluencer || null;
+        }
+      }
+
+      if (effectiveReferralCode) {
+        const refResult = await validateInfluencerCode(effectiveReferralCode, userId);
         if (refResult.valid) {
           referralDiscount  = refResult.discountPercent;
           validatedReferral = refResult.code;
