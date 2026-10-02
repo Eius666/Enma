@@ -50,6 +50,11 @@ export const TRIAL_DAYS = 7;
 export const DEFAULT_TON_USD_RATE = 5.0;
 export const USDT_DECIMALS = 6;
 export const TON_DECIMALS = 9;
+
+/** @deprecated Dead since this constant never matched the real Stars invoice
+ * price (the bot always sold a flat STAR_PRICE_MONTHLY regardless of plan —
+ * see Telegram Stars Audit §10). Stars price now comes from the backend via
+ * GET /api/payment/starsPlans — see SubscriptionPanel.tsx. */
 export const STAR_USD_RATE = 0.013;
 
 export const priceToNanotons = (usd: number, tonUsdRate: number): string => {
@@ -62,6 +67,11 @@ export const priceToUsdtUnits = (usd: number): string => {
   return Math.round(usd * 1e6).toString();
 };
 
+/** @deprecated Do not use for Stars pricing — this USD-based estimate never
+ * matched the real flat Stars invoice price and is kept only so nothing else
+ * referencing it breaks at compile time. Fetch the real price from the
+ * backend instead (GET /api/payment/starsPlans). See Telegram Stars Audit
+ * §6/§10. */
 export const priceToStars = (usd: number): number => {
   return Math.ceil(usd / STAR_USD_RATE);
 };

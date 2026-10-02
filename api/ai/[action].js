@@ -834,7 +834,7 @@ async function handleAdminSubscriptions(req, res) {
       status:        data.status,
       endDate:       data.endDate || data.expiresAt?.toDate?.()?.toISOString?.() || '',
       endDateMs:     data.endDateMs,
-      paymentMethod: data.paymentMethod,
+      paymentMethod: data.paymentMethod || data.lastPaymentMethod,
       promoCode:     data.promoCode || '',
       referralCode:  data.referralCode || '',
       grantedByAdmin:data.grantedByAdmin || false,

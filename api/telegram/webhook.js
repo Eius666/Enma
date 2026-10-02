@@ -11,11 +11,16 @@ const { handleCallbackQuery: handleContentCb, handleAdminTextMessage, isContentC
 const { handleTaskCallback }                               = require('../_lib/ai/tools');
 const { ensureReferralCode }                                = require('../_lib/referral/codes');
 const { handleReferralCommand, handleWalletCommand, handleBalanceCommand, checkUserState } = require('../_lib/referral/commands');
-const { processSubscriptionPayment }                       = require('../_lib/referral/earnings');
 const { saveMessage, loadHistory }                         = require('../_lib/ai/chatHistory');
 const { createSbpPayment, BASE_PRICE }                     = require('../_lib/platega');
 const { validatePromoCode, applyPromoToUser, getUserPromo } = require('../_lib/promoCodes');
 const { APP_URL }                                           = require('../_lib/appUrl');
+const { LEGACY_STARS_BOT_INVOICE_ENABLED, starsPriceFor }   = require('../_lib/stars/config');
+const { validatePreCheckoutQuery, validateLegacyPreCheckout, processStarsSuccessfulPayment } = require('../_lib/stars/payments');
+
+// Deliberately NOT importing processSubscriptionPayment (old consumer/TON
+// referral commission) here any more — Stars payments must never trigger it.
+// See Telegram Stars Audit §2/§12/§20 and _lib/stars/payments.js.
 
 const TG = 'https://api.telegram.org';
 
@@ -63,45 +68,34 @@ const sendTrialExhaustedPrompt = (token, chatId) =>
     { reply_markup: subscriptionKeyboard() }
   );
 
-// ── /subscribe — Telegram Stars invoice ───────────────────────────────────────
+// ── /subscribe — legacy Telegram Stars invoice (Telegram Stars Audit §18) ───
+//
+// The main Stars purchase path is now the Mini App (Settings → Subscription
+// → Telegram Stars → api/payment/[action].js:handleStarsCreate). This
+// bot-command invoice is kept ONLY as a feature-flagged fallback — default
+// OFF — because it has no server-side payment session to validate against
+// (see validateLegacyPreCheckout) and shouldn't be the primary entry point
+// going forward.
 
 async function handleSubscribeCommand(token, chatId) {
-  const starPrice = parseInt(process.env.STAR_PRICE_MONTHLY, 10) || 1000;
+  if (!LEGACY_STARS_BOT_INVOICE_ENABLED) {
+    await sendMessage(token, chatId,
+      'Оплата Stars теперь доступна в Enma.',
+      { reply_markup: subscriptionKeyboard() }
+    );
+    return;
+  }
+
+  const starPrice = starsPriceFor('pro', 'month');
   await tg(token, 'sendInvoice', {
     chat_id:     chatId,
     title:       'Enma Pro — 1 месяц',
     description: 'Безлимит сообщений, AI-ассистент, финансы, напоминания',
     payload:     `enma_sub_${chatId}_${Date.now()}`,
+    provider_token: '',
     currency:    'XTR',
     prices:      [{ label: 'Enma Pro · 1 месяц', amount: starPrice }],
   });
-}
-
-// ── Stars payment activation ──────────────────────────────────────────────────
-
-async function activateStarsSubscription(token, chatId, userId, payment) {
-  const endDate  = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-  const paymentId = payment.telegram_payment_charge_id;
-
-  await db.collection('subscriptions').doc(userId).set({
-    userId, plan: 'pro', status: 'active', endDate, paymentId,
-    paymentMethod: 'stars', starsAmount: payment.total_amount,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true });
-
-  await db.collection('payments').add({
-    userId, paymentId, method: 'stars',
-    amount: payment.total_amount, currency: 'XTR', amountUsd: 10,
-    status: 'confirmed', createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-
-  await processSubscriptionPayment(userId, 10, paymentId, token).catch(err =>
-    console.error('[WH][stars] referral error:', err.message)
-  );
-
-  await sendMessage(token, chatId,
-    '🎉 Подписка Enma Pro активирована на 30 дней!\n\nТеперь у тебя безлимит. Enjoy 🚀'
-  );
 }
 
 // ── Content generation (/generate, /post commands) ───────────────────────────
@@ -424,24 +418,57 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // ── [4b] PRE_CHECKOUT_QUERY ──────────────────────────────────────────────
+    // ── [4b] PRE_CHECKOUT_QUERY (Telegram Stars Audit §8 — was unconditional ok:true) ──
     if (update.pre_checkout_query) {
-      await tg(token, 'answerPreCheckoutQuery', {
-        pre_checkout_query_id: update.pre_checkout_query.id, ok: true,
-      });
+      const pcq = update.pre_checkout_query;
+
+      // Try the Mini App session-based payload first; fall back to the
+      // legacy bot-invoice shape only if that one's actually enabled.
+      let result = await validatePreCheckoutQuery(pcq).catch(err => ({ ok: false, reason: err.message }));
+      if (!result.ok && result.reason === 'unrecognized_payload' && LEGACY_STARS_BOT_INVOICE_ENABLED) {
+        result = validateLegacyPreCheckout(pcq);
+      }
+
+      if (result.ok) {
+        await tg(token, 'answerPreCheckoutQuery', { pre_checkout_query_id: pcq.id, ok: true });
+      } else {
+        console.warn('[WH][pre_checkout] rejected:', result.reason);
+        await tg(token, 'answerPreCheckoutQuery', {
+          pre_checkout_query_id: pcq.id, ok: false,
+          error_message: 'Платёж недействителен или истёк срок сессии. Попробуйте оформить подписку заново.',
+        });
+      }
       res.status(200).json({ ok: true });
       return;
     }
 
     const { message } = update;
 
-    // ── [4c] SUCCESSFUL PAYMENT ──────────────────────────────────────────────
+    // ── [4c] SUCCESSFUL PAYMENT (Telegram Stars Audit §8/§9 — idempotent) ───
     if (message?.successful_payment && message?.chat) {
       const chatId = message.chat.id;
       const snap   = await db.collection('users').where('chatId', '==', chatId).limit(1).get();
       const userId = snap.empty ? null : snap.docs[0].id;
+
       if (userId) {
-        await activateStarsSubscription(token, chatId, userId, message.successful_payment);
+        const result = await processStarsSuccessfulPayment({
+          successfulPayment: message.successful_payment,
+          userId,
+          telegramUserId: chatId,
+        }).catch(err => {
+          console.error('[WH][stars] processStarsSuccessfulPayment error:', err.message);
+          return { ok: false };
+        });
+
+        // Only notify on the FIRST time we see this charge id — a retried
+        // Telegram delivery of the same update must not spam the user.
+        if (result.ok && !result.alreadyProcessed) {
+          await sendMessage(token, chatId,
+            '🎉 Подписка Enma Pro активирована!\n\nТеперь у тебя безлимит. Enjoy 🚀'
+          );
+        }
+      } else {
+        console.error('[WH][stars] successful_payment for unknown chatId:', chatId);
       }
       res.status(200).json({ ok: true });
       return;
@@ -680,7 +707,7 @@ module.exports = async (req, res) => {
           '/status — статус подписки\n' +
           '/pay — оплата через СБП (1000 ₽/мес)\n' +
           '/promo — активировать промокод\n' +
-          '/subscribe — подписка через Telegram Stars\n' +
+          '/subscribe — подписка через Telegram Stars (в приложении Enma: Настройки → Подписка)\n' +
           '/referral — пригласить друга и получить бонус\n' +
           '/balance — баланс реферальных бонусов\n' +
           '/wallet — TON-кошелёк\n\n' +

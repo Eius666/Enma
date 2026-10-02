@@ -18,6 +18,9 @@ const MODULE_PATHS = [
   '../../_lib/referral/codes',
   '../../_lib/promoCodes',
   '../../_lib/platega',
+  '../../_lib/subscription/extend',
+  '../../_lib/stars/config',
+  '../../_lib/stars/sessions',
 ];
 
 function injectMockDb(seed) {
@@ -103,6 +106,28 @@ test('handleCreate: explicit referralCode from the client still wins over stored
     const payKeys = db._keys('payments/');
     const payment = db._get(payKeys[0]);
     assert.equal(payment.referralCode, null, 'a different partner code must not override the existing attribution');
+  } finally {
+    teardown();
+  }
+});
+
+test('handleCreate: balance-covered payment extends from an EXISTING Stars subscription endDate, not from now (cross-rail)', async () => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const futureMs = Date.now() + 10 * DAY_MS;
+  const db = injectMockDb({
+    'subscriptions/payer2': { plan: 'pro', status: 'active', lastPaymentMethod: 'stars', endDateMs: futureMs, startDate: new Date().toISOString() },
+    'users/payer2': { referralBalance: 10000 },
+  });
+  try {
+    const handler = require('../[action]');
+    const req = mockReq({ body: { userId: 'payer2', plan: 'pro', period: 'month', useBalance: true } });
+    const res = mockRes();
+    await handler(req, res);
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.activated, true);
+    const sub = db._get('subscriptions/payer2');
+    assert.equal(sub.endDateMs, futureMs + 30 * DAY_MS, 'balance payment must extend from the Stars endDate, not reset to now+30');
   } finally {
     teardown();
   }

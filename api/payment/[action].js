@@ -9,6 +9,14 @@ const { createSbpPayment, getSbpPaymentStatus }   = require('../_lib/platega');
 const { validatePromoCode }                        = require('../_lib/promoCodes');
 const { validateInfluencerCode }                   = require('../_lib/referral/influencer');
 const { db, admin }                                = require('../_lib/firebaseAdmin');
+const { computeExtension }                         = require('../_lib/subscription/extend');
+const { verifyInitData }                           = require('../_lib/verifyWebhookSig');
+const { rateLimit, getClientIp }                   = require('../_lib/rateLimit');
+const {
+  starsPriceFor, isValidStarsPlan,
+  STARS_MINIAPP_ENABLED, STARS_RECURRING_ENABLED, STARS_SUBSCRIPTION_PERIOD_SECONDS,
+} = require('../_lib/stars/config');
+const { createPaymentSession, getPaymentSession } = require('../_lib/stars/sessions');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TRIAL_DAYS = 7;
@@ -135,13 +143,15 @@ async function handleCreate(req, res) {
           const toPay       = finalAmount - balanceUsed;
 
           if (toPay <= 0) {
-            const now        = new Date();
             const periodDays = periodKey === 'year' ? 365 : 30;
-            const endDateObj = new Date(now.getTime() + periodDays * 24 * 60 * 60 * 1000);
-            const endDate    = endDateObj.toISOString();
             const serverTs   = admin.firestore.FieldValue.serverTimestamp();
+            const subRef     = db.collection('subscriptions').doc(userId);
 
-            await db.runTransaction(async tx => {
+            // endDate uses the same cross-rail rule as every other payment
+            // method (Telegram Stars Audit §10): extends from the LATER of
+            // "now" and the current paid-through date, so paying via balance
+            // can never shorten time already paid for via SBP/Stars.
+            const endDate = await db.runTransaction(async tx => {
               const freshSnap    = await tx.get(db.collection('users').doc(userId));
               const freshBalance = freshSnap.exists ? (freshSnap.data().referralBalance || 0) : 0;
               if (freshBalance < balanceUsed) {
@@ -149,14 +159,19 @@ async function handleCreate(req, res) {
                 err.userFacing = true;
                 throw err;
               }
-              tx.set(db.collection('subscriptions').doc(userId), {
+
+              const subSnap = await tx.get(subRef);
+              const current = subSnap.exists ? subSnap.data() : null;
+              const ext     = computeExtension(current, periodDays);
+
+              tx.set(subRef, {
                 userId, plan: planKey, period: periodKey, status: 'active',
-                startDate:     now.toISOString(),
-                endDate,
-                endDateMs:     endDateObj.getTime(),
-                paymentMethod: 'balance',
-                amountRub:     balanceUsed,
-                updatedAt:     serverTs,
+                startDate:         current?.startDate || new Date().toISOString(),
+                endDate:           ext.newEndDate,
+                endDateMs:         ext.newEndMs,
+                lastPaymentMethod: 'balance',
+                amountRub:         balanceUsed,
+                updatedAt:         serverTs,
               }, { merge: true });
               tx.set(db.collection('users').doc(userId), {
                 referralBalance: admin.firestore.FieldValue.increment(-balanceUsed),
@@ -171,6 +186,7 @@ async function handleCreate(req, res) {
                 referralCode: validatedReferral || null,
                 createdAt:    serverTs,
               });
+              return ext.newEndDate;
             });
 
             return res.status(200).json({ ok: true, activated: true, plan: planKey, endDate, balanceUsed });
@@ -269,19 +285,26 @@ async function handleCallback(req, res) {
       const plan       = payment.plan   || 'pro';
       const period     = payment.period || 'month';
       const periodDays = period === 'year' ? 365 : 30;
-      const startDate  = new Date().toISOString();
-      const endDateObj = new Date(Date.now() + periodDays * 24 * 60 * 60 * 1000);
-      const endDate    = endDateObj.toISOString();
-      const endDateMs  = endDateObj.getTime();
       const paidAmount = amount || payment.amount;
+
+      // endDate uses the same cross-rail rule as balance/Stars payments
+      // (Telegram Stars Audit §10): extends from the LATER of "now" and the
+      // current paid-through date, so SBP can never shorten time already
+      // paid for via another method.
+      const subRef   = db.collection('subscriptions').doc(payment.userId);
+      const subSnap  = await subRef.get();
+      const current  = subSnap.exists ? subSnap.data() : null;
+      const ext      = computeExtension(current, periodDays);
+      const startDate = current?.startDate || new Date().toISOString();
+      const endDate   = ext.newEndDate;
 
       console.log(`[callback] CONFIRMED userId=${payment.userId} plan=${plan} period=${period} endDate=${endDate}`);
 
       await payDoc.ref.update({ status: 'CONFIRMED', confirmedAt: now });
-      await db.collection('subscriptions').doc(payment.userId).set({
+      await subRef.set({
         userId: payment.userId, plan, period, status: 'active',
-        startDate, endDate, endDateMs,
-        paymentId: transactionId, paymentMethod: 'sbp',
+        startDate, endDate, endDateMs: ext.newEndMs,
+        paymentId: transactionId, lastPaymentMethod: 'sbp',
         amountRub: paidAmount, updatedAt: now,
       }, { merge: true });
 
@@ -396,12 +419,124 @@ async function handleTrial(req, res) {
   }
 }
 
+// ── /api/payment/starsPlans — canonical Stars price (Telegram Stars Audit §6) ──
+//
+// Frontend must NOT compute the Stars price itself (the old USD/STAR_USD_RATE
+// calculator in src/subscription.ts is dead and deprecated) — it fetches the
+// real number from here, which reads the same STAR_PRICE_MONTHLY env var the
+// backend has always used.
+
+async function handleStarsPlans(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'Method not allowed' });
+  return res.status(200).json({
+    ok: true,
+    starsEnabled: STARS_MINIAPP_ENABLED,
+    pro: { month: { starsPrice: starsPriceFor('pro', 'month') } },
+  });
+}
+
+// ── /api/payment/starsCreate — Mini App Stars checkout (Telegram Stars Audit §5/§7) ──
+//
+// Caller authentication is Telegram Mini App initData ONLY — never a
+// client-supplied userId. plan/period are validated against the single
+// server-side source of truth; nothing about the price, plan or paying user
+// is ever accepted from the request body as fact.
+
+async function handleStarsCreate(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
+
+  if (!STARS_MINIAPP_ENABLED) {
+    return res.status(403).json({ ok: false, error: 'stars_miniapp_disabled' });
+  }
+
+  const ip = getClientIp(req);
+  if (!await rateLimit(`starsCreate:${ip}`, 10, 60_000)) {
+    return res.status(429).json({ ok: false, error: 'rate_limited' });
+  }
+
+  const initData = req.headers['x-telegram-init-data'] ?? '';
+  const auth     = verifyInitData(initData);
+  if (!auth.ok || !auth.user?.id) {
+    return res.status(401).json({ ok: false, error: 'unauthorized' });
+  }
+  const telegramUserId = auth.user.id;
+
+  const userSnap = await db.collection('users').where('chatId', '==', telegramUserId).limit(1).get();
+  if (userSnap.empty) {
+    return res.status(404).json({ ok: false, error: 'user_not_found' });
+  }
+  const userId = userSnap.docs[0].id;
+
+  const { plan = 'pro', period = 'month' } = req.body || {};
+  if (!isValidStarsPlan(plan, period)) {
+    return res.status(400).json({ ok: false, error: 'invalid_plan' });
+  }
+
+  let session;
+  try {
+    session = await createPaymentSession({ userId, telegramUserId, plan, period });
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: err.code || 'session_create_failed' });
+  }
+
+  const invoiceBody = {
+    title:       'Enma Pro — 1 месяц',
+    description: 'Безлимит сообщений, AI-ассистент, финансы, напоминания',
+    payload:     session.payload,
+    provider_token: '', // required empty string for Telegram Stars (XTR)
+    currency:    'XTR',
+    prices:      [{ label: 'Enma Pro · 1 месяц', amount: session.starsAmount }],
+  };
+  if (STARS_RECURRING_ENABLED) {
+    invoiceBody.subscription_period = STARS_SUBSCRIPTION_PERIOD_SECONDS;
+  }
+
+  try {
+    const tgResp = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/createInvoiceLink`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(invoiceBody),
+    });
+    const tgData = await tgResp.json();
+    if (!tgData.ok) {
+      console.error('[payment/starsCreate] Telegram error:', tgData.description);
+      return res.status(502).json({ ok: false, error: 'telegram_error' });
+    }
+    return res.status(200).json({
+      ok: true,
+      invoiceUrl: tgData.result,
+      sessionId:  session.sessionId,
+      starsAmount: session.starsAmount,
+      expiresAtMs: session.expiresAtMs,
+    });
+  } catch (err) {
+    console.error('[payment/starsCreate] error:', err.message);
+    return res.status(500).json({ ok: false, error: 'internal_error' });
+  }
+}
+
+// ── /api/payment/starsSession — poll session status from the Mini App ──────
+
+async function handleStarsSession(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'Method not allowed' });
+  const { sessionId } = req.query;
+  if (!sessionId) return res.status(400).json({ ok: false, error: 'missing_sessionId' });
+
+  const session = await getPaymentSession(sessionId);
+  if (!session) return res.status(404).json({ ok: false, error: 'not_found' });
+
+  return res.status(200).json({ ok: true, status: session.status });
+}
+
 // ── Router ────────────────────────────────────────────────────────────────────
 
 module.exports = async (req, res) => {
   const { action } = req.query;
-  if (action === 'create')   return handleCreate(req, res);
-  if (action === 'callback') return handleCallback(req, res);
-  if (action === 'trial')    return handleTrial(req, res);
+  if (action === 'create')      return handleCreate(req, res);
+  if (action === 'callback')    return handleCallback(req, res);
+  if (action === 'trial')       return handleTrial(req, res);
+  if (action === 'starsPlans')  return handleStarsPlans(req, res);
+  if (action === 'starsCreate') return handleStarsCreate(req, res);
+  if (action === 'starsSession')return handleStarsSession(req, res);
   return res.status(404).json({ ok: false, error: 'not_found' });
 };

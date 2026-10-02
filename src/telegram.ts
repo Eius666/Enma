@@ -29,6 +29,13 @@ export type TelegramWebApp = {
   expand: () => void;
   onEvent?: (eventType: string, handler: (...args: any[]) => void) => void;
   offEvent?: (eventType: string, handler: (...args: any[]) => void) => void;
+  // Official Mini App Invoice API (Telegram Stars Audit §5) — the callback
+  // reports ONLY the sheet's close reason (paid/cancelled/failed/pending),
+  // never a reason to activate anything client-side. Entitlement comes
+  // exclusively from the backend after successful_payment.
+  openInvoice?: (url: string, callback?: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void) => void;
+  openLink?: (url: string) => void;
+  openTelegramLink?: (url: string) => void;
 };
 
 declare global {

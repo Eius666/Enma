@@ -6,7 +6,6 @@ import {
   ENMA_WALLET_ADDRESS,
   priceToNanotons,
   priceToUsdtUnits,
-  priceToStars,
   calcEndDate,
   isSubscriptionActive,
   isInTrial,
@@ -15,6 +14,7 @@ import {
   PaidPlan,
   SubscriptionPeriod,
 } from '../subscription';
+import { getTelegramWebApp } from '../telegram';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { User } from 'firebase/auth';
@@ -37,12 +37,17 @@ interface SubscriptionPanelProps {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
+// Stars re-enabled (Telegram Stars Audit — production-readiness follow-up):
+// idempotency, pre_checkout validation and a real server-side price source
+// of truth landed, so the old "disabled pending a webhook fix" TODO no
+// longer applies. The pill itself is still filtered out at render time
+// unless the backend reports starsEnabled AND the only real Stars product
+// (Pro / 1 month) is selected — see `visibleMethods` below.
 const METHODS: { id: PayMethod; icon: string; label: string; sub: Record<string, string> }[] = [
-  { id: 'sbp',   icon: '💳', label: 'СБП',   sub: { en: 'Bank card',    ru: 'Банк. карта'  } },
-  // TODO: вернуть после фикса Stars webhook
-  // { id: 'stars', icon: '⭐', label: 'Stars', sub: { en: 'Via Telegram', ru: 'Через Telegram'} },
-  { id: 'ton',   icon: '💎', label: 'TON',   sub: { en: 'Crypto',       ru: 'Криптовалюта' } },
-  { id: 'usdt',  icon: '💲', label: 'USDT',  sub: { en: 'Stablecoin',   ru: 'Стейблкоин'  } },
+  { id: 'sbp',   icon: '💳', label: 'СБП',   sub: { en: 'Bank card',           ru: 'Банк. карта'         } },
+  { id: 'stars', icon: '⭐', label: 'Stars', sub: { en: 'Pay inside Telegram', ru: 'Оплата внутри Telegram' } },
+  { id: 'ton',   icon: '💎', label: 'TON',   sub: { en: 'Crypto',              ru: 'Криптовалюта'        } },
+  { id: 'usdt',  icon: '💲', label: 'USDT',  sub: { en: 'Stablecoin',          ru: 'Стейблкоин'         } },
 ];
 
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -222,6 +227,11 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
   const [trialUsed,       setTrialUsed]       = useState(true);
   const [useBalance,      setUseBalance]      = useState(false);
 
+  // Stars: server is the sole source of truth for both the price and
+  // whether the Mini App flow is rolled out yet (Telegram Stars Audit §6/§25).
+  const [starsEnabled, setStarsEnabled] = useState(false);
+  const [starsPrice,   setStarsPrice]   = useState<number | null>(null);
+
   const pollRef   = useRef<ReturnType<typeof setInterval>|null>(null);
   const payBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -245,6 +255,31 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       .then(d => { if (d['the-open-network']?.usd) setTonUsdRate(d['the-open-network'].usd); })
       .catch(() => {});
   }, [method]);
+
+  useEffect(() => {
+    fetch('/api/payment/starsPlans')
+      .then(r => r.json())
+      .then(d => {
+        if (!d.ok) return;
+        setStarsEnabled(!!d.starsEnabled);
+        setStarsPrice(d.pro?.month?.starsPrice ?? null);
+      })
+      .catch(() => {});
+  }, []);
+
+  // The only real Stars product today is Pro / 1 month (Telegram Stars
+  // Audit §10) — never invent a price for other combos. If the user had
+  // Stars selected and then changes plan/period away from that, fall back
+  // to SBP instead of silently charging the wrong thing.
+  const starsAvailable = starsEnabled && starsPrice !== null && plan === 'pro' && period === 'month';
+  useEffect(() => {
+    if (method === 'stars' && !starsAvailable) setMethod('sbp');
+  }, [method, starsAvailable]);
+
+  const visibleMethods = useMemo(
+    () => METHODS.filter(m => m.id !== 'stars' || starsAvailable),
+    [starsAvailable]
+  );
 
   // ── Price ──────────────────────────────────────────────────────────────────
 
@@ -271,14 +306,16 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
 
   const displayPrice = useMemo(() => {
     if (!paidPlan) return '0 ₽';
-    const usd = baseUsd * discountMult;
     switch (method) {
       case 'ton':   return `${(usdAfterBalance / tonUsdRate).toFixed(2)} TON`;
       case 'usdt':  return `${usdAfterBalance.toFixed(2)} USDT`;
-      case 'stars': return `${priceToStars(usd).toLocaleString()} ⭐`;
+      // Stars price comes from the backend's own source of truth — no
+      // promo/referral discount is modeled for Stars yet (Telegram Stars
+      // Audit §6), so it's shown plain, never recomputed client-side.
+      case 'stars': return `${(starsPrice ?? 0).toLocaleString()} ⭐`;
       case 'sbp':   return `${sbpFinal} ₽`;
     }
-  }, [method, discountMult, tonUsdRate, baseUsd, paidPlan, sbpFinal, usdAfterBalance]);
+  }, [method, tonUsdRate, paidPlan, sbpFinal, usdAfterBalance, starsPrice]);
 
   const originalPriceDisplay = useMemo(() => {
     if (!paidPlan) return null;
@@ -288,7 +325,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
     switch (method) {
       case 'ton':   return `${(baseUsd / tonUsdRate).toFixed(2)} TON`;
       case 'usdt':  return `${baseUsd.toFixed(2)} USDT`;
-      case 'stars': return `${priceToStars(baseUsd).toLocaleString()} ⭐`;
+      case 'stars': return null; // no discount mechanism for Stars yet
       case 'sbp':   return `${sbp} ₽`;
     }
   }, [method, effectiveDiscount, tonUsdRate, baseUsd, paidPlan, period, balanceApplyRub, balanceApplyUsd]);
@@ -441,11 +478,56 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       }
 
       if (method === 'stars') {
-        const tgStars = (window as Window & { Telegram?: { WebApp?: { openTelegramLink?: (u: string) => void } } }).Telegram?.WebApp;
-        const botUrl  = 'https://t.me/EnmaAI_bot';
-        if (tgStars?.openTelegramLink) tgStars.openTelegramLink(botUrl);
-        else window.open(botUrl, '_blank', 'noopener,noreferrer');
-        setPayStatus('idle');
+        const tgWebApp = getTelegramWebApp();
+        if (!tgWebApp?.openInvoice || !tgWebApp.initData) {
+          // Stars only works inside an actual Telegram Mini App session —
+          // there's no sensible fallback outside of it.
+          setPayStatus('error');
+          setTimeout(() => setPayStatus('idle'), 4000);
+          return;
+        }
+
+        const resp = await fetch('/api/payment/starsCreate', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', 'x-telegram-init-data': tgWebApp.initData },
+          body:    JSON.stringify({ plan: paidPlan, period }),
+        });
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error || 'Stars invoice failed');
+
+        setPayStatus('verifying');
+
+        tgWebApp.openInvoice(data.invoiceUrl, (status) => {
+          if (status !== 'paid') {
+            stopPoll();
+            setPayStatus(status === 'cancelled' ? 'idle' : 'error');
+            if (status !== 'cancelled') setTimeout(() => setPayStatus('idle'), 4000);
+            return;
+          }
+
+          // openInvoice's own callback reports only that the Telegram payment
+          // sheet closed as "paid" — it is NOT the activation signal
+          // (Telegram Stars Audit §5/§17). Poll the backend session, which
+          // only flips to 'paid' after a verified successful_payment.
+          pollRef.current = setInterval(async () => {
+            try {
+              const r = await fetch(`/api/payment/starsSession?sessionId=${data.sessionId}`);
+              const d = await r.json();
+              if (d.status === 'paid') {
+                stopPoll();
+                try {
+                  const subSnap = await getDoc(doc(db, 'subscriptions', user.uid));
+                  if (subSnap.exists()) {
+                    const sub = subSnap.data() as Subscription;
+                    if (isSubscriptionActive(sub)) onSubscriptionChange(sub);
+                  }
+                } catch { /* onSnapshot will pick it up */ }
+                setPayStatus('verified');
+                setTimeout(() => setPayStatus('idle'), 5000);
+              }
+            } catch { /* keep polling */ }
+          }, 3000);
+        });
         return;
       }
 
@@ -761,7 +843,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
 
           {/* Method selector */}
           <div className="subscription-panel__methods">
-            {METHODS.map(m => (
+            {visibleMethods.map(m => (
               <button
                 key={m.id}
                 type="button"
