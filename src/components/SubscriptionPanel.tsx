@@ -231,10 +231,6 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
   // whether the Mini App flow is rolled out yet (Telegram Stars Audit §6/§25).
   const [starsEnabled, setStarsEnabled] = useState(false);
   const [starsPrice,   setStarsPrice]   = useState<number | null>(null);
-  // TEMPORARY — visible on-screen diagnostic for the Stars-not-showing
-  // production rollout issue. No initData/Telegram id/tokens. Remove once
-  // Stars visibility is confirmed stable in the real Mini App.
-  const [starsFetchDebug, setStarsFetchDebug] = useState<Record<string, unknown> | null>(null);
 
   const pollRef   = useRef<ReturnType<typeof setInterval>|null>(null);
   const payBtnRef = useRef<HTMLButtonElement>(null);
@@ -266,41 +262,16 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
     // effect; sending initData, when we have it, is what lets the backend
     // answer per-user instead of only the global flag.
     const tgWebApp = getTelegramWebApp();
-    const isTelegram = !!tgWebApp;
-    const initDataPresent = !!tgWebApp?.initData;
-    const baseDebug = { isTelegram, initDataPresent, fetchStartedAt: Date.now() };
-
     fetch('/api/payment/starsPlans', {
-      headers: initDataPresent ? { 'x-telegram-init-data': tgWebApp!.initData } : {},
+      headers: tgWebApp?.initData ? { 'x-telegram-init-data': tgWebApp.initData } : {},
     })
-      .then(r => {
-        const status = r.status;
-        return r.json().then(d => ({ status, d })).catch(parseErr => ({ status, parseErr: String(parseErr) }));
-      })
-      .then((outcome: any) => {
-        const d = outcome.d;
-        const debug = {
-          ...baseDebug,
-          httpStatus: outcome.status,
-          parseError: outcome.parseErr ?? null,
-          responseOk: d?.ok ?? null,
-          responseStarsEnabled: d?.starsEnabled ?? null,
-          responseStarsPrice: d?.pro?.month?.starsPrice ?? null,
-        };
-        setStarsFetchDebug(debug);
-        // TEMPORARY — production rollout debugging only. No initData, no
-        // Telegram id, no tokens. Safe to remove once Stars visibility in
-        // the real Mini App is confirmed stable.
-        console.info('[Stars UI]', debug);
-        if (!d?.ok) return;
+      .then(r => r.json())
+      .then(d => {
+        if (!d.ok) return;
         setStarsEnabled(!!d.starsEnabled);
         setStarsPrice(d.pro?.month?.starsPrice ?? null);
       })
-      .catch(err => {
-        const debug = { ...baseDebug, fetchError: String(err?.message || err) };
-        setStarsFetchDebug(debug);
-        console.info('[Stars UI]', debug);
-      });
+      .catch(() => {});
   }, []);
 
   // The method is visible whenever the backend says Stars exist at all —
@@ -764,24 +735,6 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
         <h2 className="subscription-panel__title">{t.title}</h2>
         <p className="subscription-panel__subtitle">{t.subtitle}</p>
       </div>
-
-      {/* TEMPORARY — Stars rollout diagnostic, visible on-screen so it can
-          be read without devtools. Safe: no initData/Telegram id/tokens.
-          Remove once Stars visibility is confirmed stable in production. */}
-      {starsFetchDebug && (
-        <div style={{
-          fontSize: 11, lineHeight: 1.5, color: 'var(--text-tertiary, #888)',
-          background: 'rgba(127,127,127,0.08)', borderRadius: 8, padding: '8px 10px',
-          margin: '0 0 12px', fontFamily: 'monospace', wordBreak: 'break-word',
-        }}>
-          stars-ui-debug: {JSON.stringify({
-            ...starsFetchDebug,
-            plan, period, method,
-            starsAvailable,
-            visibleMethodIds: visibleMethods.map(m => m.id),
-          })}
-        </div>
-      )}
 
       {/* Trial banner */}
       {showTrialBanner && (
