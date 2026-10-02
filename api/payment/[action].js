@@ -424,8 +424,9 @@ async function handleTrial(req, res) {
 //
 // Frontend must NOT compute the Stars price itself (the old USD/STAR_USD_RATE
 // calculator in src/subscription.ts is dead and deprecated) — it fetches the
-// real number from here, which reads the same STAR_PRICE_MONTHLY env var the
-// backend has always used.
+// real, plan-specific number from here. Pro and Premium have different real
+// USD prices (PLAN_USD_PRICES) and therefore different Stars prices — they
+// must never collapse to one shared flat value again.
 //
 // starsEnabled reflects THIS caller specifically (canary allowlist) — not
 // just the global flag — so the Mini App only shows the Stars method to
@@ -443,7 +444,8 @@ async function handleStarsPlans(req, res) {
   return res.status(200).json({
     ok: true,
     starsEnabled: isStarsEnabledForUser(telegramUserId),
-    pro: { month: { starsPrice: starsPriceFor('pro', 'month') } },
+    pro:     { month: { starsPrice: starsPriceFor('pro', 'month') } },
+    premium: { month: { starsPrice: starsPriceFor('premium', 'month') } },
   });
 }
 
@@ -493,13 +495,21 @@ async function handleStarsCreate(req, res) {
     return res.status(400).json({ ok: false, error: err.code || 'session_create_failed' });
   }
 
+  // Title/description/label must match the ACTUAL plan being sold — a
+  // Premium purchase must never show "Enma Pro" in the Telegram invoice
+  // sheet (Telegram Stars Audit §10).
+  const planLabel = plan === 'premium' ? 'Premium' : 'Pro';
+  const planDescription = plan === 'premium'
+    ? 'Безлимит + AI-изображения, PDF-отчёты, AI-чат, семейный доступ'
+    : 'Безлимит сообщений, AI-ассистент, финансы, напоминания';
+
   const invoiceBody = {
-    title:       'Enma Pro — 1 месяц',
-    description: 'Безлимит сообщений, AI-ассистент, финансы, напоминания',
+    title:       `Enma ${planLabel} — 1 месяц`,
+    description: planDescription,
     payload:     session.payload,
     provider_token: '', // required empty string for Telegram Stars (XTR)
     currency:    'XTR',
-    prices:      [{ label: 'Enma Pro · 1 месяц', amount: session.starsAmount }],
+    prices:      [{ label: `Enma ${planLabel} · 1 месяц`, amount: session.starsAmount }],
   };
   if (STARS_RECURRING_ENABLED) {
     invoiceBody.subscription_period = STARS_SUBSCRIPTION_PERIOD_SECONDS;

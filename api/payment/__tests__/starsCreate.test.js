@@ -43,7 +43,6 @@ function injectMockDb(seed, env = {}) {
   const fa = require.resolve('../../_lib/firebaseAdmin');
   require.cache[fa] = { id: fa, filename: fa, loaded: true, exports: { db, admin: mockAdmin } };
   process.env.TELEGRAM_BOT_TOKEN = BOT_TOKEN;
-  process.env.STAR_PRICE_MONTHLY = '1000';
   for (const [k, v] of Object.entries(env)) process.env[k] = v;
   for (const p of MODULE_PATHS) { try { delete require.cache[require.resolve(p)]; } catch (_) {} }
   return db;
@@ -51,7 +50,6 @@ function injectMockDb(seed, env = {}) {
 function teardown(envKeys = []) {
   try { delete require.cache[require.resolve('../../_lib/firebaseAdmin')]; } catch (_) {}
   delete process.env.TELEGRAM_BOT_TOKEN;
-  delete process.env.STAR_PRICE_MONTHLY;
   for (const k of envKeys) delete process.env[k];
   for (const p of MODULE_PATHS) { try { delete require.cache[require.resolve(p)]; } catch (_) {} }
 }
@@ -68,7 +66,7 @@ function mockRes() {
   return res;
 }
 
-test('starsPlans: returns the canonical server-side price and starsEnabled=false with no auth at all', async () => {
+test('starsPlans: returns the canonical server-side prices for BOTH plans, correctly different, and starsEnabled=false with no auth at all', async () => {
   const db = injectMockDb({});
   try {
     const handler = require('../[action]');
@@ -77,7 +75,10 @@ test('starsPlans: returns the canonical server-side price and starsEnabled=false
     await handler(req, res);
 
     assert.equal(res.statusCode, 200);
-    assert.equal(res.body.pro.month.starsPrice, 1000);
+    assert.equal(res.body.pro.month.starsPrice, 620);
+    assert.equal(res.body.premium.month.starsPrice, 850);
+    assert.notEqual(res.body.pro.month.starsPrice, res.body.premium.month.starsPrice,
+      'Pro and Premium must never share one flat Stars price again');
     assert.equal(res.body.starsEnabled, false, 'default-off until the owner flips the flag or lists this user');
   } finally { teardown(); }
 });
@@ -211,7 +212,7 @@ test('starsCreate: malformed/non-numeric canary entries are ignored, never parti
   } finally { teardown(['STARS_CANARY_TELEGRAM_IDS']); }
 });
 
-test('starsCreate: valid initData + registered user + valid plan creates a session and an invoice link', async () => {
+test('starsCreate: valid initData + registered user + Pro plan creates a session at the Pro price (620) with a Pro-labeled invoice', async () => {
   const db = injectMockDb({ 'users/u1': { chatId: 555 } }, { STARS_MINIAPP_ENABLED: 'true' });
   const originalFetch = global.fetch;
   try {
@@ -220,7 +221,9 @@ test('starsCreate: valid initData + registered user + valid plan creates a sessi
       const sentBody = JSON.parse(opts.body);
       assert.equal(sentBody.currency, 'XTR');
       assert.equal(sentBody.provider_token, '');
-      assert.equal(sentBody.prices[0].amount, 1000);
+      assert.equal(sentBody.prices[0].amount, 620);
+      assert.ok(sentBody.title.includes('Pro'));
+      assert.ok(!sentBody.title.includes('Premium'));
       assert.equal(sentBody.subscription_period, undefined, 'recurring must stay off by default');
       return { json: async () => ({ ok: true, result: 'https://t.me/invoice/fake' }) };
     };
@@ -235,12 +238,41 @@ test('starsCreate: valid initData + registered user + valid plan creates a sessi
 
     assert.equal(res.statusCode, 200);
     assert.equal(res.body.invoiceUrl, 'https://t.me/invoice/fake');
-    assert.equal(res.body.starsAmount, 1000);
+    assert.equal(res.body.starsAmount, 620);
     assert.ok(res.body.sessionId);
 
     const session = db._get(`stars_payment_sessions/${res.body.sessionId}`);
     assert.equal(session.userId, 'u1');
     assert.equal(session.telegramUserId, 555);
+    assert.equal(session.plan, 'pro');
+  } finally { global.fetch = originalFetch; teardown(['STARS_MINIAPP_ENABLED']); }
+});
+
+test('starsCreate: Premium plan creates a session at the Premium price (850) with a Premium-labeled invoice, never the Pro one', async () => {
+  const db = injectMockDb({ 'users/u1': { chatId: 555 } }, { STARS_MINIAPP_ENABLED: 'true' });
+  const originalFetch = global.fetch;
+  try {
+    global.fetch = async (url, opts) => {
+      const sentBody = JSON.parse(opts.body);
+      assert.equal(sentBody.prices[0].amount, 850);
+      assert.ok(sentBody.title.includes('Premium'));
+      return { json: async () => ({ ok: true, result: 'https://t.me/invoice/fake-premium' }) };
+    };
+
+    const handler = require('../[action]');
+    const req = mockReq({
+      action: 'starsCreate', body: { plan: 'premium', period: 'month' },
+      headers: { 'x-telegram-init-data': initDataFor(555) },
+    });
+    const res = mockRes();
+    await handler(req, res);
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.starsAmount, 850);
+
+    const session = db._get(`stars_payment_sessions/${res.body.sessionId}`);
+    assert.equal(session.plan, 'premium');
+    assert.equal(session.usdReferencePrice, 11);
   } finally { global.fetch = originalFetch; teardown(['STARS_MINIAPP_ENABLED']); }
 });
 

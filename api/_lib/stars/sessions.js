@@ -8,7 +8,10 @@
 
 const crypto = require('crypto');
 const { db, admin } = require('../firebaseAdmin');
-const { starsPriceFor, isValidStarsPlan, PAYMENT_SESSION_TTL_MS } = require('./config');
+const {
+  starsPriceFor, isValidStarsPlan, PAYMENT_SESSION_TTL_MS,
+  PLAN_USD_PRICES, TELEGRAM_STAR_REWARD_USD,
+} = require('./config');
 
 const PAYLOAD_PREFIX = 'enma_stars:';
 
@@ -44,6 +47,11 @@ async function createPaymentSession({ userId, telegramUserId, plan, period }) {
   const now          = Date.now();
   const expiresAtMs  = now + PAYMENT_SESSION_TTL_MS;
 
+  // Recorded so a session's price can always be explained later (audit,
+  // support, reconciliation) without re-deriving it from whatever
+  // PLAN_USD_PRICES/the reward rate happen to be AT READ TIME — if either
+  // ever changes, historical sessions still show what was actually true
+  // when they were created.
   await db.collection('stars_payment_sessions').doc(sessionId).set({
     sessionId,
     userId,
@@ -51,6 +59,8 @@ async function createPaymentSession({ userId, telegramUserId, plan, period }) {
     plan,
     period,
     starsAmount,
+    usdReferencePrice: PLAN_USD_PRICES[plan][period],
+    starRewardRate:    TELEGRAM_STAR_REWARD_USD,
     currency:  'XTR',
     status:    'created',
     createdAt: admin.firestore.FieldValue.serverTimestamp(),

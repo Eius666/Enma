@@ -229,8 +229,10 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
 
   // Stars: server is the sole source of truth for both the price and
   // whether the Mini App flow is rolled out yet (Telegram Stars Audit §6/§25).
+  // Pro and Premium have different real USD prices and therefore different
+  // Stars prices — never a single shared number for both.
   const [starsEnabled, setStarsEnabled] = useState(false);
-  const [starsPrice,   setStarsPrice]   = useState<number | null>(null);
+  const [starsPrices,  setStarsPrices]  = useState<{ pro: number | null; premium: number | null }>({ pro: null, premium: null });
 
   const pollRef   = useRef<ReturnType<typeof setInterval>|null>(null);
   const payBtnRef = useRef<HTMLButtonElement>(null);
@@ -269,28 +271,29 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       .then(d => {
         if (!d.ok) return;
         setStarsEnabled(!!d.starsEnabled);
-        setStarsPrice(d.pro?.month?.starsPrice ?? null);
+        setStarsPrices({
+          pro:     d.pro?.month?.starsPrice     ?? null,
+          premium: d.premium?.month?.starsPrice ?? null,
+        });
       })
       .catch(() => {});
   }, []);
 
-  // The method is visible whenever the backend says Stars exist at all —
-  // it must NOT also depend on which plan/period happens to be selected
-  // right now (that previously hid Stars entirely whenever the user had,
-  // say, Premium or Year selected, while SBP/TON/USDT stayed visible with
-  // no such restriction — a confusing, state-dependent disappearance, not a
-  // real "unavailable" state). starsEnabled/starsPrice are the only source
-  // of truth for VISIBILITY.
-  const starsAvailable = starsEnabled && starsPrice !== null;
+  // Stars only ever sells monthly plans today (no yearly Stars product
+  // exists yet — Telegram Stars Audit §10) but now supports BOTH Pro and
+  // Premium, each at its own real price. The CURRENTLY selected plan's own
+  // price decides availability — it must not also depend on `period`
+  // being month (that previously hid Stars entirely whenever Premium/Year
+  // was selected, while SBP/TON/USDT had no such restriction).
+  const currentPlanStarsPrice = plan === 'pro' ? starsPrices.pro : plan === 'premium' ? starsPrices.premium : null;
+  const starsAvailable = starsEnabled && currentPlanStarsPrice !== null && period === 'month';
 
-  // The only real Stars product today is Pro / 1 month (Telegram Stars
-  // Audit §10) — rather than hiding the method when some other plan/period
-  // is selected, selecting Stars forces the one combination it can actually
-  // sell. Changing plan/period AWAY from Pro/month while Stars is selected
+  // Switching to a period Stars can't sell (year) while Stars is selected
   // falls back to SBP instead of silently trying to charge the wrong thing.
+  // Switching plan is fine as long as it's one with its own Stars price.
   useEffect(() => {
-    if (method === 'stars' && (plan !== 'pro' || period !== 'month')) setMethod('sbp');
-  }, [method, plan, period]);
+    if (method === 'stars' && (currentPlanStarsPrice === null || period !== 'month')) setMethod('sbp');
+  }, [method, currentPlanStarsPrice, period]);
 
   const visibleMethods = useMemo(
     () => METHODS.filter(m => m.id !== 'stars' || starsAvailable),
@@ -328,10 +331,10 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       // Stars price comes from the backend's own source of truth — no
       // promo/referral discount is modeled for Stars yet (Telegram Stars
       // Audit §6), so it's shown plain, never recomputed client-side.
-      case 'stars': return `${(starsPrice ?? 0).toLocaleString()} ⭐`;
+      case 'stars': return `${(currentPlanStarsPrice ?? 0).toLocaleString()} ⭐`;
       case 'sbp':   return `${sbpFinal} ₽`;
     }
-  }, [method, tonUsdRate, paidPlan, sbpFinal, usdAfterBalance, starsPrice]);
+  }, [method, tonUsdRate, paidPlan, sbpFinal, usdAfterBalance, currentPlanStarsPrice]);
 
   const originalPriceDisplay = useMemo(() => {
     if (!paidPlan) return null;

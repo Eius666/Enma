@@ -33,46 +33,46 @@ async function makeSession(overrides = {}) {
 // ── validatePreCheckoutQuery ─────────────────────────────────────────────────
 
 test('validatePreCheckoutQuery: valid session is accepted', async () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+  const db = injectMockDb({});
   try {
     const session = await makeSession();
     const { validatePreCheckoutQuery } = require('../payments');
     const r = await validatePreCheckoutQuery({
-      invoice_payload: session.payload, currency: 'XTR', total_amount: 1000, from: { id: 555 },
+      invoice_payload: session.payload, currency: 'XTR', total_amount: 620, from: { id: 555 },
     });
     assert.equal(r.ok, true);
-  } finally { teardown(['STAR_PRICE_MONTHLY']); }
+  } finally { teardown(); }
 });
 
 test('validatePreCheckoutQuery: nonexistent session rejected', async () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+  const db = injectMockDb({});
   try {
     const { validatePreCheckoutQuery } = require('../payments');
     const { payloadFor } = require('../sessions');
     const r = await validatePreCheckoutQuery({
-      invoice_payload: payloadFor('b'.repeat(32)), currency: 'XTR', total_amount: 1000, from: { id: 555 },
+      invoice_payload: payloadFor('b'.repeat(32)), currency: 'XTR', total_amount: 620, from: { id: 555 },
     });
     assert.equal(r.ok, false);
     assert.equal(r.reason, 'session_not_found');
-  } finally { teardown(['STAR_PRICE_MONTHLY']); }
+  } finally { teardown(); }
 });
 
 test('validatePreCheckoutQuery: expired session rejected', async () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+  const db = injectMockDb({});
   try {
     const session = await makeSession();
     db._get(`stars_payment_sessions/${session.sessionId}`).expiresAtMs = Date.now() - 1000;
     const { validatePreCheckoutQuery } = require('../payments');
     const r = await validatePreCheckoutQuery({
-      invoice_payload: session.payload, currency: 'XTR', total_amount: 1000, from: { id: 555 },
+      invoice_payload: session.payload, currency: 'XTR', total_amount: 620, from: { id: 555 },
     });
     assert.equal(r.ok, false);
     assert.equal(r.reason, 'session_expired');
-  } finally { teardown(['STAR_PRICE_MONTHLY']); }
+  } finally { teardown(); }
 });
 
 test('validatePreCheckoutQuery: wrong amount rejected', async () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+  const db = injectMockDb({});
   try {
     const session = await makeSession();
     const { validatePreCheckoutQuery } = require('../payments');
@@ -81,70 +81,70 @@ test('validatePreCheckoutQuery: wrong amount rejected', async () => {
     });
     assert.equal(r.ok, false);
     assert.equal(r.reason, 'amount_mismatch');
-  } finally { teardown(['STAR_PRICE_MONTHLY']); }
+  } finally { teardown(); }
 });
 
 test('validatePreCheckoutQuery: wrong currency rejected', async () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+  const db = injectMockDb({});
   try {
     const session = await makeSession();
     const { validatePreCheckoutQuery } = require('../payments');
     const r = await validatePreCheckoutQuery({
-      invoice_payload: session.payload, currency: 'RUB', total_amount: 1000, from: { id: 555 },
+      invoice_payload: session.payload, currency: 'RUB', total_amount: 620, from: { id: 555 },
     });
     assert.equal(r.ok, false);
     assert.equal(r.reason, 'wrong_currency');
-  } finally { teardown(['STAR_PRICE_MONTHLY']); }
+  } finally { teardown(); }
 });
 
 test('validatePreCheckoutQuery: wrong Telegram user rejected', async () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+  const db = injectMockDb({});
   try {
     const session = await makeSession();
     const { validatePreCheckoutQuery } = require('../payments');
     const r = await validatePreCheckoutQuery({
-      invoice_payload: session.payload, currency: 'XTR', total_amount: 1000, from: { id: 999 },
+      invoice_payload: session.payload, currency: 'XTR', total_amount: 620, from: { id: 999 },
     });
     assert.equal(r.ok, false);
     assert.equal(r.reason, 'telegram_user_mismatch');
-  } finally { teardown(['STAR_PRICE_MONTHLY']); }
+  } finally { teardown(); }
 });
 
 test('validatePreCheckoutQuery: malformed/unrecognized payload rejected', async () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+  const db = injectMockDb({});
   try {
     const { validatePreCheckoutQuery } = require('../payments');
     const r = await validatePreCheckoutQuery({
-      invoice_payload: 'totally_not_ours', currency: 'XTR', total_amount: 1000, from: { id: 555 },
+      invoice_payload: 'totally_not_ours', currency: 'XTR', total_amount: 620, from: { id: 555 },
     });
     assert.equal(r.ok, false);
     assert.equal(r.reason, 'unrecognized_payload');
-  } finally { teardown(['STAR_PRICE_MONTHLY']); }
+  } finally { teardown(); }
 });
 
 test('validateLegacyPreCheckout: well-formed legacy payload at the right price is accepted', () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+  const db = injectMockDb({});
   try {
     const { validateLegacyPreCheckout } = require('../payments');
-    const r = validateLegacyPreCheckout({ invoice_payload: 'enma_sub_555_1700000000000', currency: 'XTR', total_amount: 1000 });
+    const r = validateLegacyPreCheckout({ invoice_payload: 'enma_sub_555_1700000000000', currency: 'XTR', total_amount: 620 });
     assert.equal(r.ok, true);
-  } finally { teardown(['STAR_PRICE_MONTHLY']); }
+  } finally { teardown(); }
 });
 
 test('validateLegacyPreCheckout: tampered amount rejected', () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+  const db = injectMockDb({});
   try {
     const { validateLegacyPreCheckout } = require('../payments');
     const r = validateLegacyPreCheckout({ invoice_payload: 'enma_sub_555_1700000000000', currency: 'XTR', total_amount: 1 });
     assert.equal(r.ok, false);
     assert.equal(r.reason, 'amount_mismatch');
-  } finally { teardown(['STAR_PRICE_MONTHLY']); }
+  } finally { teardown(); }
 });
 
 // ── processStarsSuccessfulPayment ────────────────────────────────────────────
 
 test('processStarsSuccessfulPayment: valid payment activates Pro, persists charge id, marks session paid', async () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+  const db = injectMockDb({});
   try {
     const session = await makeSession();
     const { processStarsSuccessfulPayment } = require('../payments');
@@ -153,7 +153,7 @@ test('processStarsSuccessfulPayment: valid payment activates Pro, persists charg
       successfulPayment: {
         telegram_payment_charge_id: 'charge_abc123',
         invoice_payload: session.payload,
-        total_amount: 1000, currency: 'XTR',
+        total_amount: 620, currency: 'XTR',
       },
       userId: 'u1', telegramUserId: 555,
     });
@@ -174,11 +174,11 @@ test('processStarsSuccessfulPayment: valid payment activates Pro, persists charg
     const sessionAfter = db._get(`stars_payment_sessions/${session.sessionId}`);
     assert.equal(sessionAfter.status, 'paid');
     assert.equal(sessionAfter.paymentDocId, r.docId);
-  } finally { teardown(['STAR_PRICE_MONTHLY']); }
+  } finally { teardown(); }
 });
 
 test('processStarsSuccessfulPayment: IDEMPOTENT — the same charge id processed twice extends the subscription only once', async () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+  const db = injectMockDb({});
   try {
     const session = await makeSession();
     const { processStarsSuccessfulPayment } = require('../payments');
@@ -186,7 +186,7 @@ test('processStarsSuccessfulPayment: IDEMPOTENT — the same charge id processed
       successfulPayment: {
         telegram_payment_charge_id: 'charge_dup',
         invoice_payload: session.payload,
-        total_amount: 1000, currency: 'XTR',
+        total_amount: 620, currency: 'XTR',
       },
       userId: 'u1', telegramUserId: 555,
     };
@@ -200,21 +200,21 @@ test('processStarsSuccessfulPayment: IDEMPOTENT — the same charge id processed
     assert.equal(second.alreadyProcessed, true, 'a replayed update must be a no-op');
     assert.equal(sub2.endDateMs, sub1.endDateMs, 'subscription must not be extended twice');
     assert.equal(db._keys('payments/').length, 1, 'exactly one payment doc for this charge id');
-  } finally { teardown(['STAR_PRICE_MONTHLY']); }
+  } finally { teardown(); }
 });
 
 test('processStarsSuccessfulPayment: two DIFFERENT charge ids both extend, cumulatively', async () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+  const db = injectMockDb({});
   try {
     const { processStarsSuccessfulPayment } = require('../payments');
     const sessionA = await makeSession();
     const a = await processStarsSuccessfulPayment({
-      successfulPayment: { telegram_payment_charge_id: 'charge_a', invoice_payload: sessionA.payload, total_amount: 1000, currency: 'XTR' },
+      successfulPayment: { telegram_payment_charge_id: 'charge_a', invoice_payload: sessionA.payload, total_amount: 620, currency: 'XTR' },
       userId: 'u1', telegramUserId: 555,
     });
     const sessionB = await makeSession();
     const b = await processStarsSuccessfulPayment({
-      successfulPayment: { telegram_payment_charge_id: 'charge_b', invoice_payload: sessionB.payload, total_amount: 1000, currency: 'XTR' },
+      successfulPayment: { telegram_payment_charge_id: 'charge_b', invoice_payload: sessionB.payload, total_amount: 620, currency: 'XTR' },
       userId: 'u1', telegramUserId: 555,
     });
 
@@ -223,52 +223,99 @@ test('processStarsSuccessfulPayment: two DIFFERENT charge ids both extend, cumul
     const subAfterB = new Date(b.endDate).getTime();
     assert.ok(subAfterB > subAfterA, 'second purchase must extend further, not reset');
     assert.ok(subAfterB - subAfterA >= 29 * DAY_MS, 'extension must be ~30 days on top of the first');
-  } finally { teardown(['STAR_PRICE_MONTHLY']); }
+  } finally { teardown(); }
 });
 
 test('processStarsSuccessfulPayment: Stars purchase extends from an EXISTING SBP subscription\'s endDate, not from now', async () => {
   const db = injectMockDb({
     'subscriptions/u1': { plan: 'pro', status: 'active', lastPaymentMethod: 'sbp', endDateMs: Date.now() + 20 * DAY_MS, startDate: new Date().toISOString() },
-  }, { STAR_PRICE_MONTHLY: '1000' });
+  });
   try {
     const session = await makeSession();
     const { processStarsSuccessfulPayment } = require('../payments');
     const before = db._get('subscriptions/u1').endDateMs;
 
     await processStarsSuccessfulPayment({
-      successfulPayment: { telegram_payment_charge_id: 'charge_cross_rail', invoice_payload: session.payload, total_amount: 1000, currency: 'XTR' },
+      successfulPayment: { telegram_payment_charge_id: 'charge_cross_rail', invoice_payload: session.payload, total_amount: 620, currency: 'XTR' },
       userId: 'u1', telegramUserId: 555,
     });
 
     const after = db._get('subscriptions/u1').endDateMs;
     assert.equal(after, before + 30 * DAY_MS, 'Stars must extend from the SBP endDate, not reset to now+30');
-  } finally { teardown(['STAR_PRICE_MONTHLY']); }
+  } finally { teardown(); }
+});
+
+test('processStarsSuccessfulPayment: a PREMIUM session activates Premium (not Pro) at the Premium price', async () => {
+  const db = injectMockDb({});
+  try {
+    const session = await makeSession({ plan: 'premium' });
+    assert.equal(session.starsAmount, 850, 'sanity: Premium session was created at the Premium price');
+
+    const { processStarsSuccessfulPayment } = require('../payments');
+    const r = await processStarsSuccessfulPayment({
+      successfulPayment: {
+        telegram_payment_charge_id: 'charge_premium', invoice_payload: session.payload,
+        total_amount: 850, currency: 'XTR',
+      },
+      userId: 'u1', telegramUserId: 555,
+    });
+
+    assert.equal(r.ok, true);
+    const sub = db._get('subscriptions/u1');
+    assert.equal(sub.plan, 'premium', 'must activate Premium, never hardcode Pro');
+    assert.equal(sub.status, 'active');
+
+    const payment = db._get(`payments/${r.docId}`);
+    assert.equal(payment.plan, 'premium');
+    assert.equal(payment.amount, 850);
+  } finally { teardown(); }
+});
+
+test('processStarsSuccessfulPayment: Pro and Premium purchases for the same user both extend the SAME subscription independently', async () => {
+  const db = injectMockDb({});
+  try {
+    const { processStarsSuccessfulPayment } = require('../payments');
+
+    const proSession = await makeSession({ plan: 'pro' });
+    await processStarsSuccessfulPayment({
+      successfulPayment: { telegram_payment_charge_id: 'charge_pro_1', invoice_payload: proSession.payload, total_amount: 620, currency: 'XTR' },
+      userId: 'u1', telegramUserId: 555,
+    });
+    assert.equal(db._get('subscriptions/u1').plan, 'pro');
+
+    const premiumSession = await makeSession({ plan: 'premium' });
+    await processStarsSuccessfulPayment({
+      successfulPayment: { telegram_payment_charge_id: 'charge_premium_1', invoice_payload: premiumSession.payload, total_amount: 850, currency: 'XTR' },
+      userId: 'u1', telegramUserId: 555,
+    });
+    assert.equal(db._get('subscriptions/u1').plan, 'premium', 'the later Premium purchase must update the plan');
+  } finally { teardown(); }
 });
 
 test('processStarsSuccessfulPayment: never touches the old consumer/TON referral ledger or the partner commission ledger', async () => {
   const db = injectMockDb({
     'users/u1': { referredBy: 'FRIEND1' },               // old consumer referral attribution
     'referrals/r1': { referrerId: 'friendUid', referredId: 'u1', status: 'converted' },
-  }, { STAR_PRICE_MONTHLY: '1000' });
+  });
   try {
     const session = await makeSession();
     const { processStarsSuccessfulPayment } = require('../payments');
     await processStarsSuccessfulPayment({
-      successfulPayment: { telegram_payment_charge_id: 'charge_isolation', invoice_payload: session.payload, total_amount: 1000, currency: 'XTR' },
+      successfulPayment: { telegram_payment_charge_id: 'charge_isolation', invoice_payload: session.payload, total_amount: 620, currency: 'XTR' },
       userId: 'u1', telegramUserId: 555,
     });
 
     assert.equal(db._keys('referral_earnings/').length, 0, 'old consumer/TON commission must NOT fire for Stars');
     assert.equal(db._keys('referralEarnings/').length, 0, 'Enma partner commission must NOT fire for Stars');
     assert.equal(db._get('users/u1').referralBalance, undefined, 'no RUB cashback for Stars');
-  } finally { teardown(['STAR_PRICE_MONTHLY']); }
+  } finally { teardown(); }
 });
 
 test('processStarsSuccessfulPayment: legacy bot-invoice payload (no session) still activates and is still idempotent', async () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+  const db = injectMockDb({});
   try {
     const { processStarsSuccessfulPayment } = require('../payments');
-    const legacyPayload = { telegram_payment_charge_id: 'charge_legacy', invoice_payload: 'enma_sub_555_123', total_amount: 1000, currency: 'XTR' };
+    const legacyPayload = { telegram_payment_charge_id: 'charge_legacy', invoice_payload: 'enma_sub_555_123', total_amount: 620, currency: 'XTR' };
 
     const first  = await processStarsSuccessfulPayment({ successfulPayment: legacyPayload, userId: 'u1', telegramUserId: 555 });
     const second = await processStarsSuccessfulPayment({ successfulPayment: legacyPayload, userId: 'u1', telegramUserId: 555 });
@@ -276,19 +323,19 @@ test('processStarsSuccessfulPayment: legacy bot-invoice payload (no session) sti
     assert.equal(first.alreadyProcessed, false);
     assert.equal(second.alreadyProcessed, true);
     assert.equal(db._get('subscriptions/u1').plan, 'pro');
-  } finally { teardown(['STAR_PRICE_MONTHLY']); }
+  } finally { teardown(); }
 });
 
 // ── refundStarsPayment ───────────────────────────────────────────────────────
 
 test('refundStarsPayment: successful refund marks payment refunded and writes an audit record', async () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+  const db = injectMockDb({});
   const originalFetch = global.fetch;
   try {
     const session = await makeSession();
     const { processStarsSuccessfulPayment, refundStarsPayment } = require('../payments');
     const paid = await processStarsSuccessfulPayment({
-      successfulPayment: { telegram_payment_charge_id: 'charge_refund_me', invoice_payload: session.payload, total_amount: 1000, currency: 'XTR' },
+      successfulPayment: { telegram_payment_charge_id: 'charge_refund_me', invoice_payload: session.payload, total_amount: 620, currency: 'XTR' },
       userId: 'u1', telegramUserId: 555,
     });
 
@@ -298,17 +345,17 @@ test('refundStarsPayment: successful refund marks payment refunded and writes an
     assert.equal(r.ok, true);
     assert.equal(db._get(`payments/${paid.docId}`).status, 'refunded');
     assert.equal(db._keys('stars_refund_audit/').length, 1);
-  } finally { global.fetch = originalFetch; teardown(['STAR_PRICE_MONTHLY']); }
+  } finally { global.fetch = originalFetch; teardown(); }
 });
 
 test('refundStarsPayment: a second refund of the same payment is rejected, no-op', async () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+  const db = injectMockDb({});
   const originalFetch = global.fetch;
   try {
     const session = await makeSession();
     const { processStarsSuccessfulPayment, refundStarsPayment } = require('../payments');
     const paid = await processStarsSuccessfulPayment({
-      successfulPayment: { telegram_payment_charge_id: 'charge_refund_twice', invoice_payload: session.payload, total_amount: 1000, currency: 'XTR' },
+      successfulPayment: { telegram_payment_charge_id: 'charge_refund_twice', invoice_payload: session.payload, total_amount: 620, currency: 'XTR' },
       userId: 'u1', telegramUserId: 555,
     });
 
@@ -319,17 +366,17 @@ test('refundStarsPayment: a second refund of the same payment is rejected, no-op
     assert.equal(second.ok, false);
     assert.equal(second.reason, 'already_refunded');
     assert.equal(db._keys('stars_refund_audit/').length, 1, 'no second audit record');
-  } finally { global.fetch = originalFetch; teardown(['STAR_PRICE_MONTHLY']); }
+  } finally { global.fetch = originalFetch; teardown(); }
 });
 
 test('refundStarsPayment: a failed Telegram refund call does not mark the payment refunded', async () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+  const db = injectMockDb({});
   const originalFetch = global.fetch;
   try {
     const session = await makeSession();
     const { processStarsSuccessfulPayment, refundStarsPayment } = require('../payments');
     const paid = await processStarsSuccessfulPayment({
-      successfulPayment: { telegram_payment_charge_id: 'charge_refund_fail', invoice_payload: session.payload, total_amount: 1000, currency: 'XTR' },
+      successfulPayment: { telegram_payment_charge_id: 'charge_refund_fail', invoice_payload: session.payload, total_amount: 620, currency: 'XTR' },
       userId: 'u1', telegramUserId: 555,
     });
 
@@ -338,19 +385,19 @@ test('refundStarsPayment: a failed Telegram refund call does not mark the paymen
 
     assert.equal(r.ok, false);
     assert.equal(db._get(`payments/${paid.docId}`).status, 'confirmed');
-  } finally { global.fetch = originalFetch; teardown(['STAR_PRICE_MONTHLY']); }
+  } finally { global.fetch = originalFetch; teardown(); }
 });
 
 // ── recalculateSubscriptionEntitlement ──────────────────────────────────────
 
 test('recalculateSubscriptionEntitlement: rolls back the exact extension when it is the most recent one', async () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+  const db = injectMockDb({});
   const originalFetch = global.fetch;
   try {
     const session = await makeSession();
     const { processStarsSuccessfulPayment, refundStarsPayment } = require('../payments');
     const paid = await processStarsSuccessfulPayment({
-      successfulPayment: { telegram_payment_charge_id: 'charge_rollback', invoice_payload: session.payload, total_amount: 1000, currency: 'XTR' },
+      successfulPayment: { telegram_payment_charge_id: 'charge_rollback', invoice_payload: session.payload, total_amount: 620, currency: 'XTR' },
       userId: 'u1', telegramUserId: 555,
     });
     const beforeMs = db._get(`payments/${paid.docId}`).subscriptionEndDateBeforeMs;
@@ -364,24 +411,24 @@ test('recalculateSubscriptionEntitlement: rolls back the exact extension when it
     } else {
       assert.equal(sub.status, 'expired');
     }
-  } finally { global.fetch = originalFetch; teardown(['STAR_PRICE_MONTHLY']); }
+  } finally { global.fetch = originalFetch; teardown(); }
 });
 
 test('recalculateSubscriptionEntitlement: does NOT roll back when a later payment has since extended further', async () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+  const db = injectMockDb({});
   const originalFetch = global.fetch;
   try {
     const { processStarsSuccessfulPayment, refundStarsPayment, recalculateSubscriptionEntitlement } = require('../payments');
 
     const session1 = await makeSession();
     const first = await processStarsSuccessfulPayment({
-      successfulPayment: { telegram_payment_charge_id: 'charge_first', invoice_payload: session1.payload, total_amount: 1000, currency: 'XTR' },
+      successfulPayment: { telegram_payment_charge_id: 'charge_first', invoice_payload: session1.payload, total_amount: 620, currency: 'XTR' },
       userId: 'u1', telegramUserId: 555,
     });
 
     const session2 = await makeSession();
     await processStarsSuccessfulPayment({
-      successfulPayment: { telegram_payment_charge_id: 'charge_second', invoice_payload: session2.payload, total_amount: 1000, currency: 'XTR' },
+      successfulPayment: { telegram_payment_charge_id: 'charge_second', invoice_payload: session2.payload, total_amount: 620, currency: 'XTR' },
       userId: 'u1', telegramUserId: 555,
     });
     const subAfterSecond = { ...db._get('subscriptions/u1') };
@@ -393,5 +440,5 @@ test('recalculateSubscriptionEntitlement: does NOT roll back when a later paymen
 
     const subAfterRecalc = db._get('subscriptions/u1');
     assert.equal(subAfterRecalc.endDateMs, subAfterSecond.endDateMs, 'a superseded refund must not touch the current entitlement');
-  } finally { global.fetch = originalFetch; teardown(['STAR_PRICE_MONTHLY']); }
+  } finally { global.fetch = originalFetch; teardown(); }
 });

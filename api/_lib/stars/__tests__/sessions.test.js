@@ -21,23 +21,33 @@ function teardown(envKeys = []) {
   for (const p of MODULE_PATHS) { try { delete require.cache[require.resolve(p)]; } catch (_) {} }
 }
 
-test('starsPriceFor: pro/month returns the configured STAR_PRICE_MONTHLY', () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+// Canonical USD prices (mirrors PLANS in src/subscription.ts) and their
+// correct Stars prices at the $0.013 developer reward rate, rounded up to
+// the nearest 10 XTR: 8/0.013=615.38→620, 11/0.013=846.15→850.
+const PRO_STARS = 620;
+const PREMIUM_STARS = 850;
+
+test('starsPriceFor: pro/month and premium/month are DIFFERENT, each computed from its own real USD price', () => {
+  const db = injectMockDb({});
   try {
     const { starsPriceFor, isValidStarsPlan } = require('../config');
-    assert.equal(starsPriceFor('pro', 'month'), 1000);
+    assert.equal(starsPriceFor('pro', 'month'), PRO_STARS);
+    assert.equal(starsPriceFor('premium', 'month'), PREMIUM_STARS);
+    assert.notEqual(starsPriceFor('pro', 'month'), starsPriceFor('premium', 'month'));
     assert.equal(isValidStarsPlan('pro', 'month'), true);
-  } finally { teardown(['STAR_PRICE_MONTHLY']); }
+    assert.equal(isValidStarsPlan('premium', 'month'), true);
+  } finally { teardown(); }
 });
 
 test('starsPriceFor: unsupported plan/period combos return null — no invented prices', () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+  const db = injectMockDb({});
   try {
     const { starsPriceFor, isValidStarsPlan } = require('../config');
-    assert.equal(starsPriceFor('premium', 'month'), null);
-    assert.equal(starsPriceFor('pro', 'year'), null);
-    assert.equal(isValidStarsPlan('premium', 'month'), false);
-  } finally { teardown(['STAR_PRICE_MONTHLY']); }
+    assert.equal(starsPriceFor('pro', 'year'), null, 'no yearly Stars product exists');
+    assert.equal(starsPriceFor('free', 'month'), null);
+    assert.equal(starsPriceFor('nonsense', 'month'), null);
+    assert.equal(isValidStarsPlan('pro', 'year'), false);
+  } finally { teardown(); }
 });
 
 test('sessionIdFromPayload: recognizes a well-formed enma_stars payload', () => {
@@ -61,31 +71,48 @@ test('sessionIdFromPayload: rejects legacy and garbage payloads', () => {
   } finally { teardown(); }
 });
 
-test('createPaymentSession: valid plan writes a session with the server-side price', async () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+test('createPaymentSession: Pro session uses the Pro price (620), records the USD reference and reward rate', async () => {
+  const db = injectMockDb({});
   try {
     const { createPaymentSession, getPaymentSession, sessionIdFromPayload } = require('../sessions');
     const session = await createPaymentSession({ userId: 'u1', telegramUserId: 555, plan: 'pro', period: 'month' });
-    assert.equal(session.starsAmount, 1000);
+    assert.equal(session.starsAmount, PRO_STARS);
     assert.equal(sessionIdFromPayload(session.payload), session.sessionId);
 
     const fetched = await getPaymentSession(session.sessionId);
     assert.equal(fetched.userId, 'u1');
     assert.equal(fetched.telegramUserId, 555);
+    assert.equal(fetched.plan, 'pro');
     assert.equal(fetched.status, 'created');
     assert.equal(fetched.currency, 'XTR');
-  } finally { teardown(['STAR_PRICE_MONTHLY']); }
+    assert.equal(fetched.usdReferencePrice, 8);
+    assert.equal(fetched.starRewardRate, 0.013);
+  } finally { teardown(); }
+});
+
+test('createPaymentSession: Premium session uses the Premium price (850), not Pro\'s', async () => {
+  const db = injectMockDb({});
+  try {
+    const { createPaymentSession, getPaymentSession } = require('../sessions');
+    const session = await createPaymentSession({ userId: 'u1', telegramUserId: 555, plan: 'premium', period: 'month' });
+    assert.equal(session.starsAmount, PREMIUM_STARS);
+
+    const fetched = await getPaymentSession(session.sessionId);
+    assert.equal(fetched.plan, 'premium');
+    assert.equal(fetched.usdReferencePrice, 11);
+    assert.equal(fetched.starRewardRate, 0.013);
+  } finally { teardown(); }
 });
 
 test('createPaymentSession: rejects a plan/period with no configured Stars price', async () => {
-  const db = injectMockDb({}, { STAR_PRICE_MONTHLY: '1000' });
+  const db = injectMockDb({});
   try {
     const { createPaymentSession } = require('../sessions');
     await assert.rejects(
       () => createPaymentSession({ userId: 'u1', telegramUserId: 555, plan: 'premium', period: 'year' }),
       (err) => err.code === 'invalid_plan'
     );
-  } finally { teardown(['STAR_PRICE_MONTHLY']); }
+  } finally { teardown(); }
 });
 
 test('isSessionExpired: true past expiresAtMs, false before it', () => {
