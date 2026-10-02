@@ -17,7 +17,7 @@ const {
   STARS_MINIAPP_ENABLED, STARS_RECURRING_ENABLED, STARS_SUBSCRIPTION_PERIOD_SECONDS,
 } = require('../_lib/stars/config');
 const { createPaymentSession, getPaymentSession } = require('../_lib/stars/sessions');
-const { isStarsEnabledForUser, canaryDiagnostics, isInCanary } = require('../_lib/stars/canary');
+const { isStarsEnabledForUser } = require('../_lib/stars/canary');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TRIAL_DAYS = 7;
@@ -444,19 +444,6 @@ async function handleStarsPlans(req, res) {
     ok: true,
     starsEnabled: isStarsEnabledForUser(telegramUserId),
     pro: { month: { starsPrice: starsPriceFor('pro', 'month') } },
-    // TEMPORARY — live canary diagnosis (Telegram Stars canary rollout).
-    // Scoped entirely to THIS caller's own verified identity: never the raw
-    // env value, never the list of allowed ids, never anyone else's data.
-    // Remove this block once the canary mismatch for the owner's account is
-    // confirmed resolved.
-    debug: {
-      initDataReceived: !!initData,
-      initDataValid: auth.ok,
-      telegramUserResolved: auth.ok && !!telegramUserId,
-      globalEnabled: STARS_MINIAPP_ENABLED,
-      ...canaryDiagnostics(),
-      currentUserInCanary: isInCanary(telegramUserId),
-    },
   });
 }
 
@@ -529,6 +516,7 @@ async function handleStarsCreate(req, res) {
       console.error('[payment/starsCreate] Telegram error:', tgData.description);
       return res.status(502).json({ ok: false, error: 'telegram_error' });
     }
+    console.log('[stars] stars_invoice_created', { userId, telegramUserId, plan, period, sessionId: session.sessionId });
     return res.status(200).json({
       ok: true,
       invoiceUrl: tgData.result,

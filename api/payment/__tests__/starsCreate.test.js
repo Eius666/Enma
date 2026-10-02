@@ -99,7 +99,7 @@ test('starsPlans: starsEnabled reflects THIS caller — true for a canary id, fa
   } finally { teardown(['STARS_CANARY_TELEGRAM_IDS']); }
 });
 
-test('starsPlans: debug block exposes safe diagnostics only, never the raw allowlist value', async () => {
+test('starsPlans: no longer carries a debug block in the general-release response shape (the temporary canary diagnostic was removed)', async () => {
   const db = injectMockDb({}, { STARS_CANARY_TELEGRAM_IDS: '798608938' });
   try {
     const handler = require('../[action]');
@@ -107,32 +107,26 @@ test('starsPlans: debug block exposes safe diagnostics only, never the raw allow
     const res = mockRes();
     await handler(req, res);
 
-    assert.equal(res.body.debug.initDataReceived, true);
-    assert.equal(res.body.debug.initDataValid, true);
-    assert.equal(res.body.debug.telegramUserResolved, true);
-    assert.equal(res.body.debug.globalEnabled, false);
-    assert.equal(res.body.debug.envPresent, true);
-    assert.equal(res.body.debug.entriesCountValid, 1);
-    assert.equal(res.body.debug.allEntriesNumeric, true);
-    assert.equal(res.body.debug.currentUserInCanary, true);
-
-    const serialized = JSON.stringify(res.body);
-    assert.ok(!serialized.includes('798608938,'), 'no raw list serialization leaks through');
+    assert.equal(res.body.ok, true);
+    assert.ok(!('debug' in res.body), 'the public starsPlans response must not carry diagnostic internals');
   } finally { teardown(['STARS_CANARY_TELEGRAM_IDS']); }
 });
 
-test('starsPlans: debug block with no initData at all — honest "not received" rather than a false positive', async () => {
-  const db = injectMockDb({});
+test('starsPlans: with STARS_MINIAPP_ENABLED=true, starsEnabled is true for EVERYONE — canary no longer required', async () => {
+  const db = injectMockDb({}, { STARS_MINIAPP_ENABLED: 'true' });
   try {
     const handler = require('../[action]');
-    const req = mockReq({ action: 'starsPlans', method: 'GET', headers: {} });
-    const res = mockRes();
-    await handler(req, res);
 
-    assert.equal(res.body.debug.initDataReceived, false);
-    assert.equal(res.body.debug.telegramUserResolved, false);
-    assert.equal(res.body.debug.currentUserInCanary, false);
-  } finally { teardown(); }
+    const reqAuthed = mockReq({ action: 'starsPlans', method: 'GET', headers: { 'x-telegram-init-data': initDataFor(555) } });
+    const resAuthed = mockRes();
+    await handler(reqAuthed, resAuthed);
+    assert.equal(resAuthed.body.starsEnabled, true);
+
+    const reqAnon = mockReq({ action: 'starsPlans', method: 'GET', headers: {} });
+    const resAnon = mockRes();
+    await handler(reqAnon, resAnon);
+    assert.equal(resAnon.body.starsEnabled, true, 'global flag applies even with no initData at all');
+  } finally { teardown(['STARS_MINIAPP_ENABLED']); }
 });
 
 test('starsCreate: rejects a request with no initData', async () => {

@@ -430,9 +430,10 @@ module.exports = async (req, res) => {
       }
 
       if (result.ok) {
+        console.log('[stars] stars_precheckout_accepted', { sessionId: result.session?.sessionId || null });
         await tg(token, 'answerPreCheckoutQuery', { pre_checkout_query_id: pcq.id, ok: true });
       } else {
-        console.warn('[WH][pre_checkout] rejected:', result.reason);
+        console.warn('[stars] stars_precheckout_rejected', { reason: result.reason });
         await tg(token, 'answerPreCheckoutQuery', {
           pre_checkout_query_id: pcq.id, ok: false,
           error_message: 'Платёж недействителен или истёк срок сессии. Попробуйте оформить подписку заново.',

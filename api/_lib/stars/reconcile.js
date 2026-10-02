@@ -72,6 +72,13 @@ async function reconcileStarsTransactions(token, { maxPages = 20, pageSize = 100
     if (!telegramById.has(chargeId)) dbOnly.push({ chargeId, paymentDocId: payment.id, status: payment.status });
   }
 
+  if (telegramOnly.length > 0 || dbOnly.length > 0) {
+    console.warn('[stars] stars_reconciliation_mismatch', {
+      telegramOnlyCount: telegramOnly.length,
+      dbOnlyCount: dbOnly.length,
+    });
+  }
+
   return {
     telegramTransactionCount: telegramById.size,
     dbPaymentCount: dbByChargeId.size,

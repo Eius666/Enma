@@ -8,6 +8,20 @@ const { starsPriceFor } = require('./config');
 
 const TG = 'https://api.telegram.org';
 
+// Observability (Telegram Stars general-release §22) — structured, grep-able
+// event names. Never logs a full charge id, initData, the bot token, or any
+// other secret; telegram/user ids are logged plain, consistent with this
+// codebase's existing logging (e.g. webhook.js already logs chatId/userId
+// freely elsewhere).
+function maskChargeId(id) {
+  if (!id || typeof id !== 'string') return null;
+  if (id.length <= 8) return '***';
+  return `${id.slice(0, 4)}…${id.slice(-4)}`;
+}
+function logEvent(event, fields) {
+  console.log(`[stars] ${event}`, fields);
+}
+
 async function tg(token, method, body) {
   const resp = await fetch(`${TG}/bot${token}/${method}`, {
     method: 'POST',
@@ -174,6 +188,14 @@ async function processStarsSuccessfulPayment({ successfulPayment, userId, telegr
     return { alreadyProcessed: false, endDate: ext.newEndDate };
   });
 
+  const chargeIdMasked = maskChargeId(chargeId);
+  if (result.alreadyProcessed) {
+    logEvent('stars_payment_duplicate', { docId, userId, chargeIdMasked });
+  } else {
+    logEvent('stars_payment_confirmed', { docId, userId, plan, period, chargeIdMasked });
+    logEvent('stars_subscription_extended', { userId, endDate: result.endDate, paymentMethod: 'stars' });
+  }
+
   return { ok: true, docId, ...result };
 }
 
@@ -217,6 +239,8 @@ async function refundStarsPayment({ paymentDocId, token, actor }) {
   });
 
   await recalculateSubscriptionEntitlement(payment.userId);
+
+  logEvent('stars_payment_refunded', { paymentDocId, userId: payment.userId, chargeIdMasked: maskChargeId(payment.telegram_payment_charge_id) });
 
   return { ok: true };
 }
