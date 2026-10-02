@@ -1184,6 +1184,53 @@ async function handleAdminStarsDiagnostics(req, res) {
   });
 }
 
+// Admin-only, self-service canary check (Telegram Stars canary rollout
+// diagnosis). Takes a real Telegram Mini App `initData` string in the body
+// — the SAME kind of value the Mini App itself sends to starsPlans/
+// starsCreate — and verifies it with the real production
+// TELEGRAM_BOT_TOKEN, so telegramUserId is never trusted from the request,
+// only derived from a passing HMAC check. Requires ADMIN_API_KEY on top of
+// that, so this can't be used to probe other users' canary status at scale
+// even though initData verification alone would already stop spoofing.
+//
+// Never returns the raw STARS_CANARY_TELEGRAM_IDS value or its list of ids.
+async function handleAdminStarsCanaryCheck(req, res) {
+  if (!requireAdmin(req, res)) return;
+
+  const { verifyInitData } = require('../_lib/verifyWebhookSig');
+  const { STARS_MINIAPP_ENABLED, starsPriceFor } = require('../_lib/stars/config');
+  const { canaryDiagnostics, isInCanary, isStarsEnabledForUser } = require('../_lib/stars/canary');
+
+  const { initData } = req.body ?? {};
+  if (!initData || typeof initData !== 'string') {
+    return res.status(400).json({ ok: false, error: 'missing_initData' });
+  }
+
+  const auth = verifyInitData(initData);
+  const telegramUserId = auth.ok ? auth.user?.id : null;
+  const diag = canaryDiagnostics();
+  const canaryMatched = telegramUserId ? isInCanary(telegramUserId) : false;
+  const finalStarsEnabled = telegramUserId ? isStarsEnabledForUser(telegramUserId) : false;
+
+  return res.status(200).json({
+    ok: true,
+    telegramUserResolved: auth.ok && !!telegramUserId,
+    telegramUserId: auth.ok ? telegramUserId : null, // admin-only response — the admin already knows whose initData this is
+    envPresent: diag.envPresent,
+    entriesCountRaw: diag.entriesCountRaw,
+    entriesCountValid: diag.entriesCountValid,
+    allEntriesNumeric: diag.allEntriesNumeric,
+    globalEnabled: STARS_MINIAPP_ENABLED,
+    canaryMatched,
+    isStarsEnabledForUserResult: finalStarsEnabled,
+    // The exact same computation starsPlans itself would return for this user.
+    starsPlansEquivalent: {
+      starsEnabled: finalStarsEnabled,
+      starsPrice: starsPriceFor('pro', 'month'),
+    },
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Admin: TOTP 2FA — verify and setup
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1404,6 +1451,7 @@ module.exports = async (req, res) => {
       case 'adminMessages':         return await handleAdminMessages(req, res);
       case 'adminAiUsage':          return await handleAdminAiUsage(req, res);
       case 'adminStarsDiagnostics': return await handleAdminStarsDiagnostics(req, res);
+      case 'adminStarsCanaryCheck': return await handleAdminStarsCanaryCheck(req, res);
       default:
         return res.status(404).json({ error: `Unknown AI action: ${action}` });
     }

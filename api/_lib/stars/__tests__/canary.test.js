@@ -66,3 +66,73 @@ test('isStarsEnabledForUser: string vs number id are treated the same (Telegram 
     assert.equal(isStarsEnabledForUser('555'), true);
   } finally { teardown(['STARS_CANARY_TELEGRAM_IDS']); }
 });
+
+// ── canaryDiagnostics / isInCanary — safe runtime introspection ────────────
+
+test('canaryDiagnostics: unset env — envPresent false, zero entries, not "numeric" (nothing to be numeric)', () => {
+  reload({});
+  try {
+    const { canaryDiagnostics } = require('../canary');
+    const d = canaryDiagnostics();
+    assert.equal(d.envPresent, false);
+    assert.equal(d.entriesCountRaw, 0);
+    assert.equal(d.entriesCountValid, 0);
+    assert.equal(d.allEntriesNumeric, false);
+  } finally { teardown([]); }
+});
+
+test('canaryDiagnostics: well-formed single id — present, 1/1, numeric', () => {
+  reload({ STARS_CANARY_TELEGRAM_IDS: '798608938' });
+  try {
+    const { canaryDiagnostics } = require('../canary');
+    const d = canaryDiagnostics();
+    assert.equal(d.envPresent, true);
+    assert.equal(d.entriesCountRaw, 1);
+    assert.equal(d.entriesCountValid, 1);
+    assert.equal(d.allEntriesNumeric, true);
+  } finally { teardown(['STARS_CANARY_TELEGRAM_IDS']); }
+});
+
+test('canaryDiagnostics: bracketed/quoted value — present, raw=1, valid=0, NOT numeric (flags the exact malformed-entry case)', () => {
+  reload({ STARS_CANARY_TELEGRAM_IDS: '[798608938]' });
+  try {
+    const { canaryDiagnostics } = require('../canary');
+    const d = canaryDiagnostics();
+    assert.equal(d.envPresent, true);
+    assert.equal(d.entriesCountRaw, 1);
+    assert.equal(d.entriesCountValid, 0);
+    assert.equal(d.allEntriesNumeric, false);
+  } finally { teardown(['STARS_CANARY_TELEGRAM_IDS']); }
+});
+
+test('canaryDiagnostics: mixed valid + invalid entries — raw > valid, flagged not-all-numeric', () => {
+  reload({ STARS_CANARY_TELEGRAM_IDS: '111,owner,333' });
+  try {
+    const { canaryDiagnostics } = require('../canary');
+    const d = canaryDiagnostics();
+    assert.equal(d.entriesCountRaw, 3);
+    assert.equal(d.entriesCountValid, 2);
+    assert.equal(d.allEntriesNumeric, false);
+  } finally { teardown(['STARS_CANARY_TELEGRAM_IDS']); }
+});
+
+test('canaryDiagnostics: never exposes the raw value — JSON.stringify of its result contains no digit run from the real id', () => {
+  reload({ STARS_CANARY_TELEGRAM_IDS: '798608938' });
+  try {
+    const { canaryDiagnostics } = require('../canary');
+    const serialized = JSON.stringify(canaryDiagnostics());
+    assert.ok(!serialized.includes('798608938'));
+  } finally { teardown(['STARS_CANARY_TELEGRAM_IDS']); }
+});
+
+test('isInCanary: true only for the exact matching id, false for null/undefined/other', () => {
+  reload({ STARS_CANARY_TELEGRAM_IDS: '798608938' });
+  try {
+    const { isInCanary } = require('../canary');
+    assert.equal(isInCanary(798608938), true);
+    assert.equal(isInCanary('798608938'), true);
+    assert.equal(isInCanary(111), false);
+    assert.equal(isInCanary(null), false);
+    assert.equal(isInCanary(undefined), false);
+  } finally { teardown(['STARS_CANARY_TELEGRAM_IDS']); }
+});

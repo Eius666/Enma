@@ -231,6 +231,11 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
   // whether the Mini App flow is rolled out yet (Telegram Stars Audit §6/§25).
   const [starsEnabled, setStarsEnabled] = useState(false);
   const [starsPrice,   setStarsPrice]   = useState<number | null>(null);
+  // TEMPORARY — surfaces the safe canary diagnostic fields straight in the
+  // UI so the owner can read them off-screen with zero devtools/CLI steps
+  // during the live canary rollout check. Remove this state + its render
+  // block once the canary mismatch is confirmed resolved.
+  const [starsDebug, setStarsDebug] = useState<Record<string, unknown> | null>(null);
 
   const pollRef   = useRef<ReturnType<typeof setInterval>|null>(null);
   const payBtnRef = useRef<HTMLButtonElement>(null);
@@ -269,6 +274,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
         if (!d.ok) return;
         setStarsEnabled(!!d.starsEnabled);
         setStarsPrice(d.pro?.month?.starsPrice ?? null);
+        if (d.debug) setStarsDebug(d.debug);
       })
       .catch(() => {});
   }, []);
@@ -725,6 +731,19 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
         <h2 className="subscription-panel__title">{t.title}</h2>
         <p className="subscription-panel__subtitle">{t.subtitle}</p>
       </div>
+
+      {/* TEMPORARY — Stars canary diagnostic readout. Safe: derived counts/
+          booleans only, never the raw allowlist or its contents. Remove this
+          block once the canary mismatch is confirmed resolved. */}
+      {starsDebug && (
+        <div style={{
+          fontSize: 11, lineHeight: 1.5, color: 'var(--text-tertiary, #888)',
+          background: 'rgba(127,127,127,0.08)', borderRadius: 8, padding: '8px 10px',
+          margin: '0 0 12px', fontFamily: 'monospace', wordBreak: 'break-word',
+        }}>
+          stars-debug: {JSON.stringify(starsDebug)}
+        </div>
+      )}
 
       {/* Trial banner */}
       {showTrialBanner && (
