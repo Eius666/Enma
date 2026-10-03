@@ -11,6 +11,10 @@
 # production
 /build
 
+# generated at build time (scripts/generateBuildId.js) — never committed,
+# fresh on every build, read at runtime by api/version.js
+/api/_generated
+
 # misc
 .DS_Store
 .env.local

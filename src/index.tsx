@@ -1,6 +1,12 @@
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import reportWebVitals from './reportWebVitals';
+import { checkBuildFreshness, unregisterStaleServiceWorkers } from './buildFreshness';
+
+// Runs before anything else — a stale cached bundle (Telegram WebView / a
+// long-lived browser tab) needs to catch itself as early as possible.
+unregisterStaleServiceWorkers();
+checkBuildFreshness();
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement

@@ -59,9 +59,10 @@ function mockReq({ action, method = 'POST', body, headers = {}, query = {} }) {
 }
 function mockRes() {
   const res = {
-    statusCode: null, body: null,
+    statusCode: null, body: null, headers: {},
     status(code) { this.statusCode = code; return this; },
     json(payload) { this.body = payload; return this; },
+    setHeader(k, v) { this.headers[k] = v; return this; },
   };
   return res;
 }

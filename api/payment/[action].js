@@ -437,6 +437,11 @@ async function handleTrial(req, res) {
 async function handleStarsPlans(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'Method not allowed' });
 
+  // Per-caller result (canary/global flag, future price changes) — must
+  // never be cached by a shared/CDN cache, and a client shouldn't reuse an
+  // old response across page loads either.
+  res.setHeader('Cache-Control', 'private, no-store');
+
   const initData = req.headers['x-telegram-init-data'] ?? '';
   const auth = initData ? verifyInitData(initData) : { ok: false };
   const telegramUserId = auth.ok ? auth.user?.id : null;
@@ -548,6 +553,9 @@ async function handleStarsCreate(req, res) {
 
 async function handleStarsSession(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'Method not allowed' });
+
+  // Polled payment status — must always hit the network, never a cache.
+  res.setHeader('Cache-Control', 'private, no-store');
 
   const initData = req.headers['x-telegram-init-data'] ?? '';
   const auth     = verifyInitData(initData);
