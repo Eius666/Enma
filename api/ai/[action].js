@@ -569,7 +569,16 @@ function requireAdmin(req, res) {
 //    emails, or document contents, ever.
 // ─────────────────────────────────────────────────────────────────────────────
 async function handleAdminTelegramMappingAudit(req, res) {
-  if (!requireAdmin(req, res)) return;
+  // Local admin check (not the shared requireAdmin — this endpoint's
+  // response shape is intentionally its own, see audit §6, and must not
+  // change the shared helper's behavior for every other admin action).
+  // The router above already enforces POST-only for every /api/ai/*
+  // action before this function is ever reached, so a non-POST request
+  // never gets here at all.
+  const adminKey = process.env.ADMIN_API_KEY;
+  if (!adminKey || req.headers['x-admin-key'] !== adminKey) {
+    return res.status(403).json({ ok: false, code: 'ADMIN_UNAUTHORIZED' });
+  }
 
   // §1: prove the existing Firebase Admin initialization + a real Firestore
   // read both work, without ever touching the env var ourselves.
@@ -577,7 +586,7 @@ async function handleAdminTelegramMappingAudit(req, res) {
     await db.collection('users').limit(1).get();
   } catch {
     console.error('[admin/telegramMappingAudit] FIRESTORE_QUERY_FAILED');
-    return res.status(500).json({ errorCode: 'FIRESTORE_QUERY_FAILED', safeMessage: 'Could not read Firestore.' });
+    return res.status(500).json({ ok: false, code: 'AUDIT_FAILED' });
   }
 
   try {
@@ -641,8 +650,8 @@ async function handleAdminTelegramMappingAudit(req, res) {
       telegramUsersWithoutResolvableAccount,
     });
   } catch {
-    console.error('[admin/telegramMappingAudit] AUDIT_QUERY_FAILED');
-    return res.status(500).json({ errorCode: 'AUDIT_QUERY_FAILED', safeMessage: 'Audit computation failed.' });
+    console.error('[admin/telegramMappingAudit] AUDIT_FAILED');
+    return res.status(500).json({ ok: false, code: 'AUDIT_FAILED' });
   }
 }
 
