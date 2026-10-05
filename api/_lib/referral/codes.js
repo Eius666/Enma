@@ -1,6 +1,7 @@
 'use strict';
 
 const { db, admin } = require('../firebaseAdmin');
+const { botUsername } = require('./botUsername');
 
 // Unambiguous characters (no 0/O, 1/I/l)
 const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -32,8 +33,7 @@ async function ensureReferralCode(userId) {
   }
   if (!code) return null;
 
-  const botUsername = process.env.TELEGRAM_BOT_USERNAME || 'EnmaAI_bot';
-  const referralLink = `https://t.me/${botUsername}?start=ref_${code}`;
+  const referralLink = `https://t.me/${botUsername()}?start=ref_${code}`;
 
   await userRef.set({
     referralCode: code,

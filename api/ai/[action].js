@@ -519,8 +519,21 @@ async function resolveLiveBotUsername() {
 
 async function handlePartnerBotInfo(req, res) {
   const liveUsername = await resolveLiveBotUsername();
+  // configBotUsername is what the consumer referral links (codes.js,
+  // commands.js — not touched by this endpoint) currently resolve to:
+  // process.env.TELEGRAM_BOT_USERNAME if set, else the same hardcoded
+  // fallback. Neither value is secret (a bot's @username is public) — this
+  // is a safe runtime read, not a raw env dump, and it's the only way to
+  // tell whether TELEGRAM_BOT_USERNAME is actually correct in production
+  // without being able to read a Sensitive-masked env var directly.
+  const configUsername = botUsername();
   res.setHeader('Cache-Control', 'public, max-age=300');
-  return res.status(200).json({ ok: true, botUsername: liveUsername });
+  return res.status(200).json({
+    ok: true,
+    botUsername: liveUsername,
+    configBotUsername: configUsername,
+    configMatchesLive: configUsername === liveUsername,
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1373,8 +1386,7 @@ async function handleReferralInfo(req, res) {
   const userSnap = await db.collection('users').doc(userId).get();
   const userData = userSnap.exists ? userSnap.data() : {};
 
-  const botUsername   = process.env.TELEGRAM_BOT_USERNAME || 'EnmaAI_bot';
-  const referralLink  = code ? `https://t.me/${botUsername}?start=ref_${code}` : (userData.referralLink || null);
+  const referralLink  = code ? `https://t.me/${botUsername()}?start=ref_${code}` : (userData.referralLink || null);
 
   // Count referrals this user has made
   const referralsSnap = await db.collection('referrals').where('referrerId', '==', userId).get();

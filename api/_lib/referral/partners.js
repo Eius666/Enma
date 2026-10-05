@@ -24,6 +24,7 @@
 const { db, admin } = require('../firebaseAdmin');
 const { findUserByReferralCode, handleReferralStart } = require('./codes');
 const { recordInfluencerReferral } = require('./influencer');
+const { botUsername } = require('./botUsername');
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I, matches codes.js's ambiguity rule
 const CODE_LEN = 6;
@@ -45,10 +46,6 @@ async function generateUniquePartnerCode() {
     if (!snap.exists) return code;
   }
   throw new Error('Could not generate a unique partner code');
-}
-
-function botUsername() {
-  return process.env.TELEGRAM_BOT_USERNAME || 'EnmaAI_bot';
 }
 
 function normalizePlatform(p) {

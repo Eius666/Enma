@@ -188,7 +188,7 @@ test('getPartnerSummary: aggregates referrer + links + recent earnings', async (
     assert.equal(summary.payments, 1);
     assert.equal(summary.pendingPayout, 300);
     assert.equal(summary.links.length, 1);
-    assert.equal(summary.links[0].url, 'https://t.me/EnmaAI_bot?start=ref_SASHA1_tg');
+    assert.equal(summary.links[0].url, 'https://t.me/YourArc_bot?start=ref_SASHA1_tg');
     assert.equal(summary.recentEarnings.length, 1);
   } finally { teardown(); }
 });

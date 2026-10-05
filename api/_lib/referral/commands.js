@@ -2,6 +2,7 @@
 
 const { db, admin } = require('../firebaseAdmin');
 const { ensureReferralCode } = require('./codes');
+const { botUsername } = require('./botUsername');
 
 const TG = 'https://api.telegram.org';
 const TON_ADDRESS_RE = /^[UE][A-Za-z0-9_-]{46,48}$/;
@@ -18,8 +19,7 @@ async function tg(token, method, body) {
 // /referral — show link and stats
 async function handleReferralCommand(token, chatId, userId) {
   const code = await ensureReferralCode(userId);
-  const botUsername  = process.env.TELEGRAM_BOT_USERNAME || 'EnmaAI_bot';
-  const referralLink = `https://t.me/${botUsername}?start=ref_${code}`;
+  const referralLink = `https://t.me/${botUsername()}?start=ref_${code}`;
 
   const [refSnap, userDoc] = await Promise.all([
     db.collection('referrals').where('referrerId', '==', userId).get(),
