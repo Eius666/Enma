@@ -6,6 +6,17 @@ export const useTelegramWebApp = (): TelegramWebApp | null => {
 
   useEffect(() => {
     const tg = getTelegramWebApp();
+    // Safe runtime diagnostic — presence/length only, NEVER the raw
+    // initData string (it's HMAC-verified server-side, but it's still a
+    // per-user payload and has no business in client logs). initDataUnsafe
+    // is reported here for visibility only, same as it's used everywhere
+    // else in this app — never as a trust source. See TELEGRAM_AUTOLOGIN audit.
+    console.log('[telegram] runtime', {
+      webAppPresent: !!tg,
+      initDataPresent: !!tg?.initData,
+      initDataLength: tg?.initData?.length ?? 0,
+      initDataUnsafeUserPresent: !!tg?.initDataUnsafe?.user, // diagnostic only
+    });
     if (!tg) return;
     tg.ready();
     tg.expand();

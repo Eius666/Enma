@@ -3,10 +3,18 @@
 const crypto = require('crypto');
 const { admin, db } = require('../_lib/firebaseAdmin');
 
+// Same freshness window as the (separate, Login-Widget-specific) check in
+// _lib/referral/partnerAuth.js — Telegram's own recommended practice for
+// both of its two distinct initData-signing schemes.
+const INIT_DATA_MAX_AGE_S = 24 * 60 * 60;
+
+// Returns { ok, params?, reason? }. `reason` is one of 'missing_hash',
+// 'bad_signature', 'missing_auth_date', 'expired' — safe to log, never the
+// initData itself.
 function verifyInitData(initData, botToken) {
   const params = new URLSearchParams(initData);
   const hash = params.get('hash');
-  if (!hash) return null;
+  if (!hash) return { ok: false, reason: 'missing_hash' };
 
   params.delete('hash');
   const dataCheckString = [...params.entries()]
@@ -17,12 +25,22 @@ function verifyInitData(initData, botToken) {
   const secret = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
   const expected = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex');
 
+  let validSignature = false;
   try {
-    if (!crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(expected, 'hex'))) return null;
+    validSignature = hash.length === expected.length &&
+      crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(expected, 'hex'));
   } catch {
-    return null;
+    validSignature = false;
   }
-  return params;
+  if (!validSignature) return { ok: false, reason: 'bad_signature' };
+
+  const authDate = Number(params.get('auth_date'));
+  if (!Number.isFinite(authDate)) return { ok: false, reason: 'missing_auth_date' };
+  if (Math.abs(Date.now() / 1000 - authDate) > INIT_DATA_MAX_AGE_S) {
+    return { ok: false, reason: 'expired' };
+  }
+
+  return { ok: true, params };
 }
 
 async function resolveCanonicalUid(telegramId, chatId) {
@@ -79,41 +97,70 @@ async function resolveCanonicalUid(telegramId, chatId) {
   return chosenUid;
 }
 
-module.exports = async (req, res) => {
+async function telegramAuthHandler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  // Safe structured log — booleans and non-secret ids only. Never the raw
+  // initData string, the bot token, or the signed custom token. See
+  // TELEGRAM_AUTOLOGIN audit §7.
+  const diag = {
+    initDataReceived: false,
+    hmacValid: false,
+    authDateValid: false,
+    telegramUserIdResolved: false,
+    enmaUserResolved: false,
+  };
+
   const { initData } = req.body ?? {};
-  if (!initData || typeof initData !== 'string') {
+  diag.initDataReceived = !!initData && typeof initData === 'string';
+  if (!diag.initDataReceived) {
+    console.log('[auth/telegram]', diag);
     return res.status(400).json({ error: 'Missing initData' });
   }
 
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  if (!botToken) return res.status(500).json({ error: 'Server misconfigured' });
+  if (!botToken) {
+    console.log('[auth/telegram]', diag, { reason: 'server_misconfigured' });
+    return res.status(500).json({ error: 'Server misconfigured' });
+  }
 
-  const params = verifyInitData(initData, botToken);
-  if (!params) return res.status(401).json({ error: 'Invalid initData signature' });
+  const verified = verifyInitData(initData, botToken);
+  diag.hmacValid = verified.ok || verified.reason !== 'bad_signature';
+  diag.authDateValid = verified.ok || (verified.reason !== 'missing_auth_date' && verified.reason !== 'expired');
+  if (!verified.ok) {
+    console.log('[auth/telegram]', diag, { reason: verified.reason });
+    return res.status(401).json({ error: 'Invalid initData signature' });
+  }
+  const params = verified.params;
 
   let tgUser;
   try {
     tgUser = JSON.parse(params.get('user') || '{}');
   } catch {
+    console.log('[auth/telegram]', diag, { reason: 'bad_user_payload' });
     return res.status(400).json({ error: 'Invalid user payload' });
   }
 
   const telegramId = tgUser.id;
-  if (!telegramId) return res.status(400).json({ error: 'Missing user.id' });
+  diag.telegramUserIdResolved = !!telegramId;
+  if (!telegramId) {
+    console.log('[auth/telegram]', diag);
+    return res.status(400).json({ error: 'Missing user.id' });
+  }
 
   try {
     const uid        = await resolveCanonicalUid(telegramId, telegramId);
     const startParam = params.get('start_param') || null;
     const isNewUser  = await setupNewUserIfNeeded(uid, tgUser, startParam);
     const token      = await admin.auth().createCustomToken(uid);
+    diag.enmaUserResolved = true;
+    console.log('[auth/telegram]', diag, { isNewUser });
     return res.status(200).json({ token, uid, isNewUser });
   } catch (err) {
     console.error('[auth/telegram] error', err);
     return res.status(500).json({ error: 'Auth failed' });
   }
-};
+}
 
 const TRIAL_DAYS = 7;
 
@@ -180,3 +227,8 @@ async function setupNewUserIfNeeded(uid, tgUser, startParam) {
 
   return true;
 }
+
+module.exports = telegramAuthHandler;
+// Named export purely for unit testing (see __tests__/telegram.test.js) —
+// Vercel's runtime only ever calls module.exports() itself, same as before.
+module.exports.verifyInitData = verifyInitData;

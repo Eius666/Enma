@@ -27,6 +27,7 @@ import { Timestamp, doc, getDoc, serverTimestamp, setDoc, collection, query, whe
 import './App.v2.css';
 import { auth, db } from './firebase';
 import { useTelegramWebApp } from './hooks/useTelegramWebApp';
+import { decideBootstrap, AuthStatus } from './lib/authBootstrap';
 
 import { AuthScreen } from './components/workspaces/AuthScreen';
 import DayList, { DayTask } from './components/DayList';
@@ -671,6 +672,12 @@ const App: React.FC = () => {
   const [calPreDate, setCalPreDate] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  // See src/lib/authBootstrap.ts / TELEGRAM_AUTOLOGIN audit: kept separate
+  // from `authLoading`/`user` specifically so the render layer can tell
+  // "no session yet, but a Telegram auto-auth attempt is in flight" apart
+  // from "no session and nothing else is going to happen" — the former
+  // must never show the manual login screen.
+  const [authStatus, setAuthStatus] = useState<AuthStatus>('checking');
   const prevUserId = useRef<string | null>(null);
   const anonAttemptedRef = useRef(false);
 
@@ -777,38 +784,66 @@ const App: React.FC = () => {
     const unsubscribe = onAuthStateChanged(auth, current => {
       setUser(current);
       setAuthLoading(false);
+      if (current) setAuthStatus('authenticated');
     });
     return unsubscribe;
   }, []);
 
+  // Telegram auto-auth bootstrap (TELEGRAM_AUTOLOGIN audit). Gates on raw
+  // `telegram.initData` ONLY — never `initDataUnsafe` — because that's the
+  // one value the backend can actually HMAC-verify; initDataUnsafe is
+  // diagnostics-only (see useTelegramWebApp's runtime log) and must never
+  // decide whether we attempt or trust an auth flow.
+  //
+  // decideBootstrap is a pure function (src/lib/authBootstrap.ts, unit
+  // tested) specifically so the "don't show the login screen while Telegram
+  // auth is still in flight" rule can't silently regress again — this is
+  // the exact race this audit was opened for.
   useEffect(() => {
-    if (authLoading || user || anonAttemptedRef.current) return;
-    if (!telegram?.initDataUnsafe?.user?.id) return;
+    if (authLoading) return;
+
+    const decision = decideBootstrap({
+      hasExistingSession: !!user,
+      telegramInitDataPresent: !!telegram?.initData,
+      alreadyAttemptedTelegramAuth: anonAttemptedRef.current,
+    });
+
+    if (decision === 'wait') return;
+
+    if (decision === 'unauthenticated') {
+      setAuthStatus('unauthenticated');
+      return;
+    }
+
+    // decision === 'telegram_auth'
+    setAuthStatus('telegram_auth');
     anonAttemptedRef.current = true;
 
     (async () => {
       // Try custom token first (gives permanent UID tied to Telegram ID)
       try {
-        if (telegram.initData) {
-          const res = await fetch('/api/auth/telegram', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ initData: telegram.initData }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.token) {
-              await signInWithCustomToken(auth, data.token);
-              if (data.isNewUser) setShowOnboarding(true);
-              return;
-            }
+        const res = await fetch('/api/auth/telegram', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData: telegram!.initData }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.token) {
+            await signInWithCustomToken(auth, data.token);
+            if (data.isNewUser) setShowOnboarding(true);
+            return; // onAuthStateChanged will fire next and set 'authenticated'
           }
         }
       } catch (err) {
         console.warn('Custom token auth failed, falling back to anonymous', err);
       }
-      // Fallback: anonymous (covers dev/localhost without valid initData)
-      signInAnonymously(auth).catch(err => console.warn('Anonymous sign-in failed', err));
+      // Fallback: anonymous (covers a verified-Telegram session where the
+      // backend call itself failed, e.g. a transient network error)
+      signInAnonymously(auth).catch(err => {
+        console.warn('Anonymous sign-in failed', err);
+        setAuthStatus('unauthenticated');
+      });
     })();
   }, [authLoading, user, telegram]);
 
@@ -1549,7 +1584,13 @@ const App: React.FC = () => {
     if (tabId !== 'habits')    { setHabitsView('list');   setActiveHabitId(null); }
   };
 
-  if (authLoading) {
+  // 'checking' (Firebase restoring any persisted session) AND 'telegram_auth'
+  // (a Telegram auto-auth attempt is in flight) both keep showing this
+  // loading screen — never AuthScreen. This is the exact fix for
+  // TELEGRAM_AUTOLOGIN: a fresh Telegram session used to fall through to the
+  // manual login screen the instant Firebase reported "no session", even
+  // though the Telegram sign-in attempt had not even started yet.
+  if (authLoading || authStatus === 'checking' || authStatus === 'telegram_auth') {
     return (
       <div className={`auth-screen theme-${theme}`}>
         <div className="auth-card loading-card">
