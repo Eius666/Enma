@@ -13,7 +13,18 @@
 // had a chance to run or finish. `authStatus` adds a distinct
 // 'telegram_auth' state so the render layer can keep showing a loading
 // screen (never AuthScreen) while that attempt is in flight.
-export type AuthStatus = 'checking' | 'telegram_auth' | 'authenticated' | 'unauthenticated';
+// 'telegram_auth_error' is reached only from 'telegram_auth' (the attempt
+// itself failed) — never reached directly from 'checking'. Per
+// TELEGRAM_PASSWORDLESS_AUTOAUTH audit §1: 'unauthenticated' (the manual
+// AuthScreen rendering automatically) is reserved for "genuinely not inside
+// Telegram at all" — a failed Telegram attempt must show a distinct retry
+// screen instead, never silently fall through to the password form.
+export type AuthStatus =
+  | 'checking'
+  | 'telegram_auth'
+  | 'telegram_auth_error'
+  | 'authenticated'
+  | 'unauthenticated';
 
 // Called once Firebase's own session restore has resolved to "no user" and
 // at most one Telegram-auth attempt has happened. Decides what to do next.

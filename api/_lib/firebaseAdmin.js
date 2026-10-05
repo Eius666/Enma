@@ -1,25 +1,39 @@
 const admin = require('firebase-admin');
 
+// A JSON.parse SyntaxError's own .message embeds a snippet of the string it
+// failed on (confirmed the hard way — see TELEGRAM_PASSWORDLESS_AUTOAUTH
+// incident report). Never let that propagate: catch here and throw a fixed,
+// safe message instead, regardless of what the malformed value contained.
 const getServiceAccount = () => {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (!raw) {
-    throw new Error('Missing FIREBASE_SERVICE_ACCOUNT');
+    throw new Error('FIREBASE_CONFIG_MISSING');
   }
 
-  if (raw.trim().startsWith('{')) {
-    return JSON.parse(raw);
+  try {
+    if (raw.trim().startsWith('{')) {
+      return JSON.parse(raw);
+    }
+    const decoded = Buffer.from(raw, 'base64').toString('utf8');
+    return JSON.parse(decoded);
+  } catch {
+    throw new Error('FIREBASE_CONFIG_PARSE_FAILED');
   }
-
-  const decoded = Buffer.from(raw, 'base64').toString('utf8');
-  return JSON.parse(decoded);
 };
 
 const initAdmin = () => {
   if (admin.apps.length) return admin;
   const serviceAccount = getServiceAccount();
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
-  });
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+  } catch {
+    // Same reasoning as getServiceAccount: never let whatever the SDK's own
+    // error message happens to contain (it shouldn't echo the key, but this
+    // costs nothing to guard) propagate up.
+    throw new Error('FIREBASE_INIT_FAILED');
+  }
   return admin;
 };
 

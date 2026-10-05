@@ -553,6 +553,99 @@ function requireAdmin(req, res) {
   return true;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TEMPORARY — TELEGRAM_PASSWORDLESS_AUTOAUTH read-only production audit.
+// Admin-gated, read-only, aggregate counts only. Remove this handler and its
+// router entry once the one-time audit has been run (see final report).
+//
+// Safety rules enforced throughout:
+//  - Never reads process.env.FIREBASE_SERVICE_ACCOUNT itself — relies
+//    entirely on the existing top-of-file `db`/`admin` from firebaseAdmin.js,
+//    exactly like every other handler in this file.
+//  - Every Firestore call is inside its own try/catch; no error object, raw
+//    input, or env value is ever included in a response or a log line —
+//    only a fixed errorCode + safeMessage.
+//  - Response contains ONLY integer counts. No user ids, Telegram ids,
+//    emails, or document contents, ever.
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleAdminTelegramMappingAudit(req, res) {
+  if (!requireAdmin(req, res)) return;
+
+  // §1: prove the existing Firebase Admin initialization + a real Firestore
+  // read both work, without ever touching the env var ourselves.
+  try {
+    await db.collection('users').limit(1).get();
+  } catch {
+    console.error('[admin/telegramMappingAudit] FIRESTORE_QUERY_FAILED');
+    return res.status(500).json({ errorCode: 'FIRESTORE_QUERY_FAILED', safeMessage: 'Could not read Firestore.' });
+  }
+
+  try {
+    const usersSnap = await db.collection('users').select('chatId').get();
+
+    // telegramId (as a string, normalizing the number/string chatId type
+    // inconsistency this whole audit exists to account for) -> Set(uid)
+    const chatIdToUids = new Map();
+    usersSnap.forEach((doc) => {
+      const chatId = doc.data().chatId;
+      if (chatId === undefined || chatId === null || chatId === '') return;
+      const key = String(chatId);
+      if (!chatIdToUids.has(key)) chatIdToUids.set(key, new Set());
+      chatIdToUids.get(key).add(doc.id);
+    });
+
+    // Fold in the telegramUsers/tg_<id> -> firebaseUid mapping (written by
+    // the frontend for ANY authenticated session with Telegram context,
+    // including email/password users) as an additional resolution signal —
+    // same merge resolveCanonicalUid itself performs.
+    const telegramUsersSnap = await db.collection('telegramUsers').get();
+    let telegramUsersWithoutResolvableAccount = 0;
+    for (const doc of telegramUsersSnap.docs) {
+      const firebaseUid = doc.data()?.firebaseUid;
+      if (!firebaseUid) continue;
+      const mappedSnap = await db.collection('users').doc(firebaseUid).get();
+      if (!mappedSnap.exists) {
+        telegramUsersWithoutResolvableAccount++;
+        continue;
+      }
+      const key = doc.id.replace(/^tg_/, '');
+      if (!chatIdToUids.has(key)) chatIdToUids.set(key, new Set());
+      chatIdToUids.get(key).add(firebaseUid);
+    }
+
+    let telegramLinkedUsers = 0;
+    let uniquelyResolvableUsers = 0;
+    let duplicateTelegramMappings = 0;
+    for (const uids of chatIdToUids.values()) {
+      telegramLinkedUsers++;
+      if (uids.size === 1) uniquelyResolvableUsers++;
+      else if (uids.size > 1) duplicateTelegramMappings++;
+    }
+
+    // canonicalUids/tg_<id> docs whose resolved uid no longer corresponds to
+    // an existing users doc — a previously-resolved mapping gone dangling.
+    const canonicalUidsSnap = await db.collection('canonicalUids').get();
+    let missingUidMapping = 0;
+    for (const doc of canonicalUidsSnap.docs) {
+      const uid = doc.data()?.uid;
+      if (!uid) continue;
+      const uidSnap = await db.collection('users').doc(uid).get();
+      if (!uidSnap.exists) missingUidMapping++;
+    }
+
+    return res.status(200).json({
+      telegramLinkedUsers,
+      uniquelyResolvableUsers,
+      missingUidMapping,
+      duplicateTelegramMappings,
+      telegramUsersWithoutResolvableAccount,
+    });
+  } catch {
+    console.error('[admin/telegramMappingAudit] AUDIT_QUERY_FAILED');
+    return res.status(500).json({ errorCode: 'AUDIT_QUERY_FAILED', safeMessage: 'Audit computation failed.' });
+  }
+}
+
 async function handleAdminStats(req, res) {
   if (!requireAdmin(req, res)) return;
 
@@ -1505,6 +1598,9 @@ module.exports = async (req, res) => {
       case 'adminAiUsage':          return await handleAdminAiUsage(req, res);
       case 'adminStarsDiagnostics': return await handleAdminStarsDiagnostics(req, res);
       case 'adminStarsCanaryCheck': return await handleAdminStarsCanaryCheck(req, res);
+      // TEMPORARY — see handleAdminTelegramMappingAudit's own comment. Remove
+      // this line + the handler above once the one-time audit has run.
+      case 'adminTelegramMappingAudit': return await handleAdminTelegramMappingAudit(req, res);
       default:
         return res.status(404).json({ error: `Unknown AI action: ${action}` });
     }

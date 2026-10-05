@@ -19,7 +19,6 @@ import {
 import {
   User,
   onAuthStateChanged,
-  signInAnonymously,
   signInWithCustomToken,
   signOut
 } from 'firebase/auth';
@@ -204,6 +203,10 @@ const SUPPORTED_CURRENCIES: Currency[] = ['RUB', 'USD', 'EUR', 'BYN', 'CNY'];
 const translations = {
   en: {
     authLoading: 'Checking credentials...',
+    authLoadingTelegram: 'Signing in via Telegram…',
+    authTelegramErrorTitle: "Couldn't sign in via Telegram automatically.",
+    authTelegramErrorRetry: 'Retry Telegram sign-in',
+    authTelegramErrorOther: 'Use another way to sign in',
     authBadge: 'Welcome back',
     authTitle: 'Access your organizer',
     authSubtitle: 'Sign in with your email to start planning your day, notes, and finances.',
@@ -363,6 +366,10 @@ const translations = {
   },
   ru: {
     authLoading: 'Проверяем доступ...',
+    authLoadingTelegram: 'Входим через Telegram…',
+    authTelegramErrorTitle: 'Не удалось автоматически войти через Telegram.',
+    authTelegramErrorRetry: 'Повторить вход через Telegram',
+    authTelegramErrorOther: 'Другой способ входа',
     authBadge: 'С возвращением',
     authTitle: 'Доступ к органайзеру',
     authSubtitle: 'Войдите по email, чтобы планировать день, заметки и финансы.',
@@ -679,7 +686,7 @@ const App: React.FC = () => {
   // must never show the manual login screen.
   const [authStatus, setAuthStatus] = useState<AuthStatus>('checking');
   const prevUserId = useRef<string | null>(null);
-  const anonAttemptedRef = useRef(false);
+  const telegramAuthAttemptedRef = useRef(false);
 
   const [tasks, setTasks] = useState<CalendarTask[]>([]);
   const [notes, setNotes] = useState<NotePage[]>([]);
@@ -789,12 +796,42 @@ const App: React.FC = () => {
     return unsubscribe;
   }, []);
 
-  // Telegram auto-auth bootstrap (TELEGRAM_AUTOLOGIN audit). Gates on raw
-  // `telegram.initData` ONLY — never `initDataUnsafe` — because that's the
-  // one value the backend can actually HMAC-verify; initDataUnsafe is
-  // diagnostics-only (see useTelegramWebApp's runtime log) and must never
-  // decide whether we attempt or trust an auth flow.
+  // Telegram auto-auth bootstrap (TELEGRAM_PASSWORDLESS_AUTOAUTH audit).
+  // Gates on raw `telegram.initData` ONLY — never `initDataUnsafe` —
+  // because that's the one value the backend can actually HMAC-verify;
+  // initDataUnsafe is diagnostics-only (see useTelegramWebApp's runtime
+  // log) and must never decide whether we attempt or trust an auth flow.
   //
+  // Deliberately does NOT fall back to signInAnonymously on failure
+  // (removed — audit §1/§7): an anonymous Firebase user is a BRAND NEW,
+  // disconnected identity, which is exactly the "duplicate account" outcome
+  // this whole effort exists to prevent. If the verified-Telegram attempt
+  // fails, the user sees a distinct retry screen (authStatus becomes
+  // 'telegram_auth_error') — never a silently-empty new account, never the
+  // manual AuthScreen automatically.
+  const attemptTelegramAuth = useCallback(async (initData: string) => {
+    setAuthStatus('telegram_auth');
+    try {
+      const res = await fetch('/api/auth/telegram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ initData }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.token) {
+          await signInWithCustomToken(auth, data.token);
+          if (data.isNewUser) setShowOnboarding(true);
+          return; // onAuthStateChanged fires next and sets 'authenticated'
+        }
+      }
+      throw new Error(`backend rejected (status ${res.status})`);
+    } catch (err) {
+      console.warn('Telegram auto-auth failed', err);
+      setAuthStatus('telegram_auth_error');
+    }
+  }, []);
+
   // decideBootstrap is a pure function (src/lib/authBootstrap.ts, unit
   // tested) specifically so the "don't show the login screen while Telegram
   // auth is still in flight" rule can't silently regress again — this is
@@ -805,7 +842,7 @@ const App: React.FC = () => {
     const decision = decideBootstrap({
       hasExistingSession: !!user,
       telegramInitDataPresent: !!telegram?.initData,
-      alreadyAttemptedTelegramAuth: anonAttemptedRef.current,
+      alreadyAttemptedTelegramAuth: telegramAuthAttemptedRef.current,
     });
 
     if (decision === 'wait') return;
@@ -816,36 +853,21 @@ const App: React.FC = () => {
     }
 
     // decision === 'telegram_auth'
-    setAuthStatus('telegram_auth');
-    anonAttemptedRef.current = true;
+    telegramAuthAttemptedRef.current = true;
+    attemptTelegramAuth(telegram!.initData);
+  }, [authLoading, user, telegram, attemptTelegramAuth]);
 
-    (async () => {
-      // Try custom token first (gives permanent UID tied to Telegram ID)
-      try {
-        const res = await fetch('/api/auth/telegram', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ initData: telegram!.initData }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.token) {
-            await signInWithCustomToken(auth, data.token);
-            if (data.isNewUser) setShowOnboarding(true);
-            return; // onAuthStateChanged will fire next and set 'authenticated'
-          }
-        }
-      } catch (err) {
-        console.warn('Custom token auth failed, falling back to anonymous', err);
-      }
-      // Fallback: anonymous (covers a verified-Telegram session where the
-      // backend call itself failed, e.g. a transient network error)
-      signInAnonymously(auth).catch(err => {
-        console.warn('Anonymous sign-in failed', err);
-        setAuthStatus('unauthenticated');
-      });
-    })();
-  }, [authLoading, user, telegram]);
+  // "Повторить вход через Telegram" — reuses the CURRENT raw initData
+  // (audit §16), never asks for login/password/Telegram id.
+  const retryTelegramAuth = useCallback(() => {
+    if (telegram?.initData) attemptTelegramAuth(telegram.initData);
+  }, [telegram, attemptTelegramAuth]);
+
+  // "Другой способ входа" — explicit opt-in escape hatch to the manual
+  // AuthScreen. Only reachable from telegram_auth_error, never automatic.
+  const useOtherSignInMethod = useCallback(() => {
+    setAuthStatus('unauthenticated');
+  }, []);
 
 
   const storageKey = (uid: string, key: string) => `enma.${uid}.${key}`;
@@ -1587,14 +1609,36 @@ const App: React.FC = () => {
   // 'checking' (Firebase restoring any persisted session) AND 'telegram_auth'
   // (a Telegram auto-auth attempt is in flight) both keep showing this
   // loading screen — never AuthScreen. This is the exact fix for
-  // TELEGRAM_AUTOLOGIN: a fresh Telegram session used to fall through to the
-  // manual login screen the instant Firebase reported "no session", even
-  // though the Telegram sign-in attempt had not even started yet.
+  // TELEGRAM_PASSWORDLESS_AUTOAUTH: a fresh Telegram session used to fall
+  // through to the manual login screen the instant Firebase reported "no
+  // session", even though the Telegram sign-in attempt had not even
+  // started yet.
   if (authLoading || authStatus === 'checking' || authStatus === 'telegram_auth') {
     return (
       <div className={`auth-screen theme-${theme}`}>
         <div className="auth-card loading-card">
-          <span className="auth-loading">{t('authLoading')}</span>
+          <span className="auth-loading">
+            {authStatus === 'telegram_auth' ? t('authLoadingTelegram') : t('authLoading')}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Telegram initData was present but the auto-auth attempt itself failed
+  // (network error, backend rejection, etc.) — a distinct screen, never a
+  // silent fall-through to the manual login form (audit §15/§16).
+  if (authStatus === 'telegram_auth_error') {
+    return (
+      <div className={`auth-screen theme-${theme}`}>
+        <div className="auth-card loading-card">
+          <p className="auth-error">{t('authTelegramErrorTitle')}</p>
+          <button type="button" className="primary-button auth-submit" onClick={retryTelegramAuth}>
+            {t('authTelegramErrorRetry')}
+          </button>
+          <button type="button" className="ghost-button" onClick={useOtherSignInMethod}>
+            {t('authTelegramErrorOther')}
+          </button>
         </div>
       </div>
     );

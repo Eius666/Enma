@@ -43,62 +43,130 @@ function verifyInitData(initData, botToken) {
   return { ok: true, params };
 }
 
-async function resolveCanonicalUid(telegramId, chatId) {
-  // 1. Check if canonical UID already assigned
+// Picks one uid out of several candidates using the same tie-break every
+// call site has always used: active subscription wins, else most recently
+// updated. Never random — see TELEGRAM_PASSWORDLESS_AUTOAUTH audit §8.
+function pickBestUid(userDocsById) {
+  let bestWithSub = null;
+  let bestWithSubAt = -1;
+  let bestNoSub = null;
+  let bestNoSubAt = -1;
+
+  for (const [uid, data] of userDocsById) {
+    const updatedAt = data.updatedAt?.toMillis?.() ?? 0;
+    const sub = data.subscription;
+    const isPro = data.isPro === true;
+    const isActive = isPro && sub?.status === 'active' && sub?.endDate && new Date(sub.endDate) > new Date();
+
+    if (isActive) {
+      if (updatedAt > bestWithSubAt) { bestWithSub = uid; bestWithSubAt = updatedAt; }
+    } else {
+      if (updatedAt > bestNoSubAt) { bestNoSub = uid; bestNoSubAt = updatedAt; }
+    }
+  }
+
+  return bestWithSub ?? bestNoSub ?? null;
+}
+
+// Exhaustive existing-account lookup for a verified Telegram user id. Tries
+// every mapping this project's real schema has ever used (audited, not
+// guessed — see TELEGRAM_PASSWORDLESS_AUTOAUTH audit §4/§5) before ever
+// falling back to creating a new account:
+//
+//   1. canonicalUids/tg_<id>      — fast path once resolved once, ever
+//   2. telegramUsers/tg_<id>      — written by the frontend (App.tsx) for
+//                                   ANY authenticated session that also has
+//                                   Telegram context, including users who
+//                                   originally signed up by email/password
+//   3. users where chatId == <id>          (number — the common case)
+//   4. users where chatId == String(<id>)  (string — webhook.js's own [5]
+//                                   USER LOOKUP has carried this exact
+//                                   fallback for a long time, proving some
+//                                   existing user docs really do have a
+//                                   string-typed chatId)
+//
+// Returns { uid, isNewUser, conflict: boolean }. `conflict` means more than
+// one distinct uid matched — the caller logs telegram_auth_identity_conflict
+// and this function still returns ONE uid (via pickBestUid, the same
+// heuristic every part of this codebase has always used) rather than
+// failing the login outright.
+async function resolveCanonicalUid(telegramId) {
   const canonicalRef = db.collection('canonicalUids').doc(`tg_${telegramId}`);
   const canonicalSnap = await canonicalRef.get();
   if (canonicalSnap.exists) {
-    return canonicalSnap.data().uid;
+    return { uid: canonicalSnap.data().uid, isNewUser: false, conflict: false };
   }
 
-  // 2. Find all existing Firebase UIDs for this Telegram user
-  const usersSnap = await db.collection('users')
-    .where('chatId', '==', chatId)
-    .get();
+  const candidateUids = new Set();
+  const userDocsById = new Map();
 
-  let chosenUid = null;
+  const addDocs = (snap) => {
+    for (const d of snap.docs) {
+      candidateUids.add(d.id);
+      userDocsById.set(d.id, d.data());
+    }
+  };
 
-  if (!usersSnap.empty) {
-    // Prefer UID with active subscription; fallback to most recently updated
-    let bestWithSub = null;
-    let bestUpdatedAt = null;
-    let bestNoSub = null;
+  const [telegramUsersSnap, usersNumSnap, usersStrSnap] = await Promise.all([
+    db.collection('telegramUsers').doc(`tg_${telegramId}`).get(),
+    db.collection('users').where('chatId', '==', telegramId).get(),
+    db.collection('users').where('chatId', '==', String(telegramId)).get(),
+  ]);
 
-    for (const userDoc of usersSnap.docs) {
-      const data = userDoc.data();
-      const updatedAt = data.updatedAt?.toMillis?.() ?? 0;
-      const sub = data.subscription;
-      const isPro = data.isPro === true;
-      const isActive = isPro && sub?.status === 'active' && sub?.endDate && new Date(sub.endDate) > new Date();
+  addDocs(usersNumSnap);
+  addDocs(usersStrSnap);
 
-      if (isActive) {
-        if (!bestWithSub || updatedAt > bestUpdatedAt) {
-          bestWithSub = userDoc.id;
-          bestUpdatedAt = updatedAt;
-        }
-      } else {
-        if (!bestNoSub || updatedAt > (bestNoSub.updatedAt ?? 0)) {
-          bestNoSub = { uid: userDoc.id, updatedAt };
-        }
+  let fromTelegramUsers = null;
+  if (telegramUsersSnap.exists) {
+    const mappedUid = telegramUsersSnap.data()?.firebaseUid;
+    if (mappedUid) {
+      // Defensive: only trust this mapping if the account it points to
+      // actually still exists (never resolve to an orphaned/deleted uid).
+      const mappedUserSnap = await db.collection('users').doc(mappedUid).get();
+      if (mappedUserSnap.exists) {
+        fromTelegramUsers = mappedUid;
+        candidateUids.add(mappedUid);
+        userDocsById.set(mappedUid, mappedUserSnap.data());
       }
     }
-
-    chosenUid = bestWithSub ?? bestNoSub?.uid ?? null;
   }
 
-  // 3. Fall back to new deterministic UID
+  let chosenUid = null;
+  const conflict = candidateUids.size > 1;
+
+  if (candidateUids.size === 1) {
+    chosenUid = [...candidateUids][0];
+  } else if (conflict) {
+    // More than one distinct account maps to this Telegram id. Prefer the
+    // explicit telegramUsers mapping (a direct, previously-confirmed link)
+    // over the chatId query results; otherwise fall back to the same
+    // active-subscription/most-recently-updated heuristic used everywhere
+    // else in this codebase. Never pick randomly, never create a third
+    // account — see audit §8.
+    chosenUid = fromTelegramUsers ?? pickBestUid(userDocsById);
+  }
+
+  const isNewUser = !chosenUid;
   if (!chosenUid) {
     chosenUid = `tg_${telegramId}`;
   }
 
-  // 4. Persist canonical mapping
   await canonicalRef.set({ uid: chosenUid, telegramId, resolvedAt: admin.firestore.FieldValue.serverTimestamp() });
 
-  return chosenUid;
+  return { uid: chosenUid, isNewUser, conflict };
+}
+
+// Observability events (TELEGRAM_PASSWORDLESS_AUTOAUTH audit §26) — plain
+// console.log, safe fields only (booleans, the resolved reason/uid-is-new
+// flag), never raw initData, tokens, or Telegram ids.
+function logEvent(name, fields) {
+  console.log(`[auth/telegram] ${name}`, fields ?? {});
 }
 
 async function telegramAuthHandler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  logEvent('telegram_autoauth_started');
 
   // Safe structured log — booleans and non-secret ids only. Never the raw
   // initData string, the bot token, or the signed custom token. See
@@ -115,12 +183,14 @@ async function telegramAuthHandler(req, res) {
   diag.initDataReceived = !!initData && typeof initData === 'string';
   if (!diag.initDataReceived) {
     console.log('[auth/telegram]', diag);
+    logEvent('telegram_autoauth_failed', { reason: 'missing_init_data' });
     return res.status(400).json({ error: 'Missing initData' });
   }
 
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   if (!botToken) {
     console.log('[auth/telegram]', diag, { reason: 'server_misconfigured' });
+    logEvent('telegram_autoauth_failed', { reason: 'server_misconfigured' });
     return res.status(500).json({ error: 'Server misconfigured' });
   }
 
@@ -129,6 +199,7 @@ async function telegramAuthHandler(req, res) {
   diag.authDateValid = verified.ok || (verified.reason !== 'missing_auth_date' && verified.reason !== 'expired');
   if (!verified.ok) {
     console.log('[auth/telegram]', diag, { reason: verified.reason });
+    logEvent('telegram_autoauth_failed', { reason: verified.reason });
     return res.status(401).json({ error: 'Invalid initData signature' });
   }
   const params = verified.params;
@@ -138,6 +209,7 @@ async function telegramAuthHandler(req, res) {
     tgUser = JSON.parse(params.get('user') || '{}');
   } catch {
     console.log('[auth/telegram]', diag, { reason: 'bad_user_payload' });
+    logEvent('telegram_autoauth_failed', { reason: 'bad_user_payload' });
     return res.status(400).json({ error: 'Invalid user payload' });
   }
 
@@ -145,19 +217,38 @@ async function telegramAuthHandler(req, res) {
   diag.telegramUserIdResolved = !!telegramId;
   if (!telegramId) {
     console.log('[auth/telegram]', diag);
+    logEvent('telegram_autoauth_failed', { reason: 'missing_telegram_user_id' });
     return res.status(400).json({ error: 'Missing user.id' });
   }
 
   try {
-    const uid        = await resolveCanonicalUid(telegramId, telegramId);
+    // isNewIdentity: no existing account mapped to this Telegram id at all
+    // (used only for the backend log event name below). isNewUser (from
+    // setupNewUserIfNeeded, driven by whether a subscription doc already
+    // exists): the signal the frontend actually uses to trigger onboarding
+    // — these usually agree, but an existing account that never finished
+    // setup (no subscription doc yet) is "not a new identity" yet still
+    // needs onboarding, so they're kept as two distinct signals on purpose.
+    const { uid, isNewUser: isNewIdentity, conflict } = await resolveCanonicalUid(telegramId);
+
+    if (conflict) {
+      // More than one existing account mapped to this Telegram id — resolved
+      // via the documented heuristic (never a random pick, never a new
+      // third account). Flagged for follow-up, not blocking the login.
+      logEvent('telegram_auth_identity_conflict', {});
+    }
+
     const startParam = params.get('start_param') || null;
     const isNewUser  = await setupNewUserIfNeeded(uid, tgUser, startParam);
     const token      = await admin.auth().createCustomToken(uid);
     diag.enmaUserResolved = true;
     console.log('[auth/telegram]', diag, { isNewUser });
+    logEvent(isNewIdentity ? 'telegram_autoauth_new_user' : 'telegram_autoauth_existing_user');
+    logEvent('telegram_autoauth_success');
     return res.status(200).json({ token, uid, isNewUser });
   } catch (err) {
     console.error('[auth/telegram] error', err);
+    logEvent('telegram_autoauth_failed', { reason: 'server_error' });
     return res.status(500).json({ error: 'Auth failed' });
   }
 }
@@ -167,8 +258,6 @@ const TRIAL_DAYS = 7;
 async function setupNewUserIfNeeded(uid, tgUser, startParam) {
   const userRef = db.collection('users').doc(uid);
   const subRef  = db.collection('subscriptions').doc(uid);
-
-  const [userSnap, subSnap] = await Promise.all([userRef.get(), subRef.get()]);
 
   // Process referral link regardless of new/existing user (attributeReferral is
   // idempotent). This IS the real "registration" moment for the deep-link
@@ -182,14 +271,23 @@ async function setupNewUserIfNeeded(uid, tgUser, startParam) {
     );
   }
 
-  if (subSnap.exists) return false;
-
   const now      = new Date();
   const trialEnd = new Date(now);
   trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS);
   trialEnd.setHours(23, 59, 59, 999);
 
-  await db.runTransaction(async tx => {
+  // The exists-check now happens INSIDE the transaction (tx.get, not a
+  // pre-fetched snapshot) — see TELEGRAM_PASSWORDLESS_AUTOAUTH audit §7/§10:
+  // two concurrent Mini App launches for the same brand-new Telegram user
+  // both resolve to the same deterministic uid (resolveCanonicalUid), and
+  // this transaction is what stops them from racing to double-write the
+  // trial subscription — whichever commits first wins, the other's tx.get
+  // sees subSnap.exists === true and bails out as a no-op.
+  return db.runTransaction(async tx => {
+    const [userSnap, subSnap] = await Promise.all([tx.get(userRef), tx.get(subRef)]);
+
+    if (subSnap.exists) return false;
+
     if (!userSnap.exists) {
       tx.set(userRef, {
         uid,
@@ -223,12 +321,14 @@ async function setupNewUserIfNeeded(uid, tgUser, startParam) {
       createdAt:        now.toISOString(),
       updatedAt:        admin.firestore.FieldValue.serverTimestamp(),
     });
-  });
 
-  return true;
+    return true;
+  });
 }
 
 module.exports = telegramAuthHandler;
-// Named export purely for unit testing (see __tests__/telegram.test.js) —
+// Named exports purely for unit testing (see __tests__/telegram.test.js) —
 // Vercel's runtime only ever calls module.exports() itself, same as before.
 module.exports.verifyInitData = verifyInitData;
+module.exports.resolveCanonicalUid = resolveCanonicalUid;
+module.exports.setupNewUserIfNeeded = setupNewUserIfNeeded;
