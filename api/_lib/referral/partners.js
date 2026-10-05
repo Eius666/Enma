@@ -232,6 +232,7 @@ async function getPartnerSummary(code) {
 module.exports = {
   PLATFORMS,
   DEFAULT_PLATFORM,
+  botUsername,
   linkFor,
   normalizePlatform,
   splitCodeAndPlatform,

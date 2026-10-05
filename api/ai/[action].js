@@ -10,7 +10,7 @@ const {
   verifyTelegramLoginWidget, issuePartnerSession, verifyPartnerSession, bearerToken,
 } = require('../_lib/referral/partnerAuth');
 const {
-  findOrCreatePartnerByTelegram, getPartnerSummary, getOrCreateTrackingLink, normalizePlatform,
+  findOrCreatePartnerByTelegram, getPartnerSummary, getOrCreateTrackingLink, normalizePlatform, botUsername,
 } = require('../_lib/referral/partners');
 const crypto        = require('crypto');
 
@@ -481,6 +481,46 @@ async function handlePartnerLink(req, res) {
     console.error('[ai/partnerLink] error:', err.message);
     return res.status(500).json({ error: 'Failed to create link' });
   }
+}
+
+// Not a secret — a bot's @username is public by design (anyone the bot has
+// ever messaged, or anyone who opens its Menu Button, can see it). This
+// exists purely so partners.html never has to hardcode it or trust a
+// possibly-stale config value: it asks Telegram itself (getMe) which
+// @username the live TELEGRAM_BOT_TOKEN actually resolves to right now —
+// the same token every other bot feature (webhook, Stars, sendMessage)
+// already runs on — so it can never drift out of sync with reality again.
+// Cached in-memory for a few minutes per warm instance; falls back to the
+// config-based botUsername() (process.env.TELEGRAM_BOT_USERNAME or its
+// hardcoded default) only if Telegram's API is briefly unreachable.
+let cachedBotUsername = null;
+let cachedBotUsernameAt = 0;
+const BOT_USERNAME_CACHE_MS = 5 * 60 * 1000;
+
+async function resolveLiveBotUsername() {
+  if (cachedBotUsername && Date.now() - cachedBotUsernameAt < BOT_USERNAME_CACHE_MS) {
+    return cachedBotUsername;
+  }
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return botUsername();
+  try {
+    const resp = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+    const data = await resp.json();
+    if (data?.ok && data.result?.username) {
+      cachedBotUsername = data.result.username;
+      cachedBotUsernameAt = Date.now();
+      return cachedBotUsername;
+    }
+  } catch (err) {
+    console.error('[ai/partnerBotInfo] getMe failed:', err.message);
+  }
+  return botUsername();
+}
+
+async function handlePartnerBotInfo(req, res) {
+  const liveUsername = await resolveLiveBotUsername();
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  return res.status(200).json({ ok: true, botUsername: liveUsername });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1437,6 +1477,7 @@ module.exports = async (req, res) => {
       case 'partnerLogin':     return await handlePartnerLogin(req, res);
       case 'partnerMe':        return await handlePartnerMe(req, res);
       case 'partnerLink':      return await handlePartnerLink(req, res);
+      case 'partnerBotInfo':   return await handlePartnerBotInfo(req, res);
       case 'referralValidate':      return await handleReferralValidate(req, res);
       case 'referralInfo':          return await handleReferralInfo(req, res);
       case 'referralPayout':        return await handleReferralPayout(req, res);

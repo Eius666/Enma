@@ -50,6 +50,35 @@ const sendChatAction = (token, chatId, action = 'typing') =>
 const answerCbQuery = (token, id, text) =>
   tg(token, 'answerCallbackQuery', { callback_query_id: id, text }).catch(() => {});
 
+// Live @username lookup for partner links — see PARTNER_CTA audit: the
+// hardcoded/env-configured bot username this project otherwise relies on
+// (codes.js, commands.js, partners.js) was found stale (bot was renamed;
+// TELEGRAM_BOT_USERNAME was never updated to match), which is enough on its
+// own to make a t.me link resolve to the wrong bot. getMe is ground truth
+// and can never drift, so the partner-onboarding link below uses it instead,
+// falling back to the (possibly stale) configured value only if Telegram's
+// API is briefly unreachable. Cached per warm instance — a bot's own
+// username essentially never changes, no need to ask on every /start.
+let cachedLiveBotUsername = null;
+let cachedLiveBotUsernameAt = 0;
+const LIVE_BOT_USERNAME_CACHE_MS = 5 * 60 * 1000;
+async function liveBotUsername(botToken) {
+  if (cachedLiveBotUsername && Date.now() - cachedLiveBotUsernameAt < LIVE_BOT_USERNAME_CACHE_MS) {
+    return cachedLiveBotUsername;
+  }
+  try {
+    const me = await tg(botToken, 'getMe', {});
+    if (me?.ok && me.result?.username) {
+      cachedLiveBotUsername = me.result.username;
+      cachedLiveBotUsernameAt = Date.now();
+      return cachedLiveBotUsername;
+    }
+  } catch (err) {
+    console.error('[partner] getMe failed:', err.message);
+  }
+  return null;
+}
+
 // ── Subscription prompt helpers ───────────────────────────────────────────────
 
 const subscriptionKeyboard = () => ({
@@ -498,6 +527,72 @@ module.exports = async (req, res) => {
         if (resolved.kind === 'partner') {
           await recordPartnerClick(chatId, resolved.code, resolved.platform).catch(() => {});
         }
+      }
+
+      // Partner onboarding: /start partner — intentionally handled here,
+      // BEFORE the [5] "must already have an Enma account" gate below.
+      // Becoming a partner never requires being an Enma customer, and
+      // Telegram's webhook delivery already authenticates `message.from`
+      // for us, so this needs no separate login step at all (replaces the
+      // partners.html Telegram Login Widget modal, which pointed at a
+      // hardcoded bot @username that no longer matches this bot — see
+      // PARTNER_CTA audit). Idempotent: a repeat /start partner never
+      // creates a second partner record (findOrCreatePartnerByTelegram
+      // finds the existing one by telegramId).
+      if (startParam === 'partner') {
+        const { findOrCreatePartnerByTelegram, linkFor } = require('../_lib/referral/partners');
+        const { issuePartnerSession } = require('../_lib/referral/partnerAuth');
+
+        const tgUser = {
+          id: message.from.id,
+          firstName: message.from.first_name || '',
+          lastName: message.from.last_name || '',
+          username: message.from.username || '',
+        };
+
+        const beforeSnap = await db.collection('referrers')
+          .where('telegramId', '==', tgUser.id).limit(1).get();
+        const isNewPartner = beforeSnap.empty;
+
+        const partner = await findOrCreatePartnerByTelegram(tgUser);
+        const liveUsername = await liveBotUsername(token);
+        const link = liveUsername
+          ? `https://t.me/${liveUsername}?start=ref_${partner.code}`
+          : linkFor(partner.code, 'direct');
+
+        // Safe structured logs — no tokens/secrets, just the public partner
+        // code (already visible to the partner themselves in their link).
+        console.log(`[partner] ${isNewPartner ? 'partner_registered' : 'partner_existing_open'}`, { code: partner.code });
+        console.log('[partner] partner_link_issued', { code: partner.code });
+
+        // The dashboard button carries a short-lived signed session token
+        // (same one partnerMe/partnerLink already accept as a Bearer token)
+        // so opening it never depends on the Login Widget either.
+        let dashboardUrl = `${APP_URL}/partners.html#dashboard`;
+        try {
+          const sessionToken = issuePartnerSession(partner.code);
+          dashboardUrl = `${APP_URL}/partners.html?dashboard_token=${encodeURIComponent(sessionToken)}#dashboard`;
+        } catch (err) {
+          console.error('[partner] failed to issue dashboard session:', err.message);
+        }
+
+        const greeting = isNewPartner
+          ? '🎉 Готово! Вы подключены к партнёрской программе Enma.'
+          : '👋 С возвращением! Вы уже в партнёрской программе Enma.';
+
+        await sendMessage(token, chatId,
+          `${greeting}\n\n` +
+          `Ваша персональная ссылка:\n\n` +
+          `${link}\n\n` +
+          `Вы получаете 30% от оплат привлечённых пользователей.\n\n` +
+          `Можно отправить ссылку друзьям, добавить в канал, блог или соцсети.`,
+          { reply_markup: { inline_keyboard: [
+            [{ text: 'Открыть кабинет партнёра', url: dashboardUrl }],
+            [{ text: 'Материалы для продвижения', url: `${APP_URL}/partners.html#materials` }],
+          ] } }
+        );
+        res.status(200).json({ ok: true });
+        return;
       }
     }
 
