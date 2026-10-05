@@ -580,6 +580,35 @@ async function handleStarsSession(req, res) {
   return res.status(200).json({ ok: true, status: session.status });
 }
 
+// ── /api/payment/version — stale-bundle detection (cache-bust) ─────────────────
+//
+// Lives here, as one more action on this already-shared function, rather than
+// as its own top-level api/version.js file — Vercel's Hobby plan caps a
+// deployment at 12 Serverless Functions, and this project is already at that
+// limit; adding a dedicated function for this broke every deploy with
+// "No more than 12 Serverless Functions can be added to a Deployment on the
+// Hobby plan." api/_generated/buildId.json is written fresh by
+// scripts/generateBuildId.js on every build (gitignored, never committed).
+
+let cachedBuildInfo;
+function getBuildInfo() {
+  if (cachedBuildInfo) return cachedBuildInfo;
+  try {
+    cachedBuildInfo = require('../_generated/buildId.json');
+  } catch {
+    cachedBuildInfo = { buildId: 'unknown' };
+  }
+  return cachedBuildInfo;
+}
+
+async function handleVersion(req, res) {
+  if (req.method !== 'GET') return res.status(405).json({ ok: false, error: 'Method not allowed' });
+  // This endpoint's entire purpose is to never be served stale — a cached
+  // "old" response here would defeat the whole mechanism.
+  res.setHeader('Cache-Control', 'no-store');
+  return res.status(200).json({ ok: true, buildId: getBuildInfo().buildId });
+}
+
 // ── Router ────────────────────────────────────────────────────────────────────
 
 module.exports = async (req, res) => {
@@ -590,5 +619,6 @@ module.exports = async (req, res) => {
   if (action === 'starsPlans')  return handleStarsPlans(req, res);
   if (action === 'starsCreate') return handleStarsCreate(req, res);
   if (action === 'starsSession')return handleStarsSession(req, res);
+  if (action === 'version')     return handleVersion(req, res);
   return res.status(404).json({ ok: false, error: 'not_found' });
 };

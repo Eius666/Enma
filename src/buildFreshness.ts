@@ -5,9 +5,13 @@
 // on the browser/WebView to decide to revalidate on its own.
 //
 // Safe by construction:
-//  - /api/version is a brand-new endpoint with Cache-Control: no-store, so
-//    there is no possible stale cached copy of it to begin with — the
-//    first-ever request for this exact URL always hits the network.
+//  - /api/payment/version is a brand-new endpoint with Cache-Control:
+//    no-store, so there is no possible stale cached copy of it to begin
+//    with — the first-ever request for this exact URL always hits the
+//    network. It lives on the existing payment function (not its own
+//    api/version.js) — Vercel's Hobby plan caps a deployment at 12
+//    Serverless Functions, and a dedicated function pushed this project
+//    over that limit.
 //  - A reload is only ever forced once per (tab session, stale build) pair
 //    — the sessionStorage guard prevents any reload loop.
 //  - The new URL keeps every existing query param (Telegram's start_param/
@@ -29,7 +33,7 @@ export function checkBuildFreshness(): void {
   // meaningful to compare, and dev builds aren't what gets cached anyway.
   if (BUILD_ID === 'dev') return;
 
-  fetch('/api/version', { cache: 'no-store' })
+  fetch('/api/payment/version', { cache: 'no-store' })
     .then((r) => r.json())
     .then((d: { buildId?: string }) => {
       if (!d?.buildId || d.buildId === BUILD_ID) return;

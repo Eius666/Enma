@@ -376,3 +376,58 @@ test('starsSession: unknown session id is 404, the owner\'s own known session re
     assert.equal(res2.body.status, 'paid');
   } finally { teardown(['STARS_CANARY_TELEGRAM_IDS']); }
 });
+
+// ── version (cache-bust detection — lives here, not its own api/version.js, ──
+//    to stay within Vercel's Hobby-plan 12-function-per-deployment limit) ────
+
+test('version: GET always responds 200 with a buildId and Cache-Control: no-store, even with no auth at all', async () => {
+  const db = injectMockDb({});
+  try {
+    const handler = require('../[action]');
+    const req = mockReq({ action: 'version', method: 'GET', headers: {} });
+    const res = mockRes();
+    await handler(req, res);
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.ok, true);
+    assert.ok(typeof res.body.buildId === 'string' && res.body.buildId.length > 0);
+    assert.equal(res.headers['Cache-Control'], 'no-store');
+  } finally { teardown(); }
+});
+
+test('version: never crashes even if api/_generated/buildId.json is missing — falls back to "unknown"', async () => {
+  const fs = require('fs');
+  const path = require('path');
+  const generatedDir = path.join(__dirname, '..', '..', '_generated');
+  const filePath = path.join(generatedDir, 'buildId.json');
+  const existed = fs.existsSync(filePath);
+  const backup = existed ? fs.readFileSync(filePath, 'utf8') : null;
+
+  const db = injectMockDb({});
+  try {
+    delete require.cache[path.resolve(filePath)]; // must clear BEFORE deleting the file — require.resolve needs it to exist
+    if (existed) fs.rmSync(filePath, { force: true });
+    delete require.cache[require.resolve('../[action]')];
+    const handler = require('../[action]');
+    const req = mockReq({ action: 'version', method: 'GET', headers: {} });
+    const res = mockRes();
+    await handler(req, res);
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.buildId, 'unknown');
+  } finally {
+    if (backup !== null) fs.writeFileSync(filePath, backup);
+    teardown();
+  }
+});
+
+test('version: rejects non-GET methods', async () => {
+  const db = injectMockDb({});
+  try {
+    const handler = require('../[action]');
+    const req = mockReq({ action: 'version', method: 'POST', headers: {} });
+    const res = mockRes();
+    await handler(req, res);
+    assert.equal(res.statusCode, 405);
+  } finally { teardown(); }
+});
