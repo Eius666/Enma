@@ -568,49 +568,6 @@ function requireAdmin(req, res) {
 //  - Response contains ONLY integer counts. No user ids, Telegram ids,
 //    emails, or document contents, ever.
 // ─────────────────────────────────────────────────────────────────────────────
-// ─────────────────────────────────────────────────────────────────────────────
-// TEMPORARY — diagnosing adminTelegramMappingAudit's stable ADMIN_UNAUTHORIZED
-// after an ADMIN_API_KEY rotation + redeploy. Never requires admin auth
-// itself (that comparison is exactly what's in question) and never returns
-// the value — only presence/length/whitespace booleans and a 12-hex-char
-// SHA-256 fingerprint (irreversible to the original 256-bit hex key).
-// Remove this handler + its router entry once the fingerprint comparison
-// in the final report resolves the discrepancy.
-// ─────────────────────────────────────────────────────────────────────────────
-async function handleAdminKeyDiagnostic(req, res) {
-  try {
-    const raw = process.env.ADMIN_API_KEY;
-    const present = typeof raw === 'string' && raw.length > 0;
-
-    if (!present) {
-      return res.status(200).json({
-        present: false,
-        length: 0,
-        hasLeadingWhitespace: false,
-        hasTrailingWhitespace: false,
-        containsNewline: false,
-        containsCarriageReturn: false,
-        runtimeFingerprint: null,
-      });
-    }
-
-    const fingerprint = crypto.createHash('sha256').update(raw).digest('hex').slice(0, 12);
-
-    return res.status(200).json({
-      present: true,
-      length: raw.length,
-      hasLeadingWhitespace: /^\s/.test(raw),
-      hasTrailingWhitespace: /\s$/.test(raw),
-      containsNewline: raw.includes('\n'),
-      containsCarriageReturn: raw.includes('\r'),
-      runtimeFingerprint: fingerprint,
-    });
-  } catch {
-    console.error('[admin/keyDiagnostic] DIAGNOSTIC_FAILED');
-    return res.status(500).json({ ok: false, code: 'DIAGNOSTIC_FAILED' });
-  }
-}
-
 async function handleAdminTelegramMappingAudit(req, res) {
   // Local admin check (not the shared requireAdmin — this endpoint's
   // response shape is intentionally its own, see audit §6, and must not
@@ -633,7 +590,7 @@ async function handleAdminTelegramMappingAudit(req, res) {
   }
 
   try {
-    const usersSnap = await db.collection('users').select('chatId').get();
+    const usersSnap = await db.collection('users').get();
 
     // telegramId (as a string, normalizing the number/string chatId type
     // inconsistency this whole audit exists to account for) -> Set(uid)
@@ -1653,11 +1610,6 @@ module.exports = async (req, res) => {
       // TEMPORARY — see handleAdminTelegramMappingAudit's own comment. Remove
       // this line + the handler above once the one-time audit has run.
       case 'adminTelegramMappingAudit': return await handleAdminTelegramMappingAudit(req, res);
-      // TEMPORARY — see handleAdminKeyDiagnostic's own comment. POST only
-      // (the router above enforces POST-only for every /api/ai/* action
-      // before this switch is ever reached), not GET. Remove this line +
-      // the handler above once resolved.
-      case 'adminKeyDiagnostic': return await handleAdminKeyDiagnostic(req, res);
       default:
         return res.status(404).json({ error: `Unknown AI action: ${action}` });
     }
