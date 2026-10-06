@@ -90,11 +90,10 @@ function verifyInitData(initData, botToken) {
 //                          kind — this Telegram id has genuinely never been
 //                          seen before. Safe to create a fresh account.
 // The live, authoritative "who could this Telegram id possibly be" check —
-// steps 2-4 of the lookup above, factored out so the one-time migration
-// APPLY logic (api/ai/[action].js's adminTelegramMappingApply) can re-verify
-// a candidate immediately before writing using the EXACT same logic the
-// live auth path uses, instead of a separate reimplementation that could
-// silently drift out of sync. Never touches canonicalUids — purely a read.
+// steps 2-4 of the lookup above, factored out of resolveCanonicalUid for
+// readability (it was also reused by the now-removed one-time migration
+// APPLY endpoint's re-verification step — see TELEGRAM_PASSWORDLESS_AUTOAUTH
+// audit history). Never touches canonicalUids — purely a read.
 async function gatherLiveCandidates(telegramId) {
   const candidateUids = new Set();
   const addDocs = (snap) => { for (const d of snap.docs) candidateUids.add(d.id); };
@@ -340,11 +339,8 @@ async function setupNewUserIfNeeded(uid, tgUser, startParam) {
 }
 
 module.exports = telegramAuthHandler;
-// Named exports for unit testing AND for adminTelegramMappingApply's
-// re-verification step (api/ai/[action].js) to reuse the exact same
-// candidate-resolution logic the live auth path uses — Vercel's runtime
-// only ever calls module.exports() itself, same as before.
+// Named exports purely for unit testing (see __tests__/telegram.test.js) —
+// Vercel's runtime only ever calls module.exports() itself, same as before.
 module.exports.verifyInitData = verifyInitData;
 module.exports.resolveCanonicalUid = resolveCanonicalUid;
 module.exports.setupNewUserIfNeeded = setupNewUserIfNeeded;
-module.exports.gatherLiveCandidates = gatherLiveCandidates;
