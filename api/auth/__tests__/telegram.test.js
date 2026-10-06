@@ -194,6 +194,83 @@ test('resolveCanonicalUid: a telegramUsers mapping pointing at a deleted account
   } finally { teardown(); }
 });
 
+// ── Verified manual recovery link (targeted-recovery round) ─────────────────
+// Admin-created telegramManualLinks/tg_<id> docs — a distinct, higher-trust
+// tier than the ordinary canonicalUids cache, never written by
+// resolveCanonicalUid itself. See api/ai/[action].js's
+// handleAdminLinkTelegramAccount.
+
+test('resolveCanonicalUid: a verified manual recovery link resolves to its target uid, even with zero other signals', async () => {
+  injectMockDb({
+    'users/targetUid': { email: 'owner@example.com' },
+    'telegramManualLinks/tg_42': { uid: 'targetUid', source: 'owner_manual_recovery', verified: true },
+  });
+  try {
+    const { resolveCanonicalUid } = require('../telegram');
+    const result = await resolveCanonicalUid(42);
+    assert.equal(result.status, 'unique');
+    assert.equal(result.uid, 'targetUid');
+  } finally { teardown(); }
+});
+
+test('resolveCanonicalUid: a verified manual recovery link wins over multiple legacy candidate uids — never a conflict', async () => {
+  injectMockDb({
+    'users/targetUid': { email: 'owner@example.com' },
+    'users/legacyUidA': { chatId: 42 },
+    'users/legacyUidB': { chatId: '42' },
+    'telegramManualLinks/tg_42': { uid: 'targetUid', source: 'owner_manual_recovery', verified: true },
+  });
+  try {
+    const { resolveCanonicalUid } = require('../telegram');
+    const result = await resolveCanonicalUid(42);
+    assert.equal(result.status, 'unique');
+    assert.equal(result.uid, 'targetUid');
+  } finally { teardown(); }
+});
+
+test('resolveCanonicalUid: a manual link pointing at a nonexistent uid is ignored — never creates a new account', async () => {
+  injectMockDb({
+    'telegramManualLinks/tg_42': { uid: 'longGoneUid', source: 'owner_manual_recovery', verified: true },
+  });
+  try {
+    const { resolveCanonicalUid } = require('../telegram');
+    const result = await resolveCanonicalUid(42);
+    assert.equal(result.status, 'recovery_required');
+    assert.equal(result.uid, null);
+  } finally { teardown(); }
+});
+
+test('resolveCanonicalUid: an UNVERIFIED manual link doc (verified !== true) is never trusted', async () => {
+  injectMockDb({
+    'users/someUid': {},
+    'telegramManualLinks/tg_42': { uid: 'someUid', source: 'owner_manual_recovery', verified: false },
+  });
+  try {
+    const { resolveCanonicalUid } = require('../telegram');
+    const result = await resolveCanonicalUid(42);
+    // No other signal exists, and the unverified link doesn't count as
+    // historical evidence either (it was never confirmed) — genuinely new.
+    assert.equal(result.status, 'new');
+  } finally { teardown(); }
+});
+
+test('resolveCanonicalUid: ordinary canonical cache cannot bypass a conflict that now has multiple live candidates', async () => {
+  // Combines the two existing robustness guarantees: a stale cache entry
+  // self-heals (doesn't block), AND when it does, multiple real existing
+  // accounts are still correctly reported as a conflict, never one picked.
+  injectMockDb({
+    'canonicalUids/tg_42': { uid: 'longGoneCachedUid', telegramId: 42 }, // stale
+    'users/liveUidA': { chatId: 42 },
+    'users/liveUidB': { chatId: '42' },
+  });
+  try {
+    const { resolveCanonicalUid } = require('../telegram');
+    const result = await resolveCanonicalUid(42);
+    assert.equal(result.status, 'conflict');
+    assert.equal(result.uid, null);
+  } finally { teardown(); }
+});
+
 test('resolveCanonicalUid: a genuinely new Telegram id (no chatId match, no telegramUsers doc at all) gets a deterministic uid', async () => {
   injectMockDb({});
   try {
@@ -337,6 +414,26 @@ test('telegramAuthHandler: existing Telegram user signs in to their existing uid
     await handler(req, res);
     assert.equal(statusCode, 200);
     assert.equal(jsonBody.uid, 'existingUid');
+  } finally { delete process.env.TELEGRAM_BOT_TOKEN; teardown(); }
+});
+
+test('telegramAuthHandler: valid initData + a verified manual recovery link signs in to the linked uid (no password, no new account)', async () => {
+  const db = injectMockDb({
+    'users/linkedTargetUid': { email: 'owner@example.com', isPro: false },
+    'telegramManualLinks/tg_777888999': { uid: 'linkedTargetUid', source: 'owner_manual_recovery', verified: true },
+  });
+  process.env.TELEGRAM_BOT_TOKEN = BOT_TOKEN;
+  try {
+    const handler = require('../telegram');
+    const initData = signInitData(freshFields());
+    const req = { method: 'POST', body: { initData } };
+    let statusCode, jsonBody;
+    const res = { status(c) { statusCode = c; return this; }, json(b) { jsonBody = b; return this; } };
+    await handler(req, res);
+    assert.equal(statusCode, 200);
+    assert.equal(jsonBody.uid, 'linkedTargetUid');
+    assert.ok(jsonBody.token, 'a custom token was issued for the existing linked uid');
+    assert.equal(db._count('users/'), 1, 'no second account was created');
   } finally { delete process.env.TELEGRAM_BOT_TOKEN; teardown(); }
 });
 

@@ -122,6 +122,32 @@ async function gatherLiveCandidates(telegramId) {
 }
 
 async function resolveCanonicalUid(telegramId) {
+  // 0. Verified manual recovery link — authoritative, created ONLY by the
+  // admin-gated recovery endpoint (handleAdminLinkTelegramAccount), never
+  // by this function. Checked FIRST, before the ordinary canonicalUids
+  // cache, so a stale cache entry can never shadow an explicit, verified
+  // recovery decision — this is deliberately a DIFFERENT trust tier from
+  // the ordinary cache below, not a variant of it (see
+  // TELEGRAM_PASSWORDLESS_AUTOAUTH audit, targeted-recovery round §5/§6).
+  let hadVerifiedManualLink = false;
+  const manualLinkSnap = await db.collection('telegramManualLinks').doc(`tg_${telegramId}`).get();
+  if (manualLinkSnap.exists) {
+    const manualData = manualLinkSnap.data();
+    if (manualData?.verified === true && manualData?.uid) {
+      hadVerifiedManualLink = true;
+      const manualTargetSnap = await db.collection('users').doc(manualData.uid).get();
+      if (manualTargetSnap.exists) {
+        return { status: 'unique', uid: manualData.uid };
+      }
+      // Target no longer exists — ignore the override entirely (never
+      // trust a dangling manual link as a real answer), but its mere
+      // existence is still definite proof this identity was seen and
+      // deliberately linked before, same as an orphaned telegramUsers
+      // mapping — so a "zero live candidates" outcome below still becomes
+      // recovery_required, never a silent "new account" fallback.
+    }
+  }
+
   const canonicalRef = db.collection('canonicalUids').doc(`tg_${telegramId}`);
   const canonicalSnap = await canonicalRef.get();
   if (canonicalSnap.exists) {
@@ -152,7 +178,7 @@ async function resolveCanonicalUid(telegramId) {
   }
 
   // candidateUids.size === 0
-  if (hadHistoricalMapping) {
+  if (hadHistoricalMapping || hadVerifiedManualLink) {
     return { status: 'recovery_required', uid: null };
   }
 
@@ -339,8 +365,11 @@ async function setupNewUserIfNeeded(uid, tgUser, startParam) {
 }
 
 module.exports = telegramAuthHandler;
-// Named exports purely for unit testing (see __tests__/telegram.test.js) —
+// Named exports for unit testing AND for handleAdminLinkTelegramAccount
+// (api/ai/[action].js) to report safe, aggregate-only "how many candidates
+// existed before this link" info without reimplementing the lookup —
 // Vercel's runtime only ever calls module.exports() itself, same as before.
 module.exports.verifyInitData = verifyInitData;
 module.exports.resolveCanonicalUid = resolveCanonicalUid;
 module.exports.setupNewUserIfNeeded = setupNewUserIfNeeded;
+module.exports.gatherLiveCandidates = gatherLiveCandidates;

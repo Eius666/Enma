@@ -553,6 +553,92 @@ function requireAdmin(req, res) {
   return true;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin-controlled Telegram account recovery link (permanent tool, not a
+// one-time migration script — see TELEGRAM_PASSWORDLESS_AUTOAUTH audit,
+// targeted-recovery round). Lets the owner/admin authoritatively attach a
+// verified Telegram identity to a SPECIFIC existing Enma account by email,
+// for the cases resolveCanonicalUid alone can never safely resolve on its
+// own: an identity conflict (multiple existing accounts) or a historical-
+// but-currently-unresolvable mapping. Writes ONLY a
+// telegramManualLinks/tg_<id> document — never creates, deletes, or merges
+// any account, never touches finance/tasks/habits/notes/subscriptions.
+//
+// The Telegram id is supplied by the caller (the account owner, via their
+// own authenticated admin request) — this endpoint never derives or
+// guesses it, and never echoes it or the resolved uid back in the response.
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleAdminLinkTelegramAccount(req, res) {
+  if (!requireAdmin(req, res)) return;
+
+  const { email, telegramId } = req.body || {};
+  if (!email || typeof email !== 'string' || !email.includes('@')) {
+    return res.status(400).json({ ok: false, code: 'INVALID_EMAIL' });
+  }
+  const numericTelegramId = Number(telegramId);
+  if (!Number.isFinite(numericTelegramId) || numericTelegramId <= 0) {
+    return res.status(400).json({ ok: false, code: 'INVALID_TELEGRAM_ID' });
+  }
+
+  let targetUid;
+  try {
+    const userRecord = await admin.auth().getUserByEmail(email);
+    targetUid = userRecord.uid;
+  } catch {
+    return res.status(404).json({ ok: false, code: 'ACCOUNT_NOT_FOUND' });
+  }
+
+  let enmaUserDocExists = false;
+  let candidateExistingAccounts = 0;
+  let currentConflict = false;
+  let targetEmailAccountAmongCandidates = false;
+  try {
+    const userDocSnap = await db.collection('users').doc(targetUid).get();
+    enmaUserDocExists = userDocSnap.exists;
+
+    const { gatherLiveCandidates } = require('../auth/telegram');
+    const { candidateUids } = await gatherLiveCandidates(numericTelegramId);
+    candidateExistingAccounts = candidateUids.size;
+    currentConflict = candidateUids.size > 1;
+    // Informational only — this endpoint links by explicit admin decision
+    // regardless of whether the target account happens to already be
+    // among the live chatId/telegramUsers candidates. That's the whole
+    // point of a manual override for a conflict or recovery_required case,
+    // where the target account is commonly NOT among the live candidates
+    // at all (e.g. it never had a chatId set).
+    targetEmailAccountAmongCandidates = candidateUids.has(targetUid);
+  } catch {
+    console.error('[admin/linkTelegramAccount] PRECHECK_FAILED');
+    return res.status(500).json({ ok: false, code: 'LINK_FAILED' });
+  }
+
+  try {
+    await db.collection('telegramManualLinks').doc(`tg_${numericTelegramId}`).set({
+      uid: targetUid,
+      source: 'owner_manual_recovery',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      verified: true,
+    });
+  } catch {
+    console.error('[admin/linkTelegramAccount] LINK_FAILED');
+    return res.status(500).json({ ok: false, code: 'LINK_FAILED' });
+  }
+
+  console.log('[admin/linkTelegramAccount] manual recovery link created', {
+    enmaUserDocExists, candidateExistingAccounts, currentConflict, targetEmailAccountAmongCandidates,
+  });
+
+  return res.status(200).json({
+    ok: true,
+    accountFound: true,
+    enmaUserDocExists,
+    candidateExistingAccounts,
+    currentConflict,
+    targetEmailAccountAmongCandidates,
+    manualLinkCreated: true,
+  });
+}
+
 async function handleAdminStats(req, res) {
   if (!requireAdmin(req, res)) return;
 
@@ -1505,6 +1591,7 @@ module.exports = async (req, res) => {
       case 'adminAiUsage':          return await handleAdminAiUsage(req, res);
       case 'adminStarsDiagnostics': return await handleAdminStarsDiagnostics(req, res);
       case 'adminStarsCanaryCheck': return await handleAdminStarsCanaryCheck(req, res);
+      case 'adminLinkTelegramAccount': return await handleAdminLinkTelegramAccount(req, res);
       default:
         return res.status(404).json({ error: `Unknown AI action: ${action}` });
     }
