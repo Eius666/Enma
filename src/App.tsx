@@ -205,8 +205,11 @@ const translations = {
     authLoading: 'Checking credentials...',
     authLoadingTelegram: 'Signing in via Telegram…',
     authTelegramErrorTitle: "Couldn't sign in via Telegram automatically.",
+    authTelegramConflictTitle: "We found more than one Enma account linked to your Telegram — we can't pick automatically.",
+    authTelegramRecoveryTitle: "We couldn't automatically restore your Enma account. Your data isn't lost — we need to confirm your old account.",
     authTelegramErrorRetry: 'Retry Telegram sign-in',
     authTelegramErrorOther: 'Use another way to sign in',
+    authTelegramRecoveryAction: 'Restore account',
     authBadge: 'Welcome back',
     authTitle: 'Access your organizer',
     authSubtitle: 'Sign in with your email to start planning your day, notes, and finances.',
@@ -368,8 +371,11 @@ const translations = {
     authLoading: 'Проверяем доступ...',
     authLoadingTelegram: 'Входим через Telegram…',
     authTelegramErrorTitle: 'Не удалось автоматически войти через Telegram.',
+    authTelegramConflictTitle: 'Мы нашли больше одного аккаунта Enma, связанного с вашим Telegram, — не можем выбрать автоматически.',
+    authTelegramRecoveryTitle: 'Не удалось автоматически восстановить ваш аккаунт Enma.\n\nВаши данные не потеряны — нужно подтвердить старый аккаунт.',
     authTelegramErrorRetry: 'Повторить вход через Telegram',
     authTelegramErrorOther: 'Другой способ входа',
+    authTelegramRecoveryAction: 'Восстановить аккаунт',
     authBadge: 'С возвращением',
     authTitle: 'Доступ к органайзеру',
     authSubtitle: 'Войдите по email, чтобы планировать день, заметки и финансы.',
@@ -685,6 +691,13 @@ const App: React.FC = () => {
   // from "no session and nothing else is going to happen" — the former
   // must never show the manual login screen.
   const [authStatus, setAuthStatus] = useState<AuthStatus>('checking');
+  // Only meaningful while authStatus === 'telegram_auth_error' — which of
+  // the 3 distinct backend outcomes caused it, so the retry screen can show
+  // honest, specific copy (see TELEGRAM_PASSWORDLESS_AUTOAUTH audit §12)
+  // instead of one generic message for a network blip, an identity
+  // conflict, and an orphaned historical mapping alike.
+  const [telegramAuthErrorReason, setTelegramAuthErrorReason] =
+    useState<'generic' | 'identity_conflict' | 'recovery_required'>('generic');
   const prevUserId = useRef<string | null>(null);
   const telegramAuthAttemptedRef = useRef(false);
 
@@ -825,6 +838,18 @@ const App: React.FC = () => {
           return; // onAuthStateChanged fires next and sets 'authenticated'
         }
       }
+      // TELEGRAM_IDENTITY_CONFLICT / TELEGRAM_ACCOUNT_RECOVERY_REQUIRED
+      // (see api/auth/telegram.js) get their own copy below — both are
+      // deliberate "don't touch this account automatically" outcomes, not
+      // generic failures, so they're distinguished here rather than lumped
+      // into the same retry screen as a network error.
+      let code: string | null = null;
+      try { code = (await res.json())?.code ?? null; } catch { /* body already consumed or not JSON */ }
+      setTelegramAuthErrorReason(
+        code === 'TELEGRAM_IDENTITY_CONFLICT' ? 'identity_conflict' :
+        code === 'TELEGRAM_ACCOUNT_RECOVERY_REQUIRED' ? 'recovery_required' :
+        'generic'
+      );
       throw new Error(`backend rejected (status ${res.status})`);
     } catch (err) {
       console.warn('Telegram auto-auth failed', err);
@@ -1628,11 +1653,33 @@ const App: React.FC = () => {
   // Telegram initData was present but the auto-auth attempt itself failed
   // (network error, backend rejection, etc.) — a distinct screen, never a
   // silent fall-through to the manual login form (audit §15/§16).
+  //
+  // recovery_required gets its own, single-button copy: retrying the exact
+  // same initData against a deterministically dead mapping changes nothing,
+  // and "Создать новый аккаунт" must never be the primary (or only) action
+  // here — audit §12. "Восстановить аккаунт" leads to the manual AuthScreen
+  // as the only credential-based path available today; a dedicated
+  // ownership-confirmation recovery flow (audit §13) is intentionally out
+  // of scope for this round.
   if (authStatus === 'telegram_auth_error') {
+    if (telegramAuthErrorReason === 'recovery_required') {
+      return (
+        <div className={`auth-screen theme-${theme}`}>
+          <div className="auth-card loading-card">
+            <p className="auth-error">{t('authTelegramRecoveryTitle')}</p>
+            <button type="button" className="primary-button auth-submit" onClick={useOtherSignInMethod}>
+              {t('authTelegramRecoveryAction')}
+            </button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className={`auth-screen theme-${theme}`}>
         <div className="auth-card loading-card">
-          <p className="auth-error">{t('authTelegramErrorTitle')}</p>
+          <p className="auth-error">
+            {telegramAuthErrorReason === 'identity_conflict' ? t('authTelegramConflictTitle') : t('authTelegramErrorTitle')}
+          </p>
           <button type="button" className="primary-button auth-submit" onClick={retryTelegramAuth}>
             {t('authTelegramErrorRetry')}
           </button>

@@ -591,6 +591,7 @@ async function handleAdminTelegramMappingAudit(req, res) {
 
   try {
     const usersSnap = await db.collection('users').get();
+    const existingUids = new Set(usersSnap.docs.map((d) => d.id));
 
     // telegramId (as a string, normalizing the number/string chatId type
     // inconsistency this whole audit exists to account for) -> Set(uid)
@@ -606,41 +607,73 @@ async function handleAdminTelegramMappingAudit(req, res) {
     // Fold in the telegramUsers/tg_<id> -> firebaseUid mapping (written by
     // the frontend for ANY authenticated session with Telegram context,
     // including email/password users) as an additional resolution signal —
-    // same merge resolveCanonicalUid itself performs.
+    // same merge resolveCanonicalUid itself performs. Orphaned entries
+    // (firebaseUid points at a deleted account) are further split by
+    // whether this SAME Telegram id already resolves fine via its own
+    // chatId signal (harmless clutter, live auth code already ignores it —
+    // see resolveCanonicalUid) vs has no other signal at all (the real
+    // "seen before, can't recover" / recovery_required population).
     const telegramUsersSnap = await db.collection('telegramUsers').get();
     let telegramUsersWithoutResolvableAccount = 0;
+    let orphanedMappingWithExistingSignal = 0;
+    let orphanedMappingWithNoOtherSignal = 0;
     for (const doc of telegramUsersSnap.docs) {
       const firebaseUid = doc.data()?.firebaseUid;
       if (!firebaseUid) continue;
-      const mappedSnap = await db.collection('users').doc(firebaseUid).get();
-      if (!mappedSnap.exists) {
-        telegramUsersWithoutResolvableAccount++;
+      const key = doc.id.replace(/^tg_/, '');
+      if (existingUids.has(firebaseUid)) {
+        if (!chatIdToUids.has(key)) chatIdToUids.set(key, new Set());
+        chatIdToUids.get(key).add(firebaseUid);
         continue;
       }
-      const key = doc.id.replace(/^tg_/, '');
-      if (!chatIdToUids.has(key)) chatIdToUids.set(key, new Set());
-      chatIdToUids.get(key).add(firebaseUid);
+      telegramUsersWithoutResolvableAccount++;
+      if (chatIdToUids.has(key)) orphanedMappingWithExistingSignal++;
+      else orphanedMappingWithNoOtherSignal++;
     }
 
     let telegramLinkedUsers = 0;
     let uniquelyResolvableUsers = 0;
     let duplicateTelegramMappings = 0;
-    for (const uids of chatIdToUids.values()) {
+    let uniqueNotYetCached = 0;
+    for (const [key, uids] of chatIdToUids.entries()) {
       telegramLinkedUsers++;
-      if (uids.size === 1) uniquelyResolvableUsers++;
-      else if (uids.size > 1) duplicateTelegramMappings++;
+      if (uids.size === 1) {
+        uniquelyResolvableUsers++;
+        const cachedSnap = await db.collection('canonicalUids').doc(`tg_${key}`).get();
+        if (!cachedSnap.exists) uniqueNotYetCached++;
+      } else if (uids.size > 1) {
+        duplicateTelegramMappings++;
+      }
     }
 
     // canonicalUids/tg_<id> docs whose resolved uid no longer corresponds to
     // an existing users doc — a previously-resolved mapping gone dangling.
+    // Deleting a stale cache entry is always safe (it never touches real
+    // account data, just forgets a wrong shortcut) — every one of these
+    // qualifies as SAFE_AUTO_REPAIR regardless of what it would re-resolve
+    // to live.
     const canonicalUidsSnap = await db.collection('canonicalUids').get();
     let missingUidMapping = 0;
     for (const doc of canonicalUidsSnap.docs) {
       const uid = doc.data()?.uid;
       if (!uid) continue;
-      const uidSnap = await db.collection('users').doc(uid).get();
-      if (!uidSnap.exists) missingUidMapping++;
+      if (!existingUids.has(uid)) missingUidMapping++;
     }
+
+    // ── Dry-run migration preview — counts only, no writes (audit §7/§8) ──
+    // By construction of the two passes above:
+    //  - "same UID duplicated in multiple mapping documents" and "one valid
+    //    + one stale mapping" can never reach duplicateTelegramMappings — a
+    //    Set dedupes identical uids, and an orphaned telegramUsers entry is
+    //    filtered out before ever being added to a chatId's uid Set. So
+    //    every single duplicateTelegramMappings case is genuinely 2+
+    //    DISTINCT, EXISTING Firebase accounts — never safely auto-mergeable
+    //    under the no-heuristics rule (audit §4), always AMBIGUOUS.
+    const wouldRepair = missingUidMapping; // stale canonicalUids cache entries only
+    const wouldCanonicalize = uniqueNotYetCached; // pre-warm cache for already-unique identities (pure optimization, same value live auth would compute anyway)
+    const wouldSkipAmbiguous = duplicateTelegramMappings + orphanedMappingWithNoOtherSignal;
+    const wouldSkipUnrecoverable = 0; // nothing in the current schema falls outside the categories above
+    const scanned = telegramLinkedUsers + orphanedMappingWithNoOtherSignal + missingUidMapping;
 
     return res.status(200).json({
       telegramLinkedUsers,
@@ -648,6 +681,22 @@ async function handleAdminTelegramMappingAudit(req, res) {
       missingUidMapping,
       duplicateTelegramMappings,
       telegramUsersWithoutResolvableAccount,
+      duplicateAnalysis: {
+        technicalDuplicateSameUid: 0,
+        oneValidPlusStaleMapping: 0,
+        multiplePlausibleActiveUids: duplicateTelegramMappings,
+      },
+      recoveryAnalysis: {
+        orphanedMappingWithExistingSignal,
+        orphanedMappingWithNoOtherSignal,
+      },
+      dryRun: {
+        scanned,
+        wouldRepair,
+        wouldCanonicalize,
+        wouldSkipAmbiguous,
+        wouldSkipUnrecoverable,
+      },
     });
   } catch {
     console.error('[admin/telegramMappingAudit] AUDIT_FAILED');

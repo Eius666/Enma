@@ -43,37 +43,18 @@ function verifyInitData(initData, botToken) {
   return { ok: true, params };
 }
 
-// Picks one uid out of several candidates using the same tie-break every
-// call site has always used: active subscription wins, else most recently
-// updated. Never random — see TELEGRAM_PASSWORDLESS_AUTOAUTH audit §8.
-function pickBestUid(userDocsById) {
-  let bestWithSub = null;
-  let bestWithSubAt = -1;
-  let bestNoSub = null;
-  let bestNoSubAt = -1;
-
-  for (const [uid, data] of userDocsById) {
-    const updatedAt = data.updatedAt?.toMillis?.() ?? 0;
-    const sub = data.subscription;
-    const isPro = data.isPro === true;
-    const isActive = isPro && sub?.status === 'active' && sub?.endDate && new Date(sub.endDate) > new Date();
-
-    if (isActive) {
-      if (updatedAt > bestWithSubAt) { bestWithSub = uid; bestWithSubAt = updatedAt; }
-    } else {
-      if (updatedAt > bestNoSubAt) { bestNoSub = uid; bestNoSubAt = updatedAt; }
-    }
-  }
-
-  return bestWithSub ?? bestNoSub ?? null;
-}
-
 // Exhaustive existing-account lookup for a verified Telegram user id. Tries
 // every mapping this project's real schema has ever used (audited, not
 // guessed — see TELEGRAM_PASSWORDLESS_AUTOAUTH audit §4/§5) before ever
 // falling back to creating a new account:
 //
-//   1. canonicalUids/tg_<id>      — fast path once resolved once, ever
+//   1. canonicalUids/tg_<id>      — fast path, but only trusted after
+//                                   re-verifying the cached uid still
+//                                   exists (a stale cache entry — the
+//                                   production audit's missingUidMapping
+//                                   count — must never be trusted blindly;
+//                                   it self-heals here instead of needing
+//                                   a separate migration write)
 //   2. telegramUsers/tg_<id>      — written by the frontend (App.tsx) for
 //                                   ANY authenticated session that also has
 //                                   Telegram context, including users who
@@ -85,27 +66,47 @@ function pickBestUid(userDocsById) {
 //                                   existing user docs really do have a
 //                                   string-typed chatId)
 //
-// Returns { uid, isNewUser, conflict: boolean }. `conflict` means more than
-// one distinct uid matched — the caller logs telegram_auth_identity_conflict
-// and this function still returns ONE uid (via pickBestUid, the same
-// heuristic every part of this codebase has always used) rather than
-// failing the login outright.
+// Returns { status, uid }:
+//   'unique'            — exactly one existing account matched; uid is set,
+//                          safe to sign in.
+//   'conflict'          — two or more DISTINCT existing accounts matched;
+//                          uid is null. Never auto-picked, never merged,
+//                          never a new third account — see
+//                          TELEGRAM_PASSWORDLESS_AUTOAUTH audit §1/§8. The
+//                          caller returns a controlled
+//                          TELEGRAM_IDENTITY_CONFLICT response instead of a
+//                          token.
+//   'recovery_required' — zero CURRENT candidates, but a telegramUsers
+//                          mapping doc exists for this Telegram id (i.e. we
+//                          have definite evidence this identity was seen
+//                          and linked before — its target account just
+//                          isn't resolvable right now, e.g. deleted). Never
+//                          creates a new account for this case — see
+//                          audit §10/§11 ("видел раньше, но не могу
+//                          восстановить" must never fall through to
+//                          "truly new"). uid is null; the caller returns
+//                          TELEGRAM_ACCOUNT_RECOVERY_REQUIRED.
+//   'new'                — zero candidates AND no historical mapping of any
+//                          kind — this Telegram id has genuinely never been
+//                          seen before. Safe to create a fresh account.
 async function resolveCanonicalUid(telegramId) {
   const canonicalRef = db.collection('canonicalUids').doc(`tg_${telegramId}`);
   const canonicalSnap = await canonicalRef.get();
   if (canonicalSnap.exists) {
-    return { uid: canonicalSnap.data().uid, isNewUser: false, conflict: false };
+    const cachedUid = canonicalSnap.data().uid;
+    const cachedUserSnap = await db.collection('users').doc(cachedUid).get();
+    if (cachedUserSnap.exists) {
+      return { status: 'unique', uid: cachedUid };
+    }
+    // Stale cache entry (the account it names no longer exists) — fall
+    // through to a fresh resolution below instead of trusting it. Whatever
+    // this resolves to now will overwrite (or, for conflict/recovery_required,
+    // simply not touch) this stale doc.
   }
 
   const candidateUids = new Set();
-  const userDocsById = new Map();
 
-  const addDocs = (snap) => {
-    for (const d of snap.docs) {
-      candidateUids.add(d.id);
-      userDocsById.set(d.id, d.data());
-    }
-  };
+  const addDocs = (snap) => { for (const d of snap.docs) candidateUids.add(d.id); };
 
   const [telegramUsersSnap, usersNumSnap, usersStrSnap] = await Promise.all([
     db.collection('telegramUsers').doc(`tg_${telegramId}`).get(),
@@ -116,44 +117,38 @@ async function resolveCanonicalUid(telegramId) {
   addDocs(usersNumSnap);
   addDocs(usersStrSnap);
 
-  let fromTelegramUsers = null;
-  if (telegramUsersSnap.exists) {
+  const hadHistoricalMapping = telegramUsersSnap.exists;
+  if (hadHistoricalMapping) {
     const mappedUid = telegramUsersSnap.data()?.firebaseUid;
     if (mappedUid) {
       // Defensive: only trust this mapping if the account it points to
       // actually still exists (never resolve to an orphaned/deleted uid).
       const mappedUserSnap = await db.collection('users').doc(mappedUid).get();
-      if (mappedUserSnap.exists) {
-        fromTelegramUsers = mappedUid;
-        candidateUids.add(mappedUid);
-        userDocsById.set(mappedUid, mappedUserSnap.data());
-      }
+      if (mappedUserSnap.exists) candidateUids.add(mappedUid);
     }
   }
 
-  let chosenUid = null;
-  const conflict = candidateUids.size > 1;
-
   if (candidateUids.size === 1) {
-    chosenUid = [...candidateUids][0];
-  } else if (conflict) {
-    // More than one distinct account maps to this Telegram id. Prefer the
-    // explicit telegramUsers mapping (a direct, previously-confirmed link)
-    // over the chatId query results; otherwise fall back to the same
-    // active-subscription/most-recently-updated heuristic used everywhere
-    // else in this codebase. Never pick randomly, never create a third
-    // account — see audit §8.
-    chosenUid = fromTelegramUsers ?? pickBestUid(userDocsById);
+    const uid = [...candidateUids][0];
+    await canonicalRef.set({ uid, telegramId, resolvedAt: admin.firestore.FieldValue.serverTimestamp() });
+    return { status: 'unique', uid };
   }
 
-  const isNewUser = !chosenUid;
-  if (!chosenUid) {
-    chosenUid = `tg_${telegramId}`;
+  if (candidateUids.size > 1) {
+    // Deliberately does NOT write to canonicalUids — an unresolved conflict
+    // must never be cached as if it were a decision, and must stay
+    // re-checkable (e.g. once an admin resolves the conflict some other way).
+    return { status: 'conflict', uid: null };
   }
 
-  await canonicalRef.set({ uid: chosenUid, telegramId, resolvedAt: admin.firestore.FieldValue.serverTimestamp() });
+  // candidateUids.size === 0
+  if (hadHistoricalMapping) {
+    return { status: 'recovery_required', uid: null };
+  }
 
-  return { uid: chosenUid, isNewUser, conflict };
+  const newUid = `tg_${telegramId}`;
+  await canonicalRef.set({ uid: newUid, telegramId, resolvedAt: admin.firestore.FieldValue.serverTimestamp() });
+  return { status: 'new', uid: newUid };
 }
 
 // Observability events (TELEGRAM_PASSWORDLESS_AUTOAUTH audit §26) — plain
@@ -222,21 +217,28 @@ async function telegramAuthHandler(req, res) {
   }
 
   try {
-    // isNewIdentity: no existing account mapped to this Telegram id at all
-    // (used only for the backend log event name below). isNewUser (from
-    // setupNewUserIfNeeded, driven by whether a subscription doc already
-    // exists): the signal the frontend actually uses to trigger onboarding
-    // — these usually agree, but an existing account that never finished
-    // setup (no subscription doc yet) is "not a new identity" yet still
-    // needs onboarding, so they're kept as two distinct signals on purpose.
-    const { uid, isNewUser: isNewIdentity, conflict } = await resolveCanonicalUid(telegramId);
+    const resolution = await resolveCanonicalUid(telegramId);
 
-    if (conflict) {
-      // More than one existing account mapped to this Telegram id — resolved
-      // via the documented heuristic (never a random pick, never a new
-      // third account). Flagged for follow-up, not blocking the login.
-      logEvent('telegram_auth_identity_conflict', {});
+    if (resolution.status === 'conflict') {
+      // Two or more distinct existing accounts map to this Telegram id.
+      // Never auto-picked, never merged, never a new third account — see
+      // TELEGRAM_PASSWORDLESS_AUTOAUTH audit §1/§8. No token is issued.
+      logEvent('telegram_auth_identity_conflict');
+      return res.status(409).json({ error: 'identity_conflict', code: 'TELEGRAM_IDENTITY_CONFLICT' });
     }
+
+    if (resolution.status === 'recovery_required') {
+      // We have definite evidence this Telegram id was linked before (a
+      // telegramUsers mapping doc exists), but its target account isn't
+      // resolvable right now. Creating a new account here would be exactly
+      // the duplicate-account bug this whole effort exists to prevent — see
+      // audit §10/§11. No token is issued.
+      logEvent('telegram_auth_recovery_required');
+      return res.status(409).json({ error: 'recovery_required', code: 'TELEGRAM_ACCOUNT_RECOVERY_REQUIRED' });
+    }
+
+    const uid = resolution.uid;
+    const isNewIdentity = resolution.status === 'new';
 
     const startParam = params.get('start_param') || null;
     const isNewUser  = await setupNewUserIfNeeded(uid, tgUser, startParam);

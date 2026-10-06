@@ -142,9 +142,8 @@ test('resolveCanonicalUid: finds an existing user via numeric chatId', async () 
   try {
     const { resolveCanonicalUid } = require('../telegram');
     const result = await resolveCanonicalUid(42);
+    assert.equal(result.status, 'unique');
     assert.equal(result.uid, 'uidNumeric');
-    assert.equal(result.isNewUser, false);
-    assert.equal(result.conflict, false);
   } finally { teardown(); }
 });
 
@@ -157,8 +156,8 @@ test('resolveCanonicalUid: finds an existing user via STRING chatId (legacy type
   try {
     const { resolveCanonicalUid } = require('../telegram');
     const result = await resolveCanonicalUid(42);
+    assert.equal(result.status, 'unique');
     assert.equal(result.uid, 'uidStringChatId');
-    assert.equal(result.isNewUser, false);
   } finally { teardown(); }
 });
 
@@ -174,31 +173,34 @@ test('resolveCanonicalUid: finds an existing user via the telegramUsers mapping 
   try {
     const { resolveCanonicalUid } = require('../telegram');
     const result = await resolveCanonicalUid(42);
+    assert.equal(result.status, 'unique');
     assert.equal(result.uid, 'emailSignupUid');
-    assert.equal(result.isNewUser, false);
   } finally { teardown(); }
 });
 
-test('resolveCanonicalUid: ignores a telegramUsers mapping that points at a deleted account', async () => {
+test('resolveCanonicalUid: a telegramUsers mapping pointing at a deleted account, with NO other signal, is recovery_required — never creates a new account', async () => {
+  // See TELEGRAM_PASSWORDLESS_AUTOAUTH audit §10/§11: "seen this Telegram
+  // identity before, but can't recover the account right now" must NEVER
+  // be treated as "genuinely new" — the mapping doc itself is proof this
+  // identity isn't actually new, even though its target account is gone.
   injectMockDb({
     'telegramUsers/tg_42': { firebaseUid: 'deletedUid' }, // no users/deletedUid doc exists
   });
   try {
     const { resolveCanonicalUid } = require('../telegram');
     const result = await resolveCanonicalUid(42);
-    assert.equal(result.isNewUser, true);
-    assert.equal(result.uid, 'tg_42');
+    assert.equal(result.status, 'recovery_required');
+    assert.equal(result.uid, null);
   } finally { teardown(); }
 });
 
-test('resolveCanonicalUid: a genuinely new Telegram id gets a deterministic uid, never random', async () => {
+test('resolveCanonicalUid: a genuinely new Telegram id (no chatId match, no telegramUsers doc at all) gets a deterministic uid', async () => {
   injectMockDb({});
   try {
     const { resolveCanonicalUid } = require('../telegram');
     const result = await resolveCanonicalUid(999999);
+    assert.equal(result.status, 'new');
     assert.equal(result.uid, 'tg_999999');
-    assert.equal(result.isNewUser, true);
-    assert.equal(result.conflict, false);
   } finally { teardown(); }
 });
 
@@ -220,24 +222,40 @@ test('resolveCanonicalUid: caches the resolution in canonicalUids so a second ca
   } finally { teardown(); }
 });
 
-test('resolveCanonicalUid: two distinct existing accounts for the same Telegram id is flagged as a conflict, never a random pick or a third account', async () => {
-  const past = { toMillis: () => 1000 };
-  const recent = { toMillis: () => 2000 };
-  injectMockDb({
-    'users/uidOld':    { chatId: 42, isPro: false, updatedAt: past },
-    'users/uidRecent': { chatId: '42', isPro: false, updatedAt: recent },
+test('resolveCanonicalUid: a stale canonicalUids cache entry (target account deleted) self-heals instead of being trusted blindly', async () => {
+  // This is the production audit's "missingUidMapping" case — a previously
+  // cached resolution whose account no longer exists. Must never be
+  // returned as-is; must re-resolve from the live signals.
+  const db = injectMockDb({
+    'canonicalUids/tg_42': { uid: 'longGoneUid', telegramId: 42 },
+    'users/uidB': { chatId: 42, isPro: false },
   });
   try {
     const { resolveCanonicalUid } = require('../telegram');
     const result = await resolveCanonicalUid(42);
-    assert.equal(result.conflict, true);
-    assert.equal(result.isNewUser, false);
-    // Documented heuristic: most-recently-updated (no active sub on either) wins.
-    assert.equal(result.uid, 'uidRecent');
+    assert.equal(result.status, 'unique');
+    assert.equal(result.uid, 'uidB');
+    // The stale cache entry gets overwritten with the fresh, correct uid.
+    assert.equal(db._get('canonicalUids/tg_42').uid, 'uidB');
   } finally { teardown(); }
 });
 
-test('resolveCanonicalUid: conflict resolution prefers the account with an active subscription', async () => {
+test('resolveCanonicalUid: two distinct EXISTING accounts for the same Telegram id is a conflict — no uid returned, nothing picked, nothing cached', async () => {
+  const db = injectMockDb({
+    'users/uidOld':    { chatId: 42, isPro: false },
+    'users/uidRecent': { chatId: '42', isPro: false },
+  });
+  try {
+    const { resolveCanonicalUid } = require('../telegram');
+    const result = await resolveCanonicalUid(42);
+    assert.equal(result.status, 'conflict');
+    assert.equal(result.uid, null);
+    assert.equal(db._get('canonicalUids/tg_42'), undefined, 'a conflict must never be cached as if it were a decision');
+  } finally { teardown(); }
+});
+
+test('resolveCanonicalUid: conflict is never resolved by subscription status or recency — still just "conflict"', async () => {
+  // Explicitly disallowed as a sole auto-resolution criterion — audit §4/§8.
   const future = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   injectMockDb({
     'users/uidFreeNewer':  { chatId: 42, isPro: false, updatedAt: { toMillis: () => 5000 } },
@@ -249,8 +267,8 @@ test('resolveCanonicalUid: conflict resolution prefers the account with an activ
   try {
     const { resolveCanonicalUid } = require('../telegram');
     const result = await resolveCanonicalUid(42);
-    assert.equal(result.conflict, true);
-    assert.equal(result.uid, 'uidProOlder');
+    assert.equal(result.status, 'conflict');
+    assert.equal(result.uid, null);
   } finally { teardown(); }
 });
 
@@ -336,5 +354,65 @@ test('telegramAuthHandler: invalid initData creates no account and returns 401',
     await handler(req, res);
     assert.equal(statusCode, 401);
     assert.equal(db._count('users/'), 0);
+  } finally { delete process.env.TELEGRAM_BOT_TOKEN; teardown(); }
+});
+
+test('telegramAuthHandler: two existing accounts for the same Telegram user -> 409 TELEGRAM_IDENTITY_CONFLICT, no token, no new account', async () => {
+  const db = injectMockDb({
+    'users/uidOne': { chatId: 777888999, isPro: false },
+    'users/uidTwo': { chatId: '777888999', isPro: false },
+  });
+  process.env.TELEGRAM_BOT_TOKEN = BOT_TOKEN;
+  try {
+    const handler = require('../telegram');
+    const initData = signInitData(freshFields());
+    const req = { method: 'POST', body: { initData } };
+    let statusCode, jsonBody;
+    const res = { status(c) { statusCode = c; return this; }, json(b) { jsonBody = b; return this; } };
+    await handler(req, res);
+    assert.equal(statusCode, 409);
+    assert.equal(jsonBody.code, 'TELEGRAM_IDENTITY_CONFLICT');
+    assert.equal(jsonBody.token, undefined);
+    assert.equal(db._count('users/'), 2, 'no third account was created');
+  } finally { delete process.env.TELEGRAM_BOT_TOKEN; teardown(); }
+});
+
+test('telegramAuthHandler: historical telegramUsers mapping with no resolvable account -> 409 TELEGRAM_ACCOUNT_RECOVERY_REQUIRED, no new account', async () => {
+  const db = injectMockDb({
+    'telegramUsers/tg_777888999': { firebaseUid: 'longGoneUid' },
+  });
+  process.env.TELEGRAM_BOT_TOKEN = BOT_TOKEN;
+  try {
+    const handler = require('../telegram');
+    const initData = signInitData(freshFields());
+    const req = { method: 'POST', body: { initData } };
+    let statusCode, jsonBody;
+    const res = { status(c) { statusCode = c; return this; }, json(b) { jsonBody = b; return this; } };
+    await handler(req, res);
+    assert.equal(statusCode, 409);
+    assert.equal(jsonBody.code, 'TELEGRAM_ACCOUNT_RECOVERY_REQUIRED');
+    assert.equal(jsonBody.token, undefined);
+    assert.equal(db._count('users/'), 0, 'no account was created for a recovery_required identity');
+  } finally { delete process.env.TELEGRAM_BOT_TOKEN; teardown(); }
+});
+
+test('telegramAuthHandler: two simultaneous auth requests for a brand-new Telegram user create exactly one account', async () => {
+  const db = injectMockDb({});
+  process.env.TELEGRAM_BOT_TOKEN = BOT_TOKEN;
+  try {
+    const handler = require('../telegram');
+    const initData = signInitData(freshFields());
+    const run = async () => {
+      const req = { method: 'POST', body: { initData } };
+      let statusCode, jsonBody;
+      const res = { status(c) { statusCode = c; return this; }, json(b) { jsonBody = b; return this; } };
+      await handler(req, res);
+      return { statusCode, jsonBody };
+    };
+    const [first, second] = await Promise.all([run(), run()]);
+    assert.equal(first.statusCode, 200);
+    assert.equal(second.statusCode, 200);
+    assert.equal(first.jsonBody.uid, second.jsonBody.uid, 'both requests resolve to the identical uid');
+    assert.equal(db._count('subscriptions/'), 1, 'exactly one trial subscription was created, not two');
   } finally { delete process.env.TELEGRAM_BOT_TOKEN; teardown(); }
 });

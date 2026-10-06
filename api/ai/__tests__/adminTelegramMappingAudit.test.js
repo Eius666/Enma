@@ -85,7 +85,7 @@ test('adminTelegramMappingAudit: no body required — {} is a valid request', as
   } finally { teardown(); }
 });
 
-test('adminTelegramMappingAudit: valid key reaches the handler and returns ONLY the 5 allowed aggregate fields', async () => {
+test('adminTelegramMappingAudit: valid key reaches the handler and returns only the allowed aggregate fields (top-level + nested breakdown)', async () => {
   const db = injectDb({
     'users/uidA': { chatId: 111 },
     'users/uidB': { chatId: '222' },
@@ -97,15 +97,83 @@ test('adminTelegramMappingAudit: valid key reaches the handler and returns ONLY 
     await handler(req, res);
 
     assert.equal(res.statusCode, 200);
-    const allowedKeys = [
+    const allowedTopLevelKeys = [
       'telegramLinkedUsers', 'uniquelyResolvableUsers', 'missingUidMapping',
       'duplicateTelegramMappings', 'telegramUsersWithoutResolvableAccount',
+      'duplicateAnalysis', 'recoveryAnalysis', 'dryRun',
     ];
-    assert.deepEqual(Object.keys(res.body).sort(), allowedKeys.sort());
-    for (const v of Object.values(res.body)) assert.equal(typeof v, 'number');
+    assert.deepEqual(Object.keys(res.body).sort(), allowedTopLevelKeys.sort());
+    for (const k of ['telegramLinkedUsers', 'uniquelyResolvableUsers', 'missingUidMapping', 'duplicateTelegramMappings', 'telegramUsersWithoutResolvableAccount']) {
+      assert.equal(typeof res.body[k], 'number');
+    }
+    for (const v of Object.values(res.body.duplicateAnalysis)) assert.equal(typeof v, 'number');
+    for (const v of Object.values(res.body.recoveryAnalysis)) assert.equal(typeof v, 'number');
+    for (const v of Object.values(res.body.dryRun)) assert.equal(typeof v, 'number');
     assert.equal(res.body.telegramLinkedUsers, 2);
     assert.equal(res.body.uniquelyResolvableUsers, 2);
     assert.equal(res.body.duplicateTelegramMappings, 0);
+  } finally { teardown(); }
+});
+
+test('adminTelegramMappingAudit: duplicateAnalysis attributes every conflict to multiplePlausibleActiveUids, never the two safe-pattern buckets', async () => {
+  const db = injectDb({
+    'users/uidOne': { chatId: 333 },
+    'users/uidTwo': { chatId: '333' },
+  });
+  try {
+    const handler = require('../[action]');
+    const req = mockReq({ headers: { 'x-admin-key': ADMIN_KEY } });
+    const res = mockRes();
+    await handler(req, res);
+
+    assert.equal(res.body.duplicateAnalysis.technicalDuplicateSameUid, 0);
+    assert.equal(res.body.duplicateAnalysis.oneValidPlusStaleMapping, 0);
+    assert.equal(res.body.duplicateAnalysis.multiplePlausibleActiveUids, 1);
+  } finally { teardown(); }
+});
+
+test('adminTelegramMappingAudit: recoveryAnalysis splits orphaned telegramUsers mappings by whether another signal already resolves them', async () => {
+  const db = injectDb({
+    // tg_111: orphaned mapping, but a real chatId-linked account exists too — already fine.
+    'users/uidReal': { chatId: 111 },
+    'telegramUsers/tg_111': { firebaseUid: 'nonexistentA' },
+    // tg_222: orphaned mapping, and NO other signal at all — true recovery_required.
+    'telegramUsers/tg_222': { firebaseUid: 'nonexistentB' },
+  });
+  try {
+    const handler = require('../[action]');
+    const req = mockReq({ headers: { 'x-admin-key': ADMIN_KEY } });
+    const res = mockRes();
+    await handler(req, res);
+
+    assert.equal(res.body.telegramUsersWithoutResolvableAccount, 2);
+    assert.equal(res.body.recoveryAnalysis.orphanedMappingWithExistingSignal, 1);
+    assert.equal(res.body.recoveryAnalysis.orphanedMappingWithNoOtherSignal, 1);
+  } finally { teardown(); }
+});
+
+test('adminTelegramMappingAudit: dry-run preview never reports a non-zero count for unrecoverable, and never touches the store', async () => {
+  const db = injectDb({
+    'users/uidUnique': { chatId: 100 },
+    'users/uidDupA':   { chatId: 200 },
+    'users/uidDupB':   { chatId: '200' },
+    'telegramUsers/tg_300': { firebaseUid: 'ghostUid' }, // orphaned, no other signal
+    'canonicalUids/tg_400': { uid: 'anotherGhostUid' },  // stale cache entry
+  });
+  try {
+    const handler = require('../[action]');
+    const before = JSON.stringify([...db._store.entries()]);
+    const req = mockReq({ headers: { 'x-admin-key': ADMIN_KEY } });
+    const res = mockRes();
+    await handler(req, res);
+    const after = JSON.stringify([...db._store.entries()]);
+
+    assert.equal(before, after, 'dry-run preview must never write');
+    assert.equal(res.body.dryRun.wouldRepair, 1, 'the one stale canonicalUids entry');
+    assert.equal(res.body.dryRun.wouldCanonicalize, 1, 'the one uncached-but-unique identity');
+    assert.equal(res.body.dryRun.wouldSkipAmbiguous, 2, '1 duplicate + 1 no-signal orphaned mapping');
+    assert.equal(res.body.dryRun.wouldSkipUnrecoverable, 0);
+    assert.equal(res.body.dryRun.scanned, res.body.telegramLinkedUsers + 1 + 1);
   } finally { teardown(); }
 });
 
