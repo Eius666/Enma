@@ -91,9 +91,7 @@ function verifyInitData(initData, botToken) {
 //                          seen before. Safe to create a fresh account.
 // The live, authoritative "who could this Telegram id possibly be" check —
 // steps 2-4 of the lookup above, factored out of resolveCanonicalUid for
-// readability (it was also reused by the now-removed one-time migration
-// APPLY endpoint's re-verification step — see TELEGRAM_PASSWORDLESS_AUTOAUTH
-// audit history). Never touches canonicalUids — purely a read.
+// readability. Never touches canonicalUids — purely a read.
 async function gatherLiveCandidates(telegramId) {
   const candidateUids = new Set();
   const addDocs = (snap) => { for (const d of snap.docs) candidateUids.add(d.id); };
@@ -122,11 +120,11 @@ async function gatherLiveCandidates(telegramId) {
 }
 
 async function resolveCanonicalUid(telegramId) {
-  // 0. Verified manual recovery link — authoritative, created ONLY by the
-  // admin-gated recovery endpoint (handleAdminLinkTelegramAccount), never
-  // by this function. Checked FIRST, before the ordinary canonicalUids
-  // cache, so a stale cache entry can never shadow an explicit, verified
-  // recovery decision — this is deliberately a DIFFERENT trust tier from
+  // 0. Verified manual recovery link — authoritative, created ONLY by a
+  // separate admin-gated recovery endpoint, never by this function. Checked
+  // FIRST, before the ordinary canonicalUids cache, so a stale cache entry
+  // can never shadow an explicit, verified recovery decision — this is
+  // deliberately a DIFFERENT trust tier from
   // the ordinary cache below, not a variant of it (see
   // TELEGRAM_PASSWORDLESS_AUTOAUTH audit, targeted-recovery round §5/§6).
   let hadVerifiedManualLink = false;
@@ -365,11 +363,8 @@ async function setupNewUserIfNeeded(uid, tgUser, startParam) {
 }
 
 module.exports = telegramAuthHandler;
-// Named exports for unit testing AND for handleAdminLinkTelegramAccount
-// (api/ai/[action].js) to report safe, aggregate-only "how many candidates
-// existed before this link" info without reimplementing the lookup —
+// Named exports purely for unit testing (see __tests__/telegram.test.js) —
 // Vercel's runtime only ever calls module.exports() itself, same as before.
 module.exports.verifyInitData = verifyInitData;
 module.exports.resolveCanonicalUid = resolveCanonicalUid;
 module.exports.setupNewUserIfNeeded = setupNewUserIfNeeded;
-module.exports.gatherLiveCandidates = gatherLiveCandidates;
