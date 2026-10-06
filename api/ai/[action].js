@@ -704,6 +704,169 @@ async function handleAdminTelegramMappingAudit(req, res) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TEMPORARY — TELEGRAM_PASSWORDLESS_AUTOAUTH one-time migration APPLY.
+// Writes ONLY the two categories explicitly authorized: repairing stale
+// canonicalUids cache entries, and pre-canonicalizing already-unique
+// Telegram identities that aren't cached yet. Every ambiguous case
+// (conflict or recovery_required) is always skipped — never picked, never
+// merged, never a new account. Remove this handler and its router entry
+// together with handleAdminTelegramMappingAudit once this migration has
+// run and been verified (see final report).
+//
+// Idempotency: each candidate is re-verified INSIDE its own Firestore
+// transaction, immediately before writing, using gatherLiveCandidates —
+// the exact same live-resolution logic api/auth/telegram.js's
+// resolveCanonicalUid uses, not a separate reimplementation. If the state
+// changed since the read-only audit (or since this handler's own Phase 1
+// scan), the candidate is skipped, not written with a stale decision. A
+// second run after a successful apply is a no-op (every candidate it
+// would have touched is already resolved).
+//
+// Never touches user data: only canonicalUids documents are written
+// (set/delete) — no users/subscriptions/transactions/tasks/habits/notes
+// doc is ever read for a write decision or touched by a write here.
+// ─────────────────────────────────────────────────────────────────────────────
+async function handleAdminTelegramMappingApply(req, res) {
+  const adminKey = process.env.ADMIN_API_KEY;
+  if (!adminKey || req.headers['x-admin-key'] !== adminKey) {
+    return res.status(403).json({ ok: false, code: 'ADMIN_UNAUTHORIZED' });
+  }
+
+  try {
+    await db.collection('users').limit(1).get();
+  } catch {
+    console.error('[admin/telegramMappingApply] FIRESTORE_QUERY_FAILED');
+    return res.status(500).json({ ok: false, code: 'APPLY_FAILED' });
+  }
+
+  const { gatherLiveCandidates } = require('../auth/telegram');
+
+  let scanned = 0;
+  let repaired = 0;
+  let canonicalized = 0;
+  let skippedAmbiguous = 0;
+  let skippedStateChanged = 0;
+  let failed = 0;
+
+  try {
+    // ── Phase 1 (read-only): identify candidates exactly as the audit does ──
+    const usersSnap = await db.collection('users').get();
+    const existingUids = new Set(usersSnap.docs.map((d) => d.id));
+
+    const chatIdToUids = new Map();
+    usersSnap.forEach((doc) => {
+      const chatId = doc.data().chatId;
+      if (chatId === undefined || chatId === null || chatId === '') return;
+      const key = String(chatId);
+      if (!chatIdToUids.has(key)) chatIdToUids.set(key, new Set());
+      chatIdToUids.get(key).add(doc.id);
+    });
+
+    const telegramUsersSnap = await db.collection('telegramUsers').get();
+    for (const doc of telegramUsersSnap.docs) {
+      const firebaseUid = doc.data()?.firebaseUid;
+      if (!firebaseUid || !existingUids.has(firebaseUid)) continue;
+      const key = doc.id.replace(/^tg_/, '');
+      if (!chatIdToUids.has(key)) chatIdToUids.set(key, new Set());
+      chatIdToUids.get(key).add(firebaseUid);
+    }
+
+    const canonicalizeCandidateKeys = [];
+    for (const [key, uids] of chatIdToUids.entries()) {
+      scanned++;
+      if (uids.size !== 1) { skippedAmbiguous++; continue; }
+      const cachedSnap = await db.collection('canonicalUids').doc(`tg_${key}`).get();
+      if (!cachedSnap.exists) canonicalizeCandidateKeys.push(key);
+    }
+
+    const canonicalUidsSnap = await db.collection('canonicalUids').get();
+    const repairCandidateDocIds = [];
+    for (const doc of canonicalUidsSnap.docs) {
+      const uid = doc.data()?.uid;
+      if (!uid) continue;
+      if (!existingUids.has(uid)) repairCandidateDocIds.push(doc.id);
+    }
+    scanned += repairCandidateDocIds.length;
+
+    // ── Phase 2 (writes): repair — delete a stale cache entry, after
+    // re-confirming inside the transaction that it is STILL stale. ──
+    for (const docId of repairCandidateDocIds) {
+      try {
+        const didRepair = await db.runTransaction(async (tx) => {
+          const ref = db.collection('canonicalUids').doc(docId);
+          const snap = await tx.get(ref);
+          if (!snap.exists) return false; // already gone
+          const uid = snap.data()?.uid;
+          if (!uid) return false;
+          const userSnap = await tx.get(db.collection('users').doc(uid));
+          if (userSnap.exists) return false; // state changed — now valid, leave it alone
+          tx.delete(ref);
+          return true;
+        });
+        if (didRepair) repaired++;
+        else skippedStateChanged++;
+      } catch (err) {
+        console.error('[admin/telegramMappingApply] repair transaction failed');
+        failed++;
+      }
+    }
+
+    // ── Phase 2 (writes): canonicalize — write canonicalUids only after
+    // re-gathering live candidates fresh INSIDE the transaction and
+    // confirming exactly one still matches. ──
+    for (const key of canonicalizeCandidateKeys) {
+      try {
+        const telegramId = Number(key);
+        const didCanonicalize = await db.runTransaction(async (tx) => {
+          const canonicalRef = db.collection('canonicalUids').doc(`tg_${key}`);
+          const existingCanonical = await tx.get(canonicalRef);
+          if (existingCanonical.exists) return false; // race — already canonicalized since Phase 1
+
+          const [telegramUsersSnapTx, usersNumSnapTx, usersStrSnapTx] = await Promise.all([
+            tx.get(db.collection('telegramUsers').doc(`tg_${telegramId}`)),
+            tx.get(db.collection('users').where('chatId', '==', telegramId)),
+            tx.get(db.collection('users').where('chatId', '==', String(telegramId))),
+          ]);
+
+          const freshCandidates = new Set();
+          for (const d of usersNumSnapTx.docs) freshCandidates.add(d.id);
+          for (const d of usersStrSnapTx.docs) freshCandidates.add(d.id);
+          if (telegramUsersSnapTx.exists) {
+            const mappedUid = telegramUsersSnapTx.data()?.firebaseUid;
+            if (mappedUid) {
+              const mappedUserSnap = await tx.get(db.collection('users').doc(mappedUid));
+              if (mappedUserSnap.exists) freshCandidates.add(mappedUid);
+            }
+          }
+
+          if (freshCandidates.size !== 1) return false; // state changed since Phase 1 — no longer unique
+
+          const uid = [...freshCandidates][0];
+          tx.set(canonicalRef, { uid, telegramId, resolvedAt: admin.firestore.FieldValue.serverTimestamp() });
+          return true;
+        });
+        if (didCanonicalize) canonicalized++;
+        else skippedStateChanged++;
+      } catch (err) {
+        console.error('[admin/telegramMappingApply] canonicalize transaction failed');
+        failed++;
+      }
+    }
+
+    console.log('[admin/telegramMappingApply] completed', {
+      scanned, repaired, canonicalized, skippedAmbiguous, skippedStateChanged, failed,
+    });
+
+    return res.status(200).json({
+      scanned, repaired, canonicalized, skippedAmbiguous, skippedStateChanged, failed,
+    });
+  } catch {
+    console.error('[admin/telegramMappingApply] APPLY_FAILED');
+    return res.status(500).json({ ok: false, code: 'APPLY_FAILED' });
+  }
+}
+
 async function handleAdminStats(req, res) {
   if (!requireAdmin(req, res)) return;
 
@@ -1659,6 +1822,8 @@ module.exports = async (req, res) => {
       // TEMPORARY — see handleAdminTelegramMappingAudit's own comment. Remove
       // this line + the handler above once the one-time audit has run.
       case 'adminTelegramMappingAudit': return await handleAdminTelegramMappingAudit(req, res);
+      // TEMPORARY — see handleAdminTelegramMappingApply's own comment.
+      case 'adminTelegramMappingApply':  return await handleAdminTelegramMappingApply(req, res);
       default:
         return res.status(404).json({ error: `Unknown AI action: ${action}` });
     }

@@ -89,23 +89,14 @@ function verifyInitData(initData, botToken) {
 //   'new'                — zero candidates AND no historical mapping of any
 //                          kind — this Telegram id has genuinely never been
 //                          seen before. Safe to create a fresh account.
-async function resolveCanonicalUid(telegramId) {
-  const canonicalRef = db.collection('canonicalUids').doc(`tg_${telegramId}`);
-  const canonicalSnap = await canonicalRef.get();
-  if (canonicalSnap.exists) {
-    const cachedUid = canonicalSnap.data().uid;
-    const cachedUserSnap = await db.collection('users').doc(cachedUid).get();
-    if (cachedUserSnap.exists) {
-      return { status: 'unique', uid: cachedUid };
-    }
-    // Stale cache entry (the account it names no longer exists) — fall
-    // through to a fresh resolution below instead of trusting it. Whatever
-    // this resolves to now will overwrite (or, for conflict/recovery_required,
-    // simply not touch) this stale doc.
-  }
-
+// The live, authoritative "who could this Telegram id possibly be" check —
+// steps 2-4 of the lookup above, factored out so the one-time migration
+// APPLY logic (api/ai/[action].js's adminTelegramMappingApply) can re-verify
+// a candidate immediately before writing using the EXACT same logic the
+// live auth path uses, instead of a separate reimplementation that could
+// silently drift out of sync. Never touches canonicalUids — purely a read.
+async function gatherLiveCandidates(telegramId) {
   const candidateUids = new Set();
-
   const addDocs = (snap) => { for (const d of snap.docs) candidateUids.add(d.id); };
 
   const [telegramUsersSnap, usersNumSnap, usersStrSnap] = await Promise.all([
@@ -127,6 +118,26 @@ async function resolveCanonicalUid(telegramId) {
       if (mappedUserSnap.exists) candidateUids.add(mappedUid);
     }
   }
+
+  return { candidateUids, hadHistoricalMapping };
+}
+
+async function resolveCanonicalUid(telegramId) {
+  const canonicalRef = db.collection('canonicalUids').doc(`tg_${telegramId}`);
+  const canonicalSnap = await canonicalRef.get();
+  if (canonicalSnap.exists) {
+    const cachedUid = canonicalSnap.data().uid;
+    const cachedUserSnap = await db.collection('users').doc(cachedUid).get();
+    if (cachedUserSnap.exists) {
+      return { status: 'unique', uid: cachedUid };
+    }
+    // Stale cache entry (the account it names no longer exists) — fall
+    // through to a fresh resolution below instead of trusting it. Whatever
+    // this resolves to now will overwrite (or, for conflict/recovery_required,
+    // simply not touch) this stale doc.
+  }
+
+  const { candidateUids, hadHistoricalMapping } = await gatherLiveCandidates(telegramId);
 
   if (candidateUids.size === 1) {
     const uid = [...candidateUids][0];
@@ -329,8 +340,11 @@ async function setupNewUserIfNeeded(uid, tgUser, startParam) {
 }
 
 module.exports = telegramAuthHandler;
-// Named exports purely for unit testing (see __tests__/telegram.test.js) —
-// Vercel's runtime only ever calls module.exports() itself, same as before.
+// Named exports for unit testing AND for adminTelegramMappingApply's
+// re-verification step (api/ai/[action].js) to reuse the exact same
+// candidate-resolution logic the live auth path uses — Vercel's runtime
+// only ever calls module.exports() itself, same as before.
 module.exports.verifyInitData = verifyInitData;
 module.exports.resolveCanonicalUid = resolveCanonicalUid;
 module.exports.setupNewUserIfNeeded = setupNewUserIfNeeded;
+module.exports.gatherLiveCandidates = gatherLiveCandidates;
