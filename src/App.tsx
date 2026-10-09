@@ -1500,54 +1500,16 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const habitReminderDateRef = useRef<string>('');
-
-  const scheduleHabitReminder = useCallback(
-    async (habit: Habit) => {
-      if (!habit.reminderTime || !user || !telegram?.initDataUnsafe?.user?.id) return;
-      const today = format(new Date(), 'yyyy-MM-dd');
-      const [hh, mm] = habit.reminderTime.split(':').map(Number);
-      const scheduledDate = new Date();
-      scheduledDate.setHours(hh, mm, 0, 0);
-      scheduledDate.setTime(scheduledDate.getTime() - 30_000);
-      if (scheduledDate <= new Date()) return;
-      const docId = `habit-${habit.id}-${today}`;
-      try {
-        const snap = await getDoc(doc(db, 'reminders', docId));
-        if (snap.exists()) return;
-        await setDoc(doc(db, 'reminders', docId), {
-          id: docId,
-          userId: user.uid,
-          chatId: telegram.initDataUnsafe.user.id,
-          type: 'habit_reminder',
-          habitId: habit.id,
-          title: habit.title,
-          scheduledAt: Timestamp.fromDate(scheduledDate),
-          status: 'pending',
-          telegramText:
-            language === 'ru'
-              ? `🌱 Привычка: «${habit.title}» — не забудь отметить сегодня!`
-              : `🌱 Habit: «${habit.title}» — don't forget to check in today!`,
-          language,
-          date: today,
-          updatedAt: serverTimestamp(),
-          createdAt: serverTimestamp(),
-        });
-      } catch (error) {
-        console.warn('Failed to schedule habit reminder', error);
-      }
-    },
-    [user, telegram, language]
-  );
-
-  useEffect(() => {
-    const today = format(new Date(), 'yyyy-MM-dd');
-    if (!user || habits.length === 0 || habitReminderDateRef.current === today) return;
-    habitReminderDateRef.current = today;
-    habits.forEach(habit => {
-      if (habit.reminderTime) scheduleHabitReminder(habit);
-    });
-  }, [habits, user, scheduleHabitReminder]);
+  // Habit reminders are materialized server-side (functions/src/index.ts's
+  // materializeHabitReminders, every 15 min) directly from the Firestore
+  // `habits` collection, so delivery no longer depends on this screen being
+  // open. A client-side scheduler used to live here, but it only ever acted
+  // on the legacy localStorage-only `habits` state above (type Habit, with
+  // `history`/no `repeatType`/`repeatDays`) — never on `firestoreHabits`,
+  // the actual data the Habits tab reads and writes. Since nothing
+  // populates that legacy state for the current Habits feature, it never
+  // ran for a real habit; removed rather than "fixed" so there's exactly
+  // one place (the server) that decides when a habit reminder is due.
 
   useEffect(() => {
     loadExchangeRates();

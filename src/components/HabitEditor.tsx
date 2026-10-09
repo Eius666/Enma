@@ -14,6 +14,7 @@ import type { HabitDoc } from './HabitsList';
 import type { Subscription } from '../subscription';
 import { getActivePlan, FREE_LIMITS } from '../subscription';
 import { subscribeFreeUsage } from '../lib/usageCounters';
+import { cancelTodayHabitReminder } from '../lib/habitReminders';
 import Paywall, { LimitBanner } from './Paywall';
 import './Habits.css';
 
@@ -289,6 +290,12 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
         archived,
         updatedAt:    serverTimestamp(),
       }, { merge: true });
+      // Reminder turned off → cancel whatever's still pending for today so
+      // the server-side materializer (which only ever CREATES/reschedules,
+      // never cancels on its own) doesn't leave a stale send in flight.
+      if (!reminderTime) {
+        await cancelTodayHabitReminder(id, format(new Date(), 'yyyy-MM-dd'));
+      }
       onBack();
     } catch (err) {
       console.error('HabitEditor save error', err);
@@ -309,6 +316,11 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
         archived: next,
         updatedAt: serverTimestamp(),
       });
+      // Archiving pauses reminders (PHASE 6: "привычка приостановлена → не
+      // отправлять") — cancel anything already queued for today.
+      if (next) {
+        await cancelTodayHabitReminder(habitId, format(new Date(), 'yyyy-MM-dd'));
+      }
       onBack();
     } catch (err) {
       console.warn('HabitEditor archive error', err);
@@ -324,6 +336,8 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
     if (!window.confirm(t.confirmDelete)) return;
     try {
       await deleteDoc(doc(db, 'habits', habitId));
+      // PHASE 6: "привычка удалена → ничего не отправлять".
+      await cancelTodayHabitReminder(habitId, format(new Date(), 'yyyy-MM-dd'));
     } catch (err) {
       console.warn('HabitEditor delete error', err);
     }
