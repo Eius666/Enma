@@ -6,7 +6,7 @@ import {
   localToUtc,
   isHabitDueOnWeekday,
   habitReminderDocId,
-  computeHabitOccurrence,
+  resolveHabitOccurrence,
 } from '../habitSchedule';
 
 // ── getLocalDateKey / getLocalWeekdayIndex ──────────────────────────────────
@@ -105,59 +105,118 @@ test('habitReminderDocId matches the legacy client-side scheme exactly', () => {
   assert.equal(habitReminderDocId('abc123', '2026-10-09'), 'habit-abc123-2026-10-09');
 });
 
-// ── computeHabitOccurrence ───────────────────────────────────────────────────
+// ── resolveHabitOccurrence ───────────────────────────────────────────────────
 
-test('computeHabitOccurrence resolves a due daily habit', () => {
+test('resolveHabitOccurrence resolves a due daily habit', () => {
   const now = new Date('2026-10-05T06:00:00Z'); // Monday
-  const occ = computeHabitOccurrence(
+  const d = resolveHabitOccurrence(
     'habit1',
     { repeatType: 'daily', reminderTime: '09:00' },
     'Europe/Moscow',
     now
   );
-  assert.ok(occ);
-  assert.equal(occ!.dateKey, '2026-10-05');
-  assert.equal(occ!.docId, 'habit-habit1-2026-10-05');
-  assert.equal(occ!.scheduledAt.toISOString(), '2026-10-05T06:00:00.000Z'); // 09:00 MSK = 06:00 UTC
+  assert.equal(d.due, true);
+  assert.equal(d.dateKey, '2026-10-05');
+  assert.equal(d.docId, 'habit-habit1-2026-10-05');
+  assert.equal(d.scheduledAt!.toISOString(), '2026-10-05T06:00:00.000Z'); // 09:00 MSK = 06:00 UTC
 });
 
-test('computeHabitOccurrence returns null for an archived habit', () => {
-  const occ = computeHabitOccurrence(
+test('resolveHabitOccurrence is not due for an archived habit, but still resolves today\'s docId', () => {
+  const d = resolveHabitOccurrence(
     'habit1',
     { repeatType: 'daily', reminderTime: '09:00', archived: true },
-    'Europe/Moscow'
+    'Europe/Moscow',
+    new Date('2026-10-05T06:00:00Z')
   );
-  assert.equal(occ, null);
+  assert.equal(d.due, false);
+  assert.equal(d.scheduledAt, null);
+  assert.equal(d.docId, 'habit-habit1-2026-10-05'); // still resolvable, so a stale doc can be found & cancelled
 });
 
-test('computeHabitOccurrence returns null when reminders are disabled', () => {
-  const occ = computeHabitOccurrence(
+test('resolveHabitOccurrence is not due when reminders are disabled', () => {
+  const d = resolveHabitOccurrence(
     'habit1',
     { repeatType: 'daily', reminderTime: null },
     'Europe/Moscow'
   );
-  assert.equal(occ, null);
+  assert.equal(d.due, false);
 });
 
-test('computeHabitOccurrence returns null on a day not selected for a custom habit', () => {
+test('resolveHabitOccurrence is not due on a day not selected for a custom habit', () => {
   const tuesday = new Date('2026-10-06T06:00:00Z');
-  const occ = computeHabitOccurrence(
+  const d = resolveHabitOccurrence(
     'habit1',
     { repeatType: 'custom', repeatDays: [0, 2, 4], reminderTime: '18:00' }, // Mon/Wed/Fri
     'Europe/Moscow',
     tuesday
   );
-  assert.equal(occ, null);
+  assert.equal(d.due, false);
 });
 
-test('computeHabitOccurrence resolves a due day for a custom habit', () => {
+test('resolveHabitOccurrence resolves a due day for a custom habit', () => {
   const wednesday = new Date('2026-10-07T06:00:00Z');
-  const occ = computeHabitOccurrence(
+  const d = resolveHabitOccurrence(
     'habit1',
     { repeatType: 'custom', repeatDays: [0, 2, 4], reminderTime: '18:00' },
     'Europe/Moscow',
     wednesday
   );
-  assert.ok(occ);
-  assert.equal(occ!.dateKey, '2026-10-07');
+  assert.equal(d.due, true);
+  assert.equal(d.dateKey, '2026-10-07');
+});
+
+// ── resolveHabitOccurrence × habitCreatedAt (PHASE 1 fix: no surprise
+// backdated fire for a habit that didn't exist yet at today's reminder time) ──
+
+test('a brand-new habit whose reminder time has already passed today is not due today', () => {
+  const createdAt = new Date('2026-10-05T11:00:00Z'); // created at 14:00 MSK
+  const now       = new Date('2026-10-05T12:00:00Z'); // materializer runs at 15:00 MSK
+  const d = resolveHabitOccurrence(
+    'habit1',
+    { repeatType: 'daily', reminderTime: '09:00' }, // 09:00 MSK already passed
+    'Europe/Moscow',
+    now,
+    createdAt
+  );
+  assert.equal(d.due, false);
+});
+
+test('a brand-new habit whose reminder time is still ahead today is due today', () => {
+  const createdAt = new Date('2026-10-05T06:00:00Z'); // created at 09:00 MSK
+  const now       = new Date('2026-10-05T07:00:00Z'); // now 10:00 MSK
+  const d = resolveHabitOccurrence(
+    'habit1',
+    { repeatType: 'daily', reminderTime: '18:00' }, // still ahead
+    'Europe/Moscow',
+    now,
+    createdAt
+  );
+  assert.equal(d.due, true);
+});
+
+test('an existing habit catches up correctly after an outage, regardless of its (old) createdAt', () => {
+  // The habit has existed for weeks; a scheduler outage just means this
+  // run is late. createdAt being long in the past must never suppress it.
+  const createdAt = new Date('2026-01-01T00:00:00Z');
+  const now        = new Date('2026-10-05T07:00:00Z'); // 10:00 MSK, reminder was 09:00 MSK
+  const d = resolveHabitOccurrence(
+    'habit1',
+    { repeatType: 'daily', reminderTime: '09:00' },
+    'Europe/Moscow',
+    now,
+    createdAt
+  );
+  assert.equal(d.due, true); // still materialized — will fire immediately via sendDueReminders, late but not lost
+});
+
+test('resolveHabitOccurrence without habitCreatedAt never suppresses (backward compatible)', () => {
+  const now = new Date('2026-10-05T12:00:00Z'); // 15:00 MSK, well past 09:00
+  const d = resolveHabitOccurrence(
+    'habit1',
+    { repeatType: 'daily', reminderTime: '09:00' },
+    'Europe/Moscow',
+    now
+    // no habitCreatedAt passed
+  );
+  assert.equal(d.due, true);
 });

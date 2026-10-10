@@ -2,7 +2,7 @@ import {initializeApp} from 'firebase-admin/app';
 import {FieldValue, getFirestore, Timestamp} from 'firebase-admin/firestore';
 import {onSchedule} from 'firebase-functions/v2/scheduler';
 import {logger} from 'firebase-functions';
-import {computeHabitOccurrence, HabitScheduleInput} from './habitSchedule';
+import {resolveHabitOccurrence, HabitScheduleInput} from './habitSchedule';
 
 initializeApp();
 
@@ -84,11 +84,91 @@ const processWithConcurrency = async <T>(
   await Promise.all(workers);
 };
 
-export const sendDueReminders = onSchedule(
-  {
-    schedule: 'every 1 minutes',
-  },
-  async () => {
+type HabitDoc = {
+  userId?: string;
+  title?: string;
+  repeatType?: 'daily' | 'custom';
+  repeatDays?: number[];
+  reminderTime?: string | null;
+  archived?: boolean;
+  createdAt?: Timestamp;
+};
+
+interface UserContact {
+  chatId: string | number;
+  timezone: string;
+}
+
+const getUserContact = async (
+  userId: string,
+  cache: Map<string, UserContact | null>
+): Promise<UserContact | null> => {
+  if (cache.has(userId)) return cache.get(userId) ?? null;
+
+  const snap = await db.collection('users').doc(userId).get();
+  const data = snap.exists ? (snap.data() as {chatId?: string | number; timezone?: string}) : undefined;
+
+  // No chatId → user hasn't linked Telegram yet. Not an error: just nothing
+  // to deliver to. (Mirrors api/_lib/tools.js's getUserTimezone fallback.)
+  if (!data?.chatId) {
+    cache.set(userId, null);
+    return null;
+  }
+
+  const timezone = (typeof data.timezone === 'string' && data.timezone) ? data.timezone : DEFAULT_TZ;
+  const contact: UserContact = {chatId: data.chatId, timezone};
+  cache.set(userId, contact);
+  return contact;
+};
+
+/**
+ * Re-validates a `habit_reminder` right before it's actually sent — the
+ * latest possible, and therefore safest, point to catch a habit that was
+ * archived, deleted, had its reminder disabled, or had its repeatDays
+ * changed to no longer include today, AFTER this reminder was materialized
+ * (PHASE 2, scenario E of the pre-deploy review: never send a knowably
+ * stale reminder if it can be safely cancelled first). materializeHabitReminders
+ * also self-heals this within its own 15-minute cadence, but a reminder
+ * already scheduled for later today wouldn't be revisited by it until this
+ * check runs anyway — so this is the authoritative check, not a redundant one.
+ */
+const isHabitStillDueToday = async (
+  habitId: string,
+  now: Timestamp
+): Promise<boolean> => {
+  const habitSnap = await db.collection('habits').doc(habitId).get();
+  if (!habitSnap.exists) return false;
+
+  const h = habitSnap.data() as HabitDoc;
+  if (!h.userId) return false;
+
+  const contact = await getUserContact(h.userId, new Map());
+  if (!contact) return false;
+
+  const decision = resolveHabitOccurrence(
+    habitId,
+    {
+      repeatType:   h.repeatType === 'custom' ? 'custom' : 'daily',
+      repeatDays:   h.repeatDays,
+      reminderTime: h.reminderTime,
+      archived:     h.archived,
+    },
+    contact.timezone,
+    now.toDate()
+    // habitCreatedAt deliberately omitted here: by the time a reminder is
+    // actually due to send, it's already past materialization — re-running
+    // the "didn't exist yet" guard at send time would be the same check,
+    // redundant with what materializeHabitReminders already decided.
+  );
+  return decision.due;
+};
+
+/**
+ * The actual delivery logic, exported separately from the `onSchedule`
+ * wrapper below for the same reason as materializeHabitRemindersHandler:
+ * direct, envelope-free invocation from integration tests.
+ */
+export const sendDueRemindersHandler = async (): Promise<void> => {
     const now = Timestamp.now();
     const token = process.env.BOT_TOKEN;
     if (!token) {
@@ -120,15 +200,39 @@ export const sendDueReminders = onSchedule(
         telegramText?: string;
         title?: string;
         retryCount?: number;
+        type?: string;
+        habitId?: string;
       };
-
-      const retryCount = data.retryCount ?? 0;
-      const messageText = resolveMessageText(data);
 
       logger.info('habit_notification_claimed', {
         reminderId: ref.id,
-        type: (claimed as {type?: string}).type ?? 'generic',
+        type: data.type ?? 'generic',
       });
+
+      if (data.type === 'habit_reminder' && data.habitId) {
+        const stillDue = await isHabitStillDueToday(data.habitId, now).catch(err => {
+          // Can't confirm either way (e.g. Firestore hiccup) — fail open and
+          // send it rather than silently swallowing a real reminder; the
+          // worst case is one extra message, not a lost one.
+          logger.warn('isHabitStillDueToday check failed — sending anyway', {
+            reminderId: ref.id,
+            message: err instanceof Error ? err.message : String(err),
+          });
+          return true;
+        });
+        if (!stillDue) {
+          await ref.update({
+            status: 'cancelled',
+            updatedAt: now,
+            lastError: 'habit no longer due today (archived, disabled, or rescheduled) at send time',
+          });
+          logger.info('habit_notification_skipped', {reminderId: ref.id, habitId: data.habitId});
+          return;
+        }
+      }
+
+      const retryCount = data.retryCount ?? 0;
+      const messageText = resolveMessageText(data);
 
       try {
         const {response, payload} = await sendTelegramMessage(
@@ -191,7 +295,11 @@ export const sendDueReminders = onSchedule(
         });
       }
     });
-  }
+};
+
+export const sendDueReminders = onSchedule(
+  {schedule: 'every 1 minutes'},
+  sendDueRemindersHandler
 );
 
 // ── Habit reminder materialization ──────────────────────────────────────────
@@ -216,152 +324,160 @@ export const sendDueReminders = onSchedule(
 
 const HABITS_SCAN_LIMIT = 1000;
 
-interface UserContact {
-  chatId: string | number;
-  timezone: string;
-}
+/**
+ * The actual materializer logic, exported separately from the `onSchedule`
+ * wrapper below so integration tests can invoke it directly against the
+ * Firestore emulator without going through the Functions Framework's
+ * CloudEvent envelope.
+ */
+export const materializeHabitRemindersHandler = async (): Promise<void> => {
+  const now     = Timestamp.now();
+  const nowDate = now.toDate();
 
-const getUserContact = async (
-  userId: string,
-  cache: Map<string, UserContact | null>
-): Promise<UserContact | null> => {
-  if (cache.has(userId)) return cache.get(userId) ?? null;
-
-  const snap = await db.collection('users').doc(userId).get();
-  const data = snap.exists ? (snap.data() as {chatId?: string | number; timezone?: string}) : undefined;
-
-  // No chatId → user hasn't linked Telegram yet. Not an error: just nothing
-  // to deliver to. (Mirrors api/_lib/tools.js's getUserTimezone fallback.)
-  if (!data?.chatId) {
-    cache.set(userId, null);
-    return null;
+  let snapshot;
+  try {
+    snapshot = await db.collection('habits').limit(HABITS_SCAN_LIMIT).get();
+  } catch (err) {
+    // No retry here is fine: the NEXT run (≤15 min later) re-reads `habits`
+    // from scratch and catches up on its own — see PHASE 1 of the
+    // pre-deploy review. We still log loudly so a sustained Firestore
+    // outage is visible instead of silently eating every run's worth of
+    // reminders.
+    logger.error('materializeHabitReminders: failed to read habits collection', {
+      message: err instanceof Error ? err.message : String(err),
+    });
+    return;
   }
 
-  const timezone = (typeof data.timezone === 'string' && data.timezone) ? data.timezone : DEFAULT_TZ;
-  const contact: UserContact = {chatId: data.chatId, timezone};
-  cache.set(userId, contact);
-  return contact;
+  if (snapshot.size >= HABITS_SCAN_LIMIT) {
+    logger.warn('materializeHabitReminders: hit HABITS_SCAN_LIMIT — some habits may be skipped this run', {
+      limit: HABITS_SCAN_LIMIT,
+    });
+  }
+
+  // In-memory filter rather than a Firestore `where('archived','==',false)`
+  // query: an equality filter would silently exclude any legacy habit doc
+  // that predates the `archived` field instead of treating it as active.
+  // Archived/disabled habits are intentionally NOT scanned here — the
+  // authoritative safety net for them is isHabitStillDueToday's re-check
+  // right before sendDueReminders actually sends (see its docstring); this
+  // scan only needs to cover habits that might still need a *reminder*,
+  // which by definition means still having a reminderTime and not archived.
+  const candidates = snapshot.docs.filter(d => {
+    const h = d.data() as HabitDoc;
+    return !h.archived && !!h.reminderTime;
+  });
+
+  if (candidates.length === 0) {
+    logger.info('materializeHabitReminders: no active habits with a reminder time.');
+    return;
+  }
+
+  const contactCache = new Map<string, UserContact | null>();
+  let created = 0, updated = 0, cancelled = 0, skippedNoContact = 0, skippedNotDue = 0;
+
+  await processWithConcurrency(candidates, async docSnap => {
+    const habitId = docSnap.id;
+    const h        = docSnap.data() as HabitDoc;
+    if (!h.userId) return;
+
+    const contact = await getUserContact(h.userId, contactCache);
+    if (!contact) {
+      skippedNoContact++;
+      return;
+    }
+
+    const habitInput: HabitScheduleInput = {
+      repeatType:   h.repeatType === 'custom' ? 'custom' : 'daily',
+      repeatDays:   h.repeatDays,
+      reminderTime: h.reminderTime,
+      archived:     h.archived,
+    };
+    const decision = resolveHabitOccurrence(
+      habitId, habitInput, contact.timezone, nowDate, h.createdAt?.toDate()
+    );
+    const ref = db.collection('reminders').doc(decision.docId);
+
+    if (!decision.due) {
+      skippedNotDue++;
+      // Not due today (e.g. repeatDays changed to exclude today) — but a
+      // still-pending occurrence may already exist from BEFORE that edit
+      // (PHASE 2, scenario B of the pre-deploy review). Cancel it rather
+      // than leaving it to fire later today. Never touch anything already
+      // sending/sent/failed/cancelled — that occurrence has already been
+      // handled one way or another.
+      const existing = await ref.get();
+      if (existing.exists && existing.data()?.status === 'pending') {
+        await ref.update({
+          status: 'cancelled',
+          updatedAt: now,
+          lastError: 'habit no longer due today (repeatDays or reminder changed)',
+        });
+        cancelled++;
+        logger.info('habit_notification_skipped', {reminderId: decision.docId, habitId});
+      }
+      return;
+    }
+
+    const title        = h.title ?? '';
+    const telegramText = `🌱 Привычка: «${title}» — не забудь отметить сегодня!`;
+    const scheduledAtTs = Timestamp.fromDate(decision.scheduledAt as Date);
+
+    try {
+      // Atomic create-if-absent: fails with ALREADY_EXISTS (code 6) rather
+      // than silently overwriting a reminder another path already owns.
+      await ref.create({
+        userId:      h.userId,
+        chatId:      contact.chatId,
+        type:        'habit_reminder',
+        habitId,
+        title,
+        scheduledAt: scheduledAtTs,
+        status:      'pending',
+        telegramText,
+        date:        decision.dateKey,
+        source:      'habit-materializer',
+        createdAt:   now,
+        updatedAt:   now,
+      });
+      created++;
+      logger.info('habit_notification_due', {reminderId: decision.docId, habitId});
+    } catch (err) {
+      const code = (err as {code?: number}).code;
+      if (code !== 6) {
+        logger.error('materializeHabitReminders: unexpected create error', {
+          habitId,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        return;
+      }
+
+      // Occurrence already exists (this job's earlier run, or the legacy
+      // client-side scheduler). If it's already sending/sent/failed/
+      // cancelled, it's already been handled for today — never touch it.
+      // If it's still pending, keep it in sync with the habit's CURRENT
+      // reminderTime and title (PHASE 2, scenario A: "время изменено →
+      // использовать новое расписание").
+      const existing     = await ref.get();
+      const existingData = existing.data() as {status?: string; scheduledAt?: Timestamp; title?: string} | undefined;
+      if (existingData?.status !== 'pending') return;
+
+      const sameTime  = existingData.scheduledAt?.toMillis() === scheduledAtTs.toMillis();
+      const sameTitle = existingData.title === title;
+      if (sameTime && sameTitle) return;
+
+      await ref.update({title, telegramText, scheduledAt: scheduledAtTs, updatedAt: now});
+      updated++;
+    }
+  });
+
+  logger.info('materializeHabitReminders: run complete', {
+    habitsScanned: candidates.length,
+    created, updated, cancelled, skippedNoContact, skippedNotDue,
+  });
 };
 
 export const materializeHabitReminders = onSchedule(
   {schedule: 'every 15 minutes'},
-  async () => {
-    const now     = Timestamp.now();
-    const nowDate = now.toDate();
-
-    const snapshot = await db.collection('habits').limit(HABITS_SCAN_LIMIT).get();
-    if (snapshot.size >= HABITS_SCAN_LIMIT) {
-      logger.warn('materializeHabitReminders: hit HABITS_SCAN_LIMIT — some habits may be skipped this run', {
-        limit: HABITS_SCAN_LIMIT,
-      });
-    }
-
-    type HabitDoc = {
-      userId?: string;
-      title?: string;
-      repeatType?: 'daily' | 'custom';
-      repeatDays?: number[];
-      reminderTime?: string | null;
-      archived?: boolean;
-    };
-
-    // In-memory filter rather than a Firestore `where('archived','==',false)`
-    // query: an equality filter would silently exclude any legacy habit doc
-    // that predates the `archived` field instead of treating it as active.
-    const candidates = snapshot.docs.filter(d => {
-      const h = d.data() as HabitDoc;
-      return !h.archived && !!h.reminderTime;
-    });
-
-    if (candidates.length === 0) {
-      logger.info('materializeHabitReminders: no active habits with a reminder time.');
-      return;
-    }
-
-    const contactCache = new Map<string, UserContact | null>();
-    let created = 0, updated = 0, skippedNoContact = 0, skippedNotDueToday = 0;
-
-    await processWithConcurrency(candidates, async docSnap => {
-      const habitId = docSnap.id;
-      const h        = docSnap.data() as HabitDoc;
-      if (!h.userId) return;
-
-      const contact = await getUserContact(h.userId, contactCache);
-      if (!contact) {
-        skippedNoContact++;
-        return;
-      }
-
-      const habitInput: HabitScheduleInput = {
-        repeatType:   h.repeatType === 'custom' ? 'custom' : 'daily',
-        repeatDays:   h.repeatDays,
-        reminderTime: h.reminderTime,
-        archived:     h.archived,
-      };
-      const occurrence = computeHabitOccurrence(habitId, habitInput, contact.timezone, nowDate);
-      if (!occurrence) {
-        skippedNotDueToday++;
-        return;
-      }
-
-      const title         = h.title ?? '';
-      const telegramText  = `🌱 Привычка: «${title}» — не забудь отметить сегодня!`;
-      const ref            = db.collection('reminders').doc(occurrence.docId);
-      const scheduledAtTs  = Timestamp.fromDate(occurrence.scheduledAt);
-
-      try {
-        // Atomic create-if-absent: fails with ALREADY_EXISTS (code 6) rather
-        // than silently overwriting a reminder another path already owns.
-        await ref.create({
-          userId:      h.userId,
-          chatId:      contact.chatId,
-          type:        'habit_reminder',
-          habitId,
-          title,
-          scheduledAt: scheduledAtTs,
-          status:      'pending',
-          telegramText,
-          date:        occurrence.dateKey,
-          source:      'habit-materializer',
-          createdAt:   now,
-          updatedAt:   now,
-        });
-        created++;
-        logger.info('habit_notification_due', {reminderId: occurrence.docId, habitId});
-      } catch (err) {
-        const code = (err as {code?: number}).code;
-        if (code !== 6) {
-          logger.error('materializeHabitReminders: unexpected create error', {
-            habitId,
-            message: err instanceof Error ? err.message : String(err),
-          });
-          return;
-        }
-
-        // Occurrence already exists (this job's earlier run, or the legacy
-        // client-side scheduler). If it's already sending/sent/failed, it's
-        // already been handled for today — never touch it. If it's still
-        // pending, keep it in sync with the habit's CURRENT reminderTime and
-        // title (PHASE 6: "время изменено → использовать новое расписание").
-        const existing     = await ref.get();
-        const existingData = existing.data() as {status?: string; scheduledAt?: Timestamp; title?: string} | undefined;
-        if (existingData?.status !== 'pending') return;
-
-        const sameTime  = existingData.scheduledAt?.toMillis() === scheduledAtTs.toMillis();
-        const sameTitle = existingData.title === title;
-        if (sameTime && sameTitle) return;
-
-        await ref.update({title, telegramText, scheduledAt: scheduledAtTs, updatedAt: now});
-        updated++;
-      }
-    });
-
-    logger.info('materializeHabitReminders: run complete', {
-      habitsScanned:       candidates.length,
-      created,
-      updated,
-      skippedNoContact,
-      skippedNotDueToday,
-    });
-  }
+  materializeHabitRemindersHandler
 );

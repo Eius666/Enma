@@ -21,15 +21,22 @@ export interface HabitScheduleInput {
   archived?: boolean;
 }
 
-export interface HabitOccurrence {
+/**
+ * The full decision for "today" — always resolved, even when the habit
+ * isn't due, so the caller can locate (and cancel, if still pending) a
+ * stale occurrence a no-longer-due habit may already own for today.
+ */
+export interface HabitOccurrenceDecision {
   /** 'YYYY-MM-DD' in the user's timezone — the calendar day this occurrence belongs to. */
   dateKey: string;
-  /** Absolute instant (UTC) the reminder should be delivered at. */
-  scheduledAt: Date;
   /** Stable, collision-free id: shared with the legacy client-side scheduler
-   *  (src/App.tsx's scheduleHabitReminder) so both paths can safely coexist
-   *  without ever creating two reminders for the same habit on the same day. */
+   *  (src/App.tsx used to write this same scheme) so both paths can safely
+   *  coexist without ever creating two reminders for the same habit/day. */
   docId: string;
+  /** Whether a reminder should exist for this habit today. */
+  due: boolean;
+  /** Absolute instant (UTC) the reminder should be delivered at — set iff `due`. */
+  scheduledAt: Date | null;
 }
 
 /** Returns 'YYYY-MM-DD' for `now` as displayed in `timezone`. */
@@ -93,30 +100,46 @@ export function habitReminderDocId(habitId: string, dateKey: string): string {
 }
 
 /**
- * Computes today's reminder occurrence for a habit in the user's timezone,
- * or null if nothing should be scheduled right now (disabled, archived, not
- * due today, or no reminder time set).
+ * Resolves today's reminder decision for a habit in the user's timezone.
  *
  * Deliberately only ever resolves "today" — never backfills multiple past
  * days — so that a materializer outage of any length catches up with at
  * most one reminder per habit once it resumes, instead of flooding the user
  * with a backlog (see PHASE 8 of the ENMA habit-notification task spec).
+ *
+ * `due` is false whenever nothing should exist for today: archived,
+ * disabled (no reminderTime), not scheduled for today's weekday — but also
+ * when `habitCreatedAt` is given and is AFTER today's reminder time. That
+ * last case matters because this function is also called for a habit that
+ * already existed before today; without it, creating a brand-new habit (or
+ * editing an existing one) in the afternoon with a morning reminder time
+ * would immediately fire a surprise "overdue" notification instead of
+ * waiting for the next day it's actually due. It does NOT suppress a
+ * same-day edit of an already-existing habit's reminderTime to an
+ * already-past time today — only a reminder time that predates the habit's
+ * own creation — so a genuine scheduler outage still catches up correctly
+ * (see computeHabitOccurrence's docstring history / PHASE 1 of the
+ * pre-deploy review).
  */
-export function computeHabitOccurrence(
+export function resolveHabitOccurrence(
   habitId: string,
   habit: HabitScheduleInput,
   timezone: string,
-  now: Date = new Date()
-): HabitOccurrence | null {
-  if (habit.archived) return null;
-  if (!habit.reminderTime) return null;
+  now: Date = new Date(),
+  habitCreatedAt?: Date
+): HabitOccurrenceDecision {
+  const dateKey = getLocalDateKey(now, timezone);
+  const docId   = habitReminderDocId(habitId, dateKey);
+  const notDue  = (): HabitOccurrenceDecision => ({ dateKey, docId, due: false, scheduledAt: null });
+
+  if (habit.archived) return notDue();
+  if (!habit.reminderTime) return notDue();
 
   const weekdayIndex = getLocalWeekdayIndex(now, timezone);
-  if (!isHabitDueOnWeekday(habit, weekdayIndex)) return null;
+  if (!isHabitDueOnWeekday(habit, weekdayIndex)) return notDue();
 
-  const dateKey     = getLocalDateKey(now, timezone);
   const scheduledAt = localToUtc(dateKey, habit.reminderTime, timezone);
-  const docId       = habitReminderDocId(habitId, dateKey);
+  if (habitCreatedAt && scheduledAt.getTime() < habitCreatedAt.getTime()) return notDue();
 
-  return { dateKey, scheduledAt, docId };
+  return { dateKey, docId, due: true, scheduledAt };
 }

@@ -28,7 +28,15 @@ yarn-error.log*
 .vercel
 .env*.local
 .gh-pages-tmp/
-functions/
+
+# Firebase Functions (functions/) — track src/, package.json, package-lock.json
+# and tsconfig.json so `firebase deploy --only functions` is reproducible from
+# a clean clone; exclude only its own dependencies, build output, and secrets.
+functions/node_modules/
+functions/lib/
+functions/.env
+functions/.env.*
+
 scripts/*.key
 scripts/*.json
 Снимок экрана*.png

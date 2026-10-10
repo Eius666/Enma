@@ -3,6 +3,7 @@
 const { admin, db }          = require('../_lib/firebaseAdmin');
 const { rateLimit, getClientIp } = require('../_lib/rateLimit');
 const { calculateNextRun, getUserTimezone } = require('../_lib/tools');
+const { isHabitDueToday } = require('../_lib/habits/habitSchedule');
 
 const TELEGRAM_API = 'https://api.telegram.org';
 
@@ -121,6 +122,39 @@ module.exports = async (req, res) => {
           updatedAt: admin.firestore.FieldValue.serverTimestamp() });
         results.push({ id: docRef.id, ok: false, error: 'missing chatId' });
         continue;
+      }
+
+      // Last-moment re-validation for habit reminders: this endpoint and
+      // Firebase's sendDueReminders both poll the SAME `reminders` collection
+      // independently (confirmed live via .github/workflows/telegram-cron.yml,
+      // every 5 min) and race for the same claim, so a habit archived,
+      // deleted, disabled, or rescheduled after materialization must be
+      // caught here too — not only in the Firebase path — or whichever
+      // scheduler happens to win the claim decides whether the stale-send
+      // protection applies. See PHASE 2, scenario E of the pre-deploy review.
+      if (claimed.type === 'habit_reminder' && claimed.habitId) {
+        let stillDue = true;
+        try {
+          const habitSnap = await db.collection('habits').doc(claimed.habitId).get();
+          const habit = habitSnap.exists ? habitSnap.data() : null;
+          const tz = await getUserTimezone(claimed.userId);
+          stillDue = isHabitDueToday(habit, tz);
+        } catch (err) {
+          // Can't confirm either way — fail open and send rather than
+          // silently losing a real reminder over a transient read error.
+          console.warn('[cron] isHabitDueToday check failed — sending anyway:', err.message);
+          stillDue = true;
+        }
+        if (!stillDue) {
+          console.log('[cron] reminder', docRef.id, 'habit no longer due today — cancelling instead of sending');
+          await docRef.update({
+            status:    'cancelled',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            lastError: 'habit no longer due today (archived, disabled, or rescheduled) at send time',
+          });
+          results.push({ id: docRef.id, ok: false, cancelled: true });
+          continue;
+        }
       }
 
       let text;
