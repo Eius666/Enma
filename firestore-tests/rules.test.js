@@ -168,6 +168,25 @@ test('notes: client cannot change the userId of an existing note', async () => {
   await assertFails(updateDoc(doc(alice(), 'notes/n1'), { userId: 'mallory' }));
 });
 
+// ── optimistic-concurrency `rev` field (ENMA notes-durability audit,
+//    PHASE 4) — intentionally NOT locked like userId: it only affects the
+//    owner's own client-side conflict detection, never another user's data
+//    or anything server-financial, so a plain client-writable integer is
+//    enough. These exist so a future change doesn't silently lock it.
+test('notes: owner can set/advance the optimistic-concurrency rev field', async () => {
+  await assertSucceeds(updateDoc(doc(alice(), 'notes/n1'), { rev: 1, updatedAt: serverTimestamp() }));
+});
+
+test('notes: a legacy note with no rev field at all is still fully readable/updatable', async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'notes/legacy1'), {
+      userId: 'alice', title: 'Old note', content: 'from before rev existed', type: 'text', category: 'General', pinned: false,
+    });
+  });
+  await assertSucceeds(getDoc(doc(alice(), 'notes/legacy1')));
+  await assertSucceeds(updateDoc(doc(alice(), 'notes/legacy1'), { content: 'edited', rev: 1, updatedAt: serverTimestamp() }));
+});
+
 test('notes: another user cannot read, update, or delete someone else\'s note', async () => {
   await assertFails(getDoc(doc(mallory(), 'notes/n1')));
   await assertFails(updateDoc(doc(mallory(), 'notes/n1'), { content: 'hacked' }));

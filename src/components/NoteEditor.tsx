@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   doc,
-  setDoc,
   deleteDoc,
   getDoc,
+  runTransaction,
   serverTimestamp,
 } from 'firebase/firestore';
 import { User } from 'firebase/auth';
@@ -23,6 +23,8 @@ import type { Subscription } from '../subscription';
 import { getActivePlan, FREE_LIMITS } from '../subscription';
 import { subscribeFreeUsage } from '../lib/usageCounters';
 import { createNoteSaveQueue, SaveStatus } from '../lib/noteSaveQueue';
+import { getNoteDraftStore, decideDraftAction } from '../lib/noteDrafts';
+import { NoteConflictError, classifyWriteError } from '../lib/noteSyncStatus';
 import Paywall, { LimitBanner } from './Paywall';
 import './Notes.css';
 
@@ -56,6 +58,12 @@ const T = {
     saving: 'Saving…',
     saved: 'Saved',
     saveError: 'Could not save — your text is still here, edit it to retry',
+    offlinePending: 'No connection — changes saved on this device',
+    conflictTitle: 'Version conflict',
+    conflictBody: 'This note changed elsewhere since you opened it. Choose which version to keep.',
+    keepMine: 'Keep mine',
+    useTheirs: 'Use their version',
+    restoredHint: 'Restored unsaved changes from this device',
     confirmDelete: 'Delete this note?',
     todoPlaceholder: 'New item…',
   },
@@ -74,10 +82,18 @@ const T = {
     saving: 'Сохранение…',
     saved: 'Сохранено',
     saveError: 'Не удалось сохранить — текст на месте, продолжите редактирование для повтора',
+    offlinePending: 'Нет соединения — изменения сохранены на устройстве',
+    conflictTitle: 'Конфликт версий',
+    conflictBody: 'Эта заметка изменилась в другом месте с момента открытия. Выберите, какую версию оставить.',
+    keepMine: 'Оставить моё',
+    useTheirs: 'Использовать их версию',
+    restoredHint: 'Восстановлены несохранённые изменения с этого устройства',
     confirmDelete: 'Удалить эту заметку?',
     todoPlaceholder: 'Новый пункт…',
   },
 };
+
+const OFFLINE_HINT_MS = 6000;
 
 function makeItemId(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
@@ -119,6 +135,32 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
   const limitPassedRef = useRef(false);
   const paywallHitRef = useRef(false);
 
+  // ── Durability / conflict state (ENMA notes-durability audit) ───────────
+  // knownRevRef tracks the server `rev` this editor last confirmed loading
+  // or writing — the basis for optimistic-concurrency checks (PHASE 4) and
+  // for deciding whether a leftover local draft is safe to restore
+  // (PHASE 3). Not used for brand-new notes (nothing to conflict with yet).
+  const knownRevRef = useRef<number>(0);
+  const lastErrorRef = useRef<unknown>(null);
+  const [showOfflineHint, setShowOfflineHint] = useState(false);
+  const [showRestoredHint, setShowRestoredHint] = useState(false);
+  // "Mine", for conflict resolution, always means whatever is currently in
+  // the editor's state at the moment the user resolves it — never a stale
+  // snapshot held elsewhere — so a detected-at-load conflict applies the
+  // draft into state immediately (visible, editable) but blocks the
+  // auto-resync a plain "restore" would normally do, until the user picks.
+  const [conflictActive, setConflictActive] = useState(false);
+  const offlineWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restoredHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Kept current every render so the save queue's onStatusChange closure
+  // (created once, see saveQueueRef below) can always clear the RIGHT
+  // user's/note's local draft, not whichever was current when the queue
+  // was first built.
+  const userRef = useRef(user);
+  userRef.current = user;
+  const docIdRef = useRef(docId);
+  docIdRef.current = docId;
+
   const near80 = usedNotes !== null && usedNotes >= Math.floor(limit * 0.8);
 
   useEffect(() => {
@@ -148,7 +190,8 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
 
     if (noteId) {
       // Load from Firestore
-      getDoc(doc(db, 'notes', noteId)).then(snap => {
+      getDoc(doc(db, 'notes', noteId)).then(async snap => {
+        let serverRev = 0;
         if (snap.exists()) {
           const d = snap.data();
           setTitle(d.title ?? '');
@@ -159,7 +202,49 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
           setPinned(d.pinned ?? false);
           const ts = d.updatedAt;
           if (ts?.seconds) setUpdatedAt(new Date(ts.seconds * 1000));
+          serverRev = typeof d.rev === 'number' ? d.rev : 0;
         }
+        knownRevRef.current = serverRev;
+
+        // ENMA notes-durability audit, PHASE 3: a draft left in IndexedDB
+        // from a previous session means a write never reached Firestore
+        // (a reload/crash/offline stretch interrupted it) — never silently
+        // dropped, but also never applied blindly: only restore it if
+        // nothing else has changed this note since the draft was taken.
+        const draft = await getNoteDraftStore().load(user.uid, noteId);
+        const decision = decideDraftAction(draft, serverRev);
+        if (decision === 'restore' && draft) {
+          setTitle(draft.title);
+          setContent(draft.content);
+          setType(draft.type);
+          setChecklistItems(draft.checklistItems);
+          setCategory(draft.category);
+          setPinned(draft.pinned);
+          setShowRestoredHint(true);
+          if (restoredHintTimerRef.current) clearTimeout(restoredHintTimerRef.current);
+          restoredHintTimerRef.current = setTimeout(() => setShowRestoredHint(false), 4000);
+          // Try to resync the recovered content right away — the queue is
+          // already initialized synchronously during render, before any
+          // effect's async continuation (like this one) can run.
+          saveQueueRef.current?.schedule({
+            id: noteId, title: draft.title, content: draft.content, type: draft.type,
+            checklistItems: draft.checklistItems, category: draft.category, pinned: draft.pinned,
+          });
+        } else if (decision === 'conflict' && draft) {
+          // Something else wrote a newer revision after this draft was
+          // taken. The draft is still applied into state — so the user
+          // can SEE and keep editing it rather than it vanishing — but it
+          // is NOT auto-scheduled for a write; that's gated behind the
+          // conflict banner until the user explicitly picks a version.
+          setTitle(draft.title);
+          setContent(draft.content);
+          setType(draft.type);
+          setChecklistItems(draft.checklistItems);
+          setCategory(draft.category);
+          setPinned(draft.pinned);
+          setConflictActive(true);
+        }
+
         setLoaded(true);
         // Don't auto-focus on existing note (user is reading)
       }).catch(err => {
@@ -233,16 +318,35 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
         }
         if (!resp.ok) throw new Error(`entityCreate failed: ${resp.status}`);
         limitPassedRef.current = true;
+        // The doc has just been created with no `rev` field yet — the
+        // transaction below treats a missing field as 0, so this keeps
+        // the editor's own idea of the revision consistent with that.
+        knownRevRef.current = 0;
         setUpdatedAt(new Date());
         return;
       }
 
-      // Update existing note (or already-created new note on subsequent auto-saves)
-      await setDoc(
-        doc(db, 'notes', id),
-        { ...fields, userId: user.uid, updatedAt: serverTimestamp() },
-        { merge: true }
-      );
+      // Update existing note (or already-created new note on subsequent
+      // auto-saves). ENMA notes-durability audit, PHASE 4: wrapped in a
+      // transaction so a concurrent write from elsewhere (another tab,
+      // another device, a restored-draft resync racing a live edit) is
+      // detected instead of silently overwritten. `rev` is a plain
+      // client-visible integer (not a locked/server-owned field — see
+      // firestore.rules) that only this optimistic-concurrency check
+      // relies on; a legacy document with no `rev` field is treated as
+      // revision 0, so existing notes keep working without migration.
+      const ref = doc(db, 'notes', id);
+      let nextRev = 0;
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(ref);
+        const serverRev = snap.exists() && typeof snap.data()?.rev === 'number' ? snap.data()!.rev : 0;
+        if (knownRevRef.current !== serverRev) {
+          throw new NoteConflictError(serverRev);
+        }
+        nextRev = serverRev + 1;
+        tx.set(ref, { ...fields, userId: user.uid, updatedAt: serverTimestamp(), rev: nextRev }, { merge: true });
+      });
+      knownRevRef.current = nextRev;
       setUpdatedAt(new Date());
     },
     [user, isNew, limit]
@@ -259,9 +363,22 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
   const saveQueueRef = useRef<ReturnType<typeof createNoteSaveQueue<NotePatch>> | null>(null);
   if (!saveQueueRef.current) {
     saveQueueRef.current = createNoteSaveQueue<NotePatch>({
-      write: (patch) => writeNoteRef.current(patch),
+      // Captures the real error (noteSaveQueue's own catch only tracks a
+      // boolean) so onStatusChange below can tell "offline", "conflict"
+      // and "other failure" apart, then rethrows so the queue's existing,
+      // already-tested success/failure bookkeeping is untouched.
+      write: (patch) => writeNoteRef.current(patch).catch((err) => {
+        lastErrorRef.current = err;
+        throw err;
+      }),
       debounceMs: DEBOUNCE_MS,
       onStatusChange: (status) => {
+        if (offlineWatchdogRef.current) {
+          clearTimeout(offlineWatchdogRef.current);
+          offlineWatchdogRef.current = null;
+        }
+        setShowOfflineHint(false);
+
         if (status === 'saved' && paywallHitRef.current) {
           // writeNote hit the free-plan limit and returned without
           // throwing (it's not a retryable error, the Paywall already
@@ -271,6 +388,38 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
           setSavingState('idle');
           return;
         }
+
+        if (status === 'saving') {
+          // PHASE 2: this app's Firestore client has no offline
+          // persistence, so a write attempted with no connectivity just
+          // sits pending (resolves neither way) until the connection
+          // returns — "Сохранение…" would otherwise hang forever with no
+          // explanation. After a few seconds of that, tell the truth:
+          // the text is safe on this device (the draft store already has
+          // it), it just hasn't reached the server yet.
+          offlineWatchdogRef.current = setTimeout(() => setShowOfflineHint(true), OFFLINE_HINT_MS);
+        }
+
+        if (status === 'saved') {
+          // Confirmed server write — only now is it safe to drop the
+          // local draft (PHASE 3, requirement 5: never clear it before a
+          // confirmed success).
+          const u = userRef.current;
+          const id = docIdRef.current;
+          if (u && id) getNoteDraftStore().clear(u.uid, id).catch(() => {});
+        }
+
+        if (status === 'error' && classifyWriteError(lastErrorRef.current) === 'conflict') {
+          // A live edit raced a newer write from elsewhere (another tab/
+          // device). The draft store already holds this editor's current
+          // content (every change persists it), so it's safe for the
+          // user to review as "mine" without anything extra — just stop
+          // the queue from silently retrying the same stale comparison.
+          setConflictActive(true);
+          setSavingState('idle');
+          return;
+        }
+
         setSavingState(status);
         if (idleResetTimer.current) clearTimeout(idleResetTimer.current);
         // 'saved' fades back to idle after a moment, same as before. 'error'
@@ -283,12 +432,31 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
     });
   }
 
-  // Trigger save whenever editable fields change
+  // Trigger save whenever editable fields change. Two independent things
+  // happen on every change, not just the debounced one:
+  //  1. The local draft (IndexedDB) is persisted IMMEDIATELY — this is
+  //     what actually protects the "closed the tab/lost power mid-
+  //     debounce" window, not the network write, which is still debounced
+  //     and can still be slow/offline/failing.
+  //  2. The real Firestore write is scheduled through the save queue, same
+  //     as before.
   useEffect(() => {
-    if (!loaded || !docId) return;
-    saveQueueRef.current?.schedule({ id: docId, title, content, type, checklistItems, category, pinned });
+    if (!loaded || !docId || !user) return;
+    const patch: NotePatch = { id: docId, title, content, type, checklistItems, category, pinned };
+    getNoteDraftStore().save({
+      uid: user.uid, noteId: docId, title, content, type, checklistItems, category, pinned,
+      baseRev: knownRevRef.current, savedAtLocal: Date.now(),
+    }).catch(() => {});
+    // While a conflict banner is up, the draft above still gets refreshed
+    // (so further edits during review aren't lost either), but the write
+    // itself stays paused — scheduling it here would silently resolve the
+    // conflict in favor of whatever's on screen before the user ever
+    // chose a version. resolveKeepMine()/resolveUseTheirs() explicitly
+    // schedule (or discard) once the user decides.
+    if (conflictActive) return;
+    saveQueueRef.current?.schedule(patch);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, content, type, checklistItems, category, pinned, loaded, docId]);
+  }, [title, content, type, checklistItems, category, pinned, loaded, docId, user, conflictActive]);
 
   // Flush on unmount — the exact fix for the "edits silently lost" bug:
   // whatever's still pending gets written now instead of discarded. This
@@ -298,6 +466,9 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
   // component's lifecycle, so it isn't cancelled by the unmount either.
   useEffect(() => {
     return () => {
+      if (idleResetTimer.current) clearTimeout(idleResetTimer.current);
+      if (offlineWatchdogRef.current) clearTimeout(offlineWatchdogRef.current);
+      if (restoredHintTimerRef.current) clearTimeout(restoredHintTimerRef.current);
       saveQueueRef.current?.flush().catch(() => {});
     };
   }, []);
@@ -377,6 +548,9 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
     } catch (err) {
       console.warn('Delete error', err);
     }
+    // A leftover local draft for a now-deleted note must never resurrect
+    // it on a future load — clear it too.
+    if (user) await getNoteDraftStore().clear(user.uid, docId).catch(() => {});
     onBack();
   };
 
@@ -386,11 +560,45 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
   // the unmount flush above. On failure, stays on screen: the typed text
   // is untouched (local state was never cleared) and savingState shows
   // the error, so editing again naturally retries via the normal debounce.
+  // An unresolved conflict also blocks navigation — the draft is already
+  // safe in IndexedDB either way, but leaving silently would mean the
+  // user never actually chose which version to keep.
   const handleBack = async () => {
+    if (conflictActive) return;
     if (!saveQueueRef.current?.hasPendingWork()) { onBack(); return; }
     const ok = await saveQueueRef.current.flush();
     if (!ok) return;
     onBack();
+  };
+
+  // ── Conflict resolution (PHASE 4) ───────────────────────────────────────
+  // Neither path merges text automatically — the user explicitly picks one
+  // whole version. "Keep mine" re-bases the editor onto the current server
+  // revision and resyncs; "Use theirs" reloads the server content, discards
+  // the stale local draft, and keeps editing from there.
+  const resolveKeepMine = async () => {
+    if (!docId || !user) { setConflictActive(false); return; }
+    const snap = await getDoc(doc(db, 'notes', docId));
+    knownRevRef.current = snap.exists() && typeof snap.data()?.rev === 'number' ? snap.data()!.rev : 0;
+    setConflictActive(false);
+    saveQueueRef.current?.schedule({ id: docId, title, content, type, checklistItems, category, pinned });
+  };
+
+  const resolveUseTheirs = async () => {
+    if (!docId || !user) { setConflictActive(false); return; }
+    const snap = await getDoc(doc(db, 'notes', docId));
+    if (snap.exists()) {
+      const d = snap.data();
+      setTitle(d.title ?? '');
+      setContent(d.content ?? '');
+      setType(d.type ?? 'text');
+      setChecklistItems(d.checklistItems ?? []);
+      setCategory(d.category ?? defaultCats[0]);
+      setPinned(d.pinned ?? false);
+      knownRevRef.current = typeof d.rev === 'number' ? d.rev : 0;
+    }
+    await getNoteDraftStore().clear(user.uid, docId).catch(() => {});
+    setConflictActive(false);
   };
 
   // ── Format updatedAt display ────────────────────────────────────────────
@@ -438,19 +646,46 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
         />
       )}
 
+      {conflictActive && (
+        <div className="note-editor__conflict-banner" role="alert">
+          <div className="note-editor__conflict-text">
+            <strong>{t.conflictTitle}</strong>
+            <span>{t.conflictBody}</span>
+          </div>
+          <div className="note-editor__conflict-actions">
+            <button type="button" onClick={resolveKeepMine} className="note-editor__conflict-btn">
+              {t.keepMine}
+            </button>
+            <button type="button" onClick={resolveUseTheirs} className="note-editor__conflict-btn note-editor__conflict-btn--secondary">
+              {t.useTheirs}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Toolbar ── */}
       <div className="note-editor__toolbar">
         <button
           className="note-editor__back-btn"
           onClick={handleBack}
-          disabled={savingState === 'saving'}
+          disabled={savingState === 'saving' || conflictActive}
           type="button"
         >
           <FaArrowLeft /> {t.back}
         </button>
 
         <div className="note-editor__toolbar-actions" ref={menuRef}>
-          {savingState === 'saving' && (
+          {showRestoredHint && (
+            <span className="note-editor__saving note-editor__saving--restored">
+              {t.restoredHint}
+            </span>
+          )}
+          {savingState === 'saving' && showOfflineHint && (
+            <span className="note-editor__saving note-editor__saving--offline">
+              {t.offlinePending}
+            </span>
+          )}
+          {savingState === 'saving' && !showOfflineHint && (
             <span className="note-editor__saving">
               <span className="note-editor__saving-dot" />
               {t.saving}
