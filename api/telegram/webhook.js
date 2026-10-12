@@ -1064,7 +1064,7 @@ module.exports = async (req, res) => {
 
       let voiceReply;
       try {
-        const { text: response } = await chatWithTools(transcription, userId, chatId, voiceHistory);
+        const { text: response } = await chatWithTools(transcription, userId, chatId, voiceHistory, message?.message_id);
         voiceReply = response || 'Не удалось получить ответ.';
       } catch (aiErr) {
         console.error('[WH][8b] voice chatWithTools error:', aiErr.message);
@@ -1107,7 +1107,7 @@ module.exports = async (req, res) => {
 
     let replyText;
     try {
-      const { text: response } = await chatWithTools(text, userId, chatId, history);
+      const { text: response } = await chatWithTools(text, userId, chatId, history, message?.message_id);
       replyText = response || 'Не удалось получить ответ.';
     } catch (aiErr) {
       console.error('[WH][8c] chatWithTools error:', aiErr.message);

@@ -24,8 +24,23 @@ service cloud.firestore {
     function touchesLockedTxFields() {
       return request.resource.data.diff(resource.data).affectedKeys().hasAny([
         'amount', 'currency', 'rubAmount', 'fx', 'schemaVersion',
-        'type', 'userId', 'source', 'createdAt', 'goalId'
+        'type', 'userId', 'source', 'createdAt', 'goalId',
+        // Goal-transfer fields (api/_lib/finance/goalTransfer.js) — same
+        // "server decides, client reads" guarantee as the money fields above.
+        'budgetImpact', 'goalTitleSnapshot', 'goalCurrency',
+        'amountInGoalCurrency', 'goalBalanceAfter', 'operationId'
       ]);
+    }
+
+    // A goal-linked transaction (anything carrying goalId) is the paired
+    // half of an atomic goal.currentAmount update. Deleting it through the
+    // normal client delete path would silently desync the two — the goal
+    // would still show the money as saved while its financial record
+    // vanished. Until a proper reversal flow exists, these are not
+    // client-deletable at all (api/_lib/finance/goalTransfer.js never
+    // deletes one either).
+    function isGoalLinkedTx() {
+      return resource.data.keys().hasAny(['goalId']);
     }
 
     function writesOwnUid() {
@@ -134,7 +149,7 @@ service cloud.firestore {
           allow read:   if isAuthenticated() && request.auth.uid == userId;
           allow create: if false;
           allow update: if isAuthenticated() && request.auth.uid == userId && !touchesLockedTxFields();
-          allow delete: if isAuthenticated() && request.auth.uid == userId;
+          allow delete: if isAuthenticated() && request.auth.uid == userId && !isGoalLinkedTx();
         }
 
         // Habits — 3 total for Free
@@ -177,7 +192,7 @@ service cloud.firestore {
       allow read:   if ownsDoc();
       allow create: if false;
       allow update: if ownsDoc() && !touchesLockedTxFields();
-      allow delete: if ownsDoc();
+      allow delete: if ownsDoc() && !isGoalLinkedTx();
     }
 
     // Savings goals — read-only for clients; all writes go through the API.

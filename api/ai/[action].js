@@ -364,29 +364,39 @@ async function handleGoalCreate(req, res) {
   }
 }
 
-// direction: 'deposit' adds, 'withdraw' subtracts (never below 0)
+// direction: 'deposit' adds to the goal (and debits free balance), 'withdraw'
+// subtracts (and credits free balance back) — never below 0. Delegates to
+// transferGoalFunds, the single authoritative write path shared with
+// Telegram/AI tool-calling (api/_lib/tools.js's deposit_to_goal /
+// withdraw_from_goal) — see api/_lib/finance/goalTransfer.js.
 async function handleGoalAdjust(req, res) {
   const uid = await requireAuth(req, res);
   if (!uid) return;
-  const { id, amount, direction } = req.body ?? {};
+  const { id, amount, direction, operationId } = req.body ?? {};
   if (typeof id !== 'string' || !id || !isPosNum(amount) || !['deposit', 'withdraw'].includes(direction)) {
     return res.status(400).json({ error: 'Invalid request', code: 'VALIDATION_ERROR' });
   }
+  if (typeof operationId !== 'string' || !operationId.trim()) {
+    return res.status(400).json({ error: 'Missing operationId', code: 'VALIDATION_ERROR' });
+  }
+
+  const { transferGoalFunds, GoalTransferError } = require('../_lib/finance/goalTransfer');
   try {
-    const ref = db.collection('goals').doc(id);
-    const out = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists || snap.data().userId !== uid) return { notFound: true };
-      const current = Number(snap.data().currentAmount) || 0;
-      if (direction === 'withdraw' && amount > current) return { insufficient: true, current };
-      const next = round2(direction === 'deposit' ? current + amount : current - amount);
-      tx.update(ref, { currentAmount: next, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-      return { next };
+    const out = await transferGoalFunds({
+      uid,
+      goalId: id,
+      direction: direction === 'deposit' ? 'contribution' : 'withdrawal',
+      amount,
+      operationId: String(operationId).trim().slice(0, 200),
+      source: 'web-app',
     });
-    if (out.notFound) return res.status(404).json({ error: 'Goal not found' });
-    if (out.insufficient) return res.status(400).json({ error: 'Insufficient goal balance', code: 'INSUFFICIENT', current: out.current });
-    return res.status(200).json({ ok: true, id, currentAmount: out.next });
+    return res.status(200).json({ ok: true, id, currentAmount: out.currentAmount, duplicate: out.duplicate });
   } catch (err) {
+    if (err instanceof GoalTransferError) {
+      if (err.code === 'NOT_FOUND') return res.status(404).json({ error: 'Goal not found' });
+      if (err.code === 'INSUFFICIENT_FUNDS') return res.status(400).json({ error: err.message, code: 'INSUFFICIENT' });
+      if (err.code === 'VALIDATION_ERROR') return res.status(400).json({ error: err.message, code: 'VALIDATION_ERROR' });
+    }
     console.error('[ai/goalAdjust] error:', err.message);
     return res.status(500).json({ error: 'Failed to update goal' });
   }

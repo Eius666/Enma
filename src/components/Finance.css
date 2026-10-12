@@ -6,6 +6,7 @@
 :root {
   --fin-income: #2ecc71;
   --fin-expense: #ff4757;
+  --fin-goal: #7B68EE; /* matches GoalsList/HabitEditor's own accent color */
 }
 
 @keyframes finSlideIn {
@@ -274,6 +275,40 @@ body.theme-light .fin-list__item-icon {
 
 .fin-list__item-amount--income  { color: var(--fin-income); }
 .fin-list__item-amount--expense { color: var(--fin-expense); }
+.fin-list__item-amount--goal    { color: var(--fin-goal); }
+
+/* Goal transfers (goal_deposit/goal_withdraw) — visually distinct from real
+   income/expense so a transfer never reads as either. */
+.fin-list__item-icon--goal {
+  background: var(--fin-goal);
+  color: #fff;
+  font-size: 16px;
+}
+
+.fin-list__balance-item--saved { color: var(--fin-goal); }
+
+.fin-list__goal-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 16px 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(123, 104, 238, 0.12);
+  font-size: 13px;
+  color: var(--notes-text);
+}
+.fin-list__goal-info-icon { color: var(--fin-goal); flex-shrink: 0; }
+.fin-list__goal-info-text { flex: 1; min-width: 0; }
+.fin-list__goal-info-close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--notes-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
 
 .fin-list__item-date {
   font-size: 11px;

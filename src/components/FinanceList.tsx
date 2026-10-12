@@ -1,11 +1,15 @@
-import React, { useMemo, useState } from 'react';
-import { FaSearch, FaArrowUp, FaArrowDown, FaWallet } from 'react-icons/fa';
+import React, { useEffect, useMemo, useState } from 'react';
+import { FaSearch, FaArrowUp, FaArrowDown, FaWallet, FaBullseye } from 'react-icons/fa';
 import { isToday, isYesterday, format } from 'date-fns';
 import { ru as ruLocale, enUS } from 'date-fns/locale';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { User } from 'firebase/auth';
+import { db } from '../firebase';
 import type { Transaction, Category, Currency } from '../types/app';
 import { PRESET_COLOR_BY_ID } from './FinanceEditor';
 import { getBudgetAmount, getOriginalCurrency } from '../utils/budgetAmount';
 import { compareNewestFirst } from '../utils/sortTransactions';
+import { convertCurrency } from '../utils/convertCurrency';
 import './Finance.css';
 
 interface FinanceListProps {
@@ -14,7 +18,13 @@ interface FinanceListProps {
   rates: Record<string, number>;
   categories: Category[];
   transactions: Transaction[];
+  user: User | null;
   onOpenEditor: (txId: string | null) => void;
+}
+
+/** Whether a transaction is a goal transfer — never real income/expense. */
+function isGoalTransfer(tx: Transaction): boolean {
+  return tx.type === 'goal_deposit' || tx.type === 'goal_withdraw';
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -61,7 +71,7 @@ function getCatColor(tx: Transaction): string {
 }
 
 /** First letter of the category label (for the colored circle). */
-function getCatInitial(label: string, type: 'income' | 'expense'): string {
+function getCatInitial(label: string, type: Transaction['type']): string {
   if (!label) return type === 'income' ? 'I' : 'E';
   return label.charAt(0).toUpperCase();
 }
@@ -103,6 +113,7 @@ const T = {
     balance: 'Balance',
     income: 'Income',
     expense: 'Expenses',
+    saved: 'Saved',
     search: 'Search transactions…',
     all: 'All',
     emptyTitle: 'No transactions yet',
@@ -114,11 +125,17 @@ const T = {
     periodWeek: 'Week',
     periodMonth: 'Month',
     periodAll: 'All time',
+    goalContribution: 'Savings',
+    goalWithdrawal: 'Savings',
+    goalContributionSub: 'Transferred to savings',
+    goalWithdrawalSub: 'Returned from savings',
+    goalInfoClose: 'Close',
   },
   ru: {
     balance: 'Баланс',
     income: 'Доход',
     expense: 'Расходы',
+    saved: 'Отложено',
     search: 'Поиск операций…',
     all: 'Все',
     emptyTitle: 'Операций пока нет',
@@ -130,6 +147,11 @@ const T = {
     periodWeek: 'Неделя',
     periodMonth: 'Месяц',
     periodAll: 'Всё время',
+    goalContribution: 'Накопления',
+    goalWithdrawal: 'Накопления',
+    goalContributionSub: 'Перевод в копилку',
+    goalWithdrawalSub: 'Возврат из копилки',
+    goalInfoClose: 'Закрыть',
   },
 };
 
@@ -139,6 +161,7 @@ const FinanceList: React.FC<FinanceListProps> = ({
   rates,
   categories,
   transactions,
+  user,
   onOpenEditor,
 }) => {
   const t = T[language];
@@ -148,6 +171,31 @@ const FinanceList: React.FC<FinanceListProps> = ({
   const [period, setPeriod] = useState<Period>('month');
   const [activeCategory, setActiveCategory] = useState(t.all);
   const [activeBank, setActiveBank] = useState<string | null>(null);
+  const [goalInfoTxId, setGoalInfoTxId] = useState<string | null>(null);
+
+  // Independent subscription (same pattern as GoalsList) — only reads
+  // currentAmount/currency/title, purely for the compact "Отложено" line
+  // below; never written to from here.
+  const [goals, setGoals] = useState<{ currentAmount: number; currency?: string }[]>([]);
+  useEffect(() => {
+    if (!user) { setGoals([]); return; }
+    const q = query(collection(db, 'goals'), where('userId', '==', user.uid));
+    return onSnapshot(
+      q,
+      snap => setGoals(snap.docs.map(d => d.data() as { currentAmount: number; currency?: string })),
+      err => console.warn('FinanceList goals listener error', err),
+    );
+  }, [user]);
+
+  // Live conversion for display only — never locked/stored. Each goal's own
+  // running currentAmount is already the full historical truth (new AND
+  // legacy contributions alike), so this is a straight read, not a sum over
+  // transactions — summing goal_deposit/goal_withdraw records instead would
+  // double-count any goal that had a balance before this feature existed.
+  const savingsBalance = useMemo(
+    () => goals.reduce((s, g) => s + convertCurrency(g.currentAmount || 0, g.currency || 'RUB', currency, rates), 0),
+    [goals, currency, rates],
+  );
 
   // Filter transactions by selected period first; everything else derives from this.
   // Always newest first (top = most recent), whatever order the data arrives in.
@@ -290,6 +338,12 @@ const FinanceList: React.FC<FinanceListProps> = ({
             <FaArrowDown className="fin-list__balance-arrow" />
             {t.expense}: {fmt(summary.expense)}
           </span>
+          {savingsBalance > 0 && (
+            <span className="fin-list__balance-item fin-list__balance-item--saved">
+              <FaBullseye className="fin-list__balance-arrow" />
+              {t.saved}: {fmt(savingsBalance)}
+            </span>
+          )}
         </div>
       </div>
 
@@ -380,6 +434,68 @@ const FinanceList: React.FC<FinanceListProps> = ({
           <React.Fragment key={label}>
             <div className="fin-list__section-label">{label}</div>
             {items.map(tx => {
+              // Goal transfers (api/_lib/finance/goalTransfer.js) get their own
+              // row shape — never routed into the generic FinanceEditor
+              // (PHASE 11: money fields of a linked transaction must not be
+              // editable independently of the goal itself; Firestore rules
+              // enforce this server-side too). Clicking shows a small inline
+              // info disclosure instead of opening an editor.
+              if (isGoalTransfer(tx)) {
+                const isWithdrawal = tx.type === 'goal_withdraw';
+                const goalTitle = tx.goalTitleSnapshot || (language === 'ru' ? 'Цель' : 'Goal');
+                const infoOpen = goalInfoTxId === tx.id;
+                return (
+                  <React.Fragment key={tx.id}>
+                    <button
+                      className="fin-list__item"
+                      onClick={() => setGoalInfoTxId(infoOpen ? null : tx.id)}
+                      type="button"
+                      aria-expanded={infoOpen}
+                    >
+                      <span className="fin-list__item-icon fin-list__item-icon--goal">
+                        <FaBullseye />
+                      </span>
+                      <span className="fin-list__item-body">
+                        <span className="fin-list__item-title">
+                          {(isWithdrawal ? t.goalWithdrawal : t.goalContribution)} · {goalTitle}
+                        </span>
+                        <span className="fin-list__item-meta">
+                          <span className="fin-list__item-cat">
+                            {isWithdrawal ? t.goalWithdrawalSub : t.goalContributionSub}
+                          </span>
+                        </span>
+                      </span>
+                      <span className="fin-list__item-right">
+                        <span className="fin-list__item-amount fin-list__item-amount--goal">
+                          {isWithdrawal ? '+' : '−'}{txAmountParts(tx).primary}
+                        </span>
+                        {txAmountParts(tx).secondary && (
+                          <span className="fin-list__item-approx">{txAmountParts(tx).secondary}</span>
+                        )}
+                        {txTimeLabel(tx) && (
+                          <span className="fin-list__item-date">{txTimeLabel(tx)}</span>
+                        )}
+                      </span>
+                    </button>
+                    {infoOpen && (
+                      <div className="fin-list__goal-info">
+                        <FaBullseye className="fin-list__goal-info-icon" />
+                        <span className="fin-list__goal-info-text">
+                          {goalTitle} — {isWithdrawal ? '+' : '−'}{txAmountParts(tx).primary}
+                        </span>
+                        <button
+                          className="fin-list__goal-info-close"
+                          onClick={() => setGoalInfoTxId(null)}
+                          type="button"
+                        >
+                          {t.goalInfoClose}
+                        </button>
+                      </div>
+                    )}
+                  </React.Fragment>
+                );
+              }
+
               const catLabel = resolveCatLabel(tx, categories);
               const color = getCatColor(tx);
               const initial = getCatInitial(catLabel, tx.type);

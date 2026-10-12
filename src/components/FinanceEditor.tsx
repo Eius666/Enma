@@ -246,17 +246,28 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
   }, [user, isFree]);
 
   // ── Load existing transaction ─────────────────────────────────────────────
+  // Goal-linked transactions (type goal_deposit/goal_withdraw) never get
+  // their money fields loaded into the editable form — FinanceList never
+  // routes a click on one here in the first place, but this guard is a
+  // second line of defense (PHASE 11/16: a linked transaction's money
+  // fields must not be editable independently of the goal itself; Firestore
+  // rules enforce the same server-side).
   useEffect(() => {
     if (initialTransaction) {
-      applyTxData(initialTransaction, setTxType, setAmountStr, setTxCurrency, setDescription, setDate, setSelectedCatId, setSelectedBank, inputCurrency);
+      if (initialTransaction.type === 'income' || initialTransaction.type === 'expense') {
+        applyTxData({ ...initialTransaction, type: initialTransaction.type }, setTxType, setAmountStr, setTxCurrency, setDescription, setDate, setSelectedCatId, setSelectedBank, inputCurrency);
+      }
       return;
     }
     if (!transactionId) return;
     getDoc(doc(db, 'transactions', transactionId))
       .then(snap => {
         if (snap.exists()) {
-          setExistingTx({ id: snap.id, ...snap.data() } as Transaction);
-          applyTxData(snap.data() as Parameters<typeof applyTxData>[0], setTxType, setAmountStr, setTxCurrency, setDescription, setDate, setSelectedCatId, setSelectedBank, inputCurrency);
+          const data = snap.data();
+          setExistingTx({ id: snap.id, ...data } as Transaction);
+          if (data.type === 'income' || data.type === 'expense') {
+            applyTxData({ ...data, type: data.type }, setTxType, setAmountStr, setTxCurrency, setDescription, setDate, setSelectedCatId, setSelectedBank, inputCurrency);
+          }
         }
         setLoaded(true);
       })
@@ -391,6 +402,23 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
           <button className="fin-editor__back-btn" onClick={onBack} type="button">
             <FaArrowLeft /> {t.back}
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (existingTx && existingTx.type !== 'income' && existingTx.type !== 'expense') {
+    return (
+      <div className="fin-editor">
+        <div className="fin-editor__toolbar">
+          <button className="fin-editor__back-btn" onClick={onBack} type="button">
+            <FaArrowLeft /> {t.back}
+          </button>
+        </div>
+        <div className="fin-editor__error" role="status">
+          {language === 'ru'
+            ? 'Это перевод в накопления — изменить его здесь нельзя. Управляйте целью во вкладке «Цели».'
+            : "This is a savings transfer — it can't be edited here. Manage it from the Goals tab."}
         </div>
       </div>
     );

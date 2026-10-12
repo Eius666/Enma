@@ -164,7 +164,11 @@ async function searchWeb(query) {
 
 // ── Main chat function ────────────────────────────────────────────────────────
 
-async function chatWithTools(userMessage, userId, chatId, history = []) {
+// messageId: the inbound Telegram message_id, threaded through to
+// executeTool for deposit_to_goal/withdraw_from_goal's idempotency key —
+// stable across a webhook redelivery of the same update, unlike anything
+// generated fresh per LLM completion (see tools.js's goalOperationId).
+async function chatWithTools(userMessage, userId, chatId, history = [], messageId) {
   const [timezone, currency] = await Promise.all([
     getUserTimezone(userId).catch(() => 'Europe/Warsaw'),
     getUserCurrency(userId).catch(() => 'RUB'), // current INPUT currency; budget is always RUB
@@ -216,7 +220,7 @@ async function chatWithTools(userMessage, userId, chatId, history = []) {
         const found = await searchWeb(args.query || userMessage);
         result = { ok: true, message: found };
       } else {
-        result = await executeTool(name, args, userId, chatId, timezone, currency);
+        result = await executeTool(name, args, userId, chatId, timezone, currency, messageId);
       }
     } catch (err) {
       result  = { ok: false, error: err.message };

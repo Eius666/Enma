@@ -11,6 +11,7 @@ const { hasLockedRub } = require('./finance/lockedAmount');
 const { resolveTransactionCurrency } = require('./finance/resolveLegacyCurrency');
 const { createFinancialTransaction, TransactionValidationError } = require('./transactions/financialTransaction');
 const { FxUnavailableError } = require('./fx');
+const { transferGoalFunds, GoalTransferError } = require('./finance/goalTransfer');
 
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -916,7 +917,9 @@ async function queryTransactions(args, userId) {
   if (!txs.length) return { ok: true, message: 'Нет транзакций.' };
 
   const lines = txs.map(t => {
-    const emoji     = t.type === 'income' ? '💰' : '💸';
+    const emoji = t.type === 'income' ? '💰'
+      : (t.type === 'goal_deposit' || t.type === 'goal_withdraw') ? '🎯'
+      : '💸';
     const bankLabel = t.bank ? ` [${t.bank}]` : '';
     // v2 rows show their real currency (+ locked ₽ value); legacy rows keep
     // the resolver-derived currency.
@@ -1326,31 +1329,49 @@ async function createGoal(args, userId, currency) {
   };
 }
 
-async function depositToGoal(args, userId, chatId, currency) {
+// Both deposit_to_goal and withdraw_from_goal delegate to transferGoalFunds
+// — the single authoritative write path shared with the Web UI's goalAdjust
+// (api/ai/[action].js) — see api/_lib/finance/goalTransfer.js. Neither
+// function touches goals/transactions directly any more: the old code did
+// two independent, non-atomic Firestore writes with no FX/rubAmount and no
+// idempotency protection against a redelivered Telegram update.
+//
+// operationId is derived from (chatId, messageId, goalId, direction) — all
+// of them stable across a webhook redelivery of the SAME inbound update, so
+// a retry resolves to the exact same logical operation. When messageId is
+// unavailable (defensive fallback only — every real call site passes it),
+// a per-call unique value is used so the user is never blocked from acting,
+// at the cost of only protecting against double-click/network-retry within
+// THIS call, not across a Telegram redelivery of the original message.
+function goalOperationId(chatId, messageId, goalId, direction) {
+  const stableMessageId = messageId ?? `nomsg-${createId()}`;
+  return `tg-${chatId}-${stableMessageId}-${goalId}-${direction}`;
+}
+
+async function depositToGoal(args, userId, chatId, currency, messageId) {
   const { goalId, amount } = args;
   const sym = CURRENCY_SYMBOLS[currency] || currency;
 
-  const ref  = db.collection('goals').doc(goalId);
-  const snap = await ref.get();
-  if (!snap.exists || snap.data().userId !== userId) return { ok: false, error: 'Цель не найдена' };
+  let result;
+  try {
+    result = await transferGoalFunds({
+      uid: userId,
+      goalId,
+      direction: 'contribution',
+      amount,
+      currency,
+      operationId: goalOperationId(chatId, messageId, goalId, 'contribution'),
+      source: 'telegram-bot',
+    });
+  } catch (err) {
+    if (err instanceof GoalTransferError && err.code === 'NOT_FOUND') return { ok: false, error: 'Цель не найдена' };
+    if (err instanceof GoalTransferError) return { ok: false, error: err.message };
+    throw err;
+  }
 
-  const goal      = snap.data();
-  const newAmount = (goal.currentAmount || 0) + amount;
-  await ref.update({ currentAmount: newAmount, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-
-  await db.collection('transactions').doc(createId()).set({
-    userId, chatId,
-    type:        'goal_deposit',
-    budgetImpact: false, // goal movement, not an income/expense — carries no rubAmount by design
-    amount,
-    description: `Пополнение: ${goal.title}`,
-    categoryId:  'cat-goal',
-    goalId,
-    date:        new Date().toISOString(),
-    source:      'telegram-bot',
-    createdAt:   admin.firestore.FieldValue.serverTimestamp(),
-  });
-
+  const goalSnap  = await db.collection('goals').doc(goalId).get();
+  const goal      = goalSnap.data();
+  const newAmount = result.currentAmount;
   const pct      = Math.min(Math.round(newAmount / goal.targetAmount * 100), 100);
   const bar      = progressBar(newAmount, goal.targetAmount);
   const congrats = pct >= 100 ? '\n\n🎉 Цель достигнута! Поздравляем!' : '';
@@ -1360,34 +1381,34 @@ async function depositToGoal(args, userId, chatId, currency) {
   };
 }
 
-async function withdrawFromGoal(args, userId, chatId, currency) {
+async function withdrawFromGoal(args, userId, chatId, currency, messageId) {
   const { goalId, amount } = args;
   const sym = CURRENCY_SYMBOLS[currency] || currency;
 
-  const ref  = db.collection('goals').doc(goalId);
-  const snap = await ref.get();
-  if (!snap.exists || snap.data().userId !== userId) return { ok: false, error: 'Цель не найдена' };
+  let result;
+  try {
+    result = await transferGoalFunds({
+      uid: userId,
+      goalId,
+      direction: 'withdrawal',
+      amount,
+      currency,
+      operationId: goalOperationId(chatId, messageId, goalId, 'withdrawal'),
+      source: 'telegram-bot',
+    });
+  } catch (err) {
+    if (err instanceof GoalTransferError && err.code === 'NOT_FOUND') return { ok: false, error: 'Цель не найдена' };
+    if (err instanceof GoalTransferError && err.code === 'INSUFFICIENT_FUNDS') {
+      const current = (await db.collection('goals').doc(goalId).get()).data()?.currentAmount ?? 0;
+      return { ok: false, error: `Недостаточно средств. Накоплено: ${current} ${sym}` };
+    }
+    if (err instanceof GoalTransferError) return { ok: false, error: err.message };
+    throw err;
+  }
 
-  const goal    = snap.data();
-  const current = goal.currentAmount || 0;
-  if (current - amount < 0) return { ok: false, error: `Недостаточно средств. Накоплено: ${current} ${sym}` };
-
-  const newAmount = current - amount;
-  await ref.update({ currentAmount: newAmount, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-
-  await db.collection('transactions').doc(createId()).set({
-    userId, chatId,
-    type:        'goal_withdraw',
-    budgetImpact: false, // goal movement, not an income/expense — carries no rubAmount by design
-    amount,
-    description: `Снятие: ${goal.title}`,
-    categoryId:  'cat-goal',
-    goalId,
-    date:        new Date().toISOString(),
-    source:      'telegram-bot',
-    createdAt:   admin.firestore.FieldValue.serverTimestamp(),
-  });
-
+  const goalSnap  = await db.collection('goals').doc(goalId).get();
+  const goal      = goalSnap.data();
+  const newAmount = result.currentAmount;
   const pct = Math.round(newAmount / goal.targetAmount * 100);
   const bar = progressBar(newAmount, goal.targetAmount);
   return {
@@ -1433,7 +1454,12 @@ async function deleteGoal(args, userId) {
 
 // `currency` = user.currency = the current INPUT currency. Reads/analytics are
 // always in HOME_BUDGET_CURRENCY (RUB) regardless of it.
-async function executeTool(name, args, userId, chatId, timezone, currency = 'RUB') {
+// messageId: Telegram's message_id for the inbound message that triggered
+// this tool call — stable across a webhook redelivery of the SAME update,
+// unlike the LLM's own per-completion tool_call id. Only deposit_to_goal /
+// withdraw_from_goal use it (as part of their idempotency key); every other
+// tool ignores the extra argument.
+async function executeTool(name, args, userId, chatId, timezone, currency = 'RUB', messageId) {
   switch (name) {
     case 'create_reminder':    return createReminder(args, userId, chatId, timezone);
     case 'create_task':        return createTask(args, userId, chatId, timezone);
@@ -1453,8 +1479,8 @@ async function executeTool(name, args, userId, chatId, timezone, currency = 'RUB
     case 'pause_automation':    return pauseAutomation(args, userId, timezone);
     case 'set_banks':           return setBanks(args, userId);
     case 'get_banks':           return getBanks(userId);
-    case 'deposit_to_goal':     return depositToGoal(args, userId, chatId, currency);
-    case 'withdraw_from_goal':  return withdrawFromGoal(args, userId, chatId, currency);
+    case 'deposit_to_goal':     return depositToGoal(args, userId, chatId, currency, messageId);
+    case 'withdraw_from_goal':  return withdrawFromGoal(args, userId, chatId, currency, messageId);
     case 'list_goals':          return listGoals(userId, currency);
     case 'delete_goal':         return deleteGoal(args, userId);
     // search_web is intercepted by the caller

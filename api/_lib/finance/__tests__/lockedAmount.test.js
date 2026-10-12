@@ -49,6 +49,33 @@ test('balance: v2 income/expense use rubAmount; mixed with legacy RUB', () => {
   assert.equal(bal, 86000 - 10100 - 5000);
 });
 
+// ── Free Balance must move on a goal transfer (ENMA goal↔finance integration) ─
+
+test('balance: a goal_deposit reduces the balance like an expense would', () => {
+  const bal = calculateCurrentBalance([
+    v2('RUB', 100000, 100000, 'income'),
+    v2('RUB', 5000, 5000, 'goal_deposit'),
+  ], 'RUB', null);
+  assert.equal(bal, 95000);
+});
+
+test('balance: a goal_withdraw restores the balance like income would', () => {
+  const bal = calculateCurrentBalance([
+    v2('RUB', 100000, 100000, 'income'),
+    v2('RUB', 5000, 5000, 'goal_deposit'),
+    v2('RUB', 2000, 2000, 'goal_withdraw'),
+  ], 'RUB', null);
+  assert.equal(bal, 97000);
+});
+
+test('balance: a goal transfer in a foreign currency uses its own locked rubAmount, not the raw amount', () => {
+  const bal = calculateCurrentBalance([
+    v2('RUB', 100000, 100000, 'income'),
+    v2('USD', 100, 8600, 'goal_deposit'), // $100 contribution, locked at 86 RUB/USD
+  ], 'RUB', null);
+  assert.equal(bal, 91400);
+});
+
 test('repository normalizeTransaction preserves v2 fields (and adds none for legacy)', () => {
   const n = normalizeTransaction({ id: 'a', data: () => ({ ...v2('USD', 100, 8600), fx: { rateToRub: 86 } }) });
   assert.equal(n.schemaVersion, 2); assert.equal(n.rubAmount, 8600); assert.equal(n.fx.rateToRub, 86);

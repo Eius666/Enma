@@ -82,12 +82,20 @@ async function getAllTransactions(uid) {
 // (rates unavailable), is skipped rather than mis-summed — this keeps a
 // RUB-only user's balance correct even when the FX API is offline, since
 // same-currency transactions never need `rates` at all.
+// This IS "Free Balance" (ENMA goal↔finance integration): a goal_deposit
+// moves money OUT of what's freely available (same sign as an expense) and
+// a goal_withdraw moves it back IN (same sign as income) — it is money the
+// user still owns, just not a real expense/income, so it must still shift
+// this number or "free balance" would overstate what's actually spendable
+// by whatever sits in goals. budgetImpact/type distinguish it from a real
+// expense/income everywhere ELSE (category spend, consumer-expense totals,
+// income totals) — only here, in the balance itself, does it participate.
 function calculateCurrentBalance(transactions, targetCurrency = 'RUB', rates = null) {
   let balance = 0;
   for (const t of transactions) {
     if (hasLockedRub(t) && targetCurrency === 'RUB') {
-      if (t.type === 'income')  balance += t.rubAmount;
-      if (t.type === 'expense') balance -= t.rubAmount;
+      if (t.type === 'income' || t.type === 'goal_withdraw') balance += t.rubAmount;
+      if (t.type === 'expense' || t.type === 'goal_deposit')  balance -= t.rubAmount;
       continue;
     }
     const resolved = resolveTransactionCurrency(t);
@@ -97,8 +105,8 @@ function calculateCurrentBalance(transactions, targetCurrency = 'RUB', rates = n
       if (!rates) continue;
       amount = convertCurrency(t.amount, resolved.currency, targetCurrency, rates);
     }
-    if (t.type === 'income')  balance += amount;
-    if (t.type === 'expense') balance -= amount;
+    if (t.type === 'income' || t.type === 'goal_withdraw') balance += amount;
+    if (t.type === 'expense' || t.type === 'goal_deposit')  balance -= amount;
   }
   return Math.round(balance * 100) / 100;
 }

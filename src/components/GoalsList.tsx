@@ -6,6 +6,17 @@ import { db } from '../firebase';
 import { formatCurrency } from '../utils/formatCurrency';
 import './Finance.css';
 
+// Stable per-submission idempotency key — generated once when the deposit/
+// withdraw panel is opened, reused across any retry of that same logical
+// request (never Date.now(), which would mint a new key every retry and
+// defeat the point).
+function newOperationId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `op-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 interface Goal {
   id: string;
   title: string;
@@ -85,7 +96,7 @@ const GoalsList: React.FC<GoalsListProps> = ({ user, language }) => {
   const [title, setTitle] = useState('');
   const [target, setTarget] = useState('');
   const [deadline, setDeadline] = useState('');
-  const [adjust, setAdjust] = useState<{ id: string; direction: 'deposit' | 'withdraw' } | null>(null);
+  const [adjust, setAdjust] = useState<{ id: string; direction: 'deposit' | 'withdraw'; operationId: string } | null>(null);
   const [adjustAmount, setAdjustAmount] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -143,7 +154,12 @@ const GoalsList: React.FC<GoalsListProps> = ({ user, language }) => {
     if (!adjust) return;
     const amount = parseFloat(adjustAmount);
     if (!(amount > 0)) { setError(t.invalid); return; }
-    const res = await call('goalAdjust', { id: adjust.id, amount, direction: adjust.direction });
+    // Same operationId is reused for every retry of THIS submission (the
+    // button is disabled via `busy` while in flight, and the id itself only
+    // changes when the adjust panel is re-opened) — a double click or a
+    // network-level retry resolves to the same logical request server-side
+    // instead of depositing/withdrawing twice.
+    const res = await call('goalAdjust', { id: adjust.id, amount, direction: adjust.direction, operationId: adjust.operationId });
     if (res.ok) { setAdjust(null); setAdjustAmount(''); }
   };
 
@@ -266,8 +282,8 @@ const GoalsList: React.FC<GoalsListProps> = ({ user, language }) => {
                 </div>
               ) : (
                 <div className="goals__actions">
-                  <button className="goals__btn goals__btn--primary" onClick={() => { setAdjust({ id: g.id, direction: 'deposit' }); setAdjustAmount(''); }} type="button">{t.deposit}</button>
-                  <button className="goals__btn" onClick={() => { setAdjust({ id: g.id, direction: 'withdraw' }); setAdjustAmount(''); }} type="button">{t.withdraw}</button>
+                  <button className="goals__btn goals__btn--primary" onClick={() => { setAdjust({ id: g.id, direction: 'deposit', operationId: newOperationId() }); setAdjustAmount(''); }} type="button">{t.deposit}</button>
+                  <button className="goals__btn" onClick={() => { setAdjust({ id: g.id, direction: 'withdraw', operationId: newOperationId() }); setAdjustAmount(''); }} type="button">{t.withdraw}</button>
                   <button className="goals__icon-btn" onClick={() => handleDelete(g.id)} aria-label={t.del} type="button"><FaTrash /></button>
                 </div>
               )}

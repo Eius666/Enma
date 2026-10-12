@@ -58,7 +58,11 @@ export type Category = {
 // The server/Firestore shape lives in src/types/finance.ts.
 export type Transaction = {
   id: string;
-  type: 'income' | 'expense';
+  // 'goal_deposit'/'goal_withdraw': a transfer between free balance and a
+  // savings goal (api/_lib/finance/goalTransfer.js) — never counted as real
+  // income/expense (budgetImpact: false; excluded from Income/Expense totals
+  // by every `type === 'income'|'expense'` filter already in this file).
+  type: 'income' | 'expense' | 'goal_deposit' | 'goal_withdraw';
   // Stored in the transaction's own currency (see `currency` field).
   // Legacy records without a `currency` field must be resolved via
   // resolveLegacyCurrency() — never guessed as a blanket RUB default. See
@@ -101,6 +105,9 @@ export type Transaction = {
     requestedDate?: string;
     rateMatchesRequestedDate?: boolean;
   } | null;
+  // Present only on goal_deposit/goal_withdraw — see api/_lib/finance/goalTransfer.js.
+  goalId?: string;
+  goalTitleSnapshot?: string;
 };
 
 // Client-side habit shape: history keyed by YYYY-MM-DD date strings.

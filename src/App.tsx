@@ -1857,6 +1857,7 @@ const App: React.FC = () => {
             rates={rates}
             categories={categories}
             transactions={transactions}
+            user={user}
             onOpenEditor={(id) => {
               setActiveTransactionId(id);
               setFinanceView('editor');

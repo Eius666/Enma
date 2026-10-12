@@ -12,6 +12,12 @@ let env;
 
 const V2 = { userId: 'alice', schemaVersion: 2, type: 'expense', amount: 100, currency: 'USD', rubAmount: 8640, fx: { rateToRub: 86.4, source: 'bank_quote' }, description: 'coffee', source: 'web-app' };
 const LEGACY = { userId: 'alice', type: 'expense', amount: 5000, currency: 'RUB', description: 'old', source: 'telegram-bot' };
+const GOAL_LINKED = {
+  userId: 'alice', schemaVersion: 2, type: 'goal_deposit', budgetImpact: false,
+  amount: 5000, currency: 'RUB', rubAmount: 5000, fx: null,
+  goalId: 'g1', goalTitleSnapshot: 'Car', goalCurrency: 'RUB', amountInGoalCurrency: 5000,
+  goalBalanceAfter: 5000, operationId: 'op-1', description: 'Накопления: Car', source: 'web-app',
+};
 
 before(async () => {
   env = await initializeTestEnvironment({
@@ -27,6 +33,7 @@ beforeEach(async () => {
     await setDoc(doc(db, 'transactions/v2'), V2);
     await setDoc(doc(db, 'transactions/legacy'), LEGACY);
     await setDoc(doc(db, 'transactions/bobs'), { ...V2, userId: 'bob' });
+    await setDoc(doc(db, 'transactions/goallinked'), GOAL_LINKED);
     await setDoc(doc(db, 'goals/g1'), { userId: 'alice', title: 'Car', targetAmount: 1000, currentAmount: 0, currency: 'RUB' });
   });
 });
@@ -47,6 +54,26 @@ for (const [field, value] of [['rubAmount', 1], ['amount', 1], ['currency', 'RUB
     await assertFails(updateDoc(doc(alice(), 'transactions/v2'), { [field]: value }));
   });
 }
+
+// ── goal-transfer fields are also immutable, and a goal-linked tx can't be
+//    deleted by the client (would desync the paired goal.currentAmount) ────
+for (const [field, value] of [
+  ['budgetImpact', true], ['goalTitleSnapshot', 'forged'], ['goalCurrency', 'USD'],
+  ['amountInGoalCurrency', 999999], ['goalBalanceAfter', 999999], ['operationId', 'forged'],
+]) {
+  test(`client cannot change ${field} of a goal-linked transaction`, async () => {
+    await assertFails(updateDoc(doc(alice(), 'transactions/goallinked'), { [field]: value }));
+  });
+}
+test('client cannot add a goalId to an existing non-linked transaction', async () => {
+  await assertFails(updateDoc(doc(alice(), 'transactions/v2'), { goalId: 'g1' }));
+});
+test('client cannot delete a goal-linked transaction (would desync the goal balance)', async () => {
+  await assertFails(deleteDoc(doc(alice(), 'transactions/goallinked')));
+});
+test('owner can still edit metadata on a goal-linked transaction', async () => {
+  await assertSucceeds(updateDoc(doc(alice(), 'transactions/goallinked'), { description: 'renamed note' }));
+});
 
 test('client cannot upgrade a legacy doc to a forged v2 (adding rubAmount/fx/schemaVersion)', async () => {
   await assertFails(updateDoc(doc(alice(), 'transactions/legacy'), { schemaVersion: 2, rubAmount: 999999, fx: { rateToRub: 1 } }));
