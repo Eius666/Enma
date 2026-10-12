@@ -152,6 +152,8 @@ test('adminNotesDiagnostic: reports the real list-query (where+orderBy) count al
     const res = mockRes();
     await handler(req, res);
     assert.equal(res.body.primary.listQueryError, null);
+    assert.equal(res.body.primary.listQueryErrorCode, null);
+    assert.equal(res.body.primary.listQueryErrorMessage, null);
     assert.equal(res.body.primary.listQueryCount, 1);
     assert.equal(res.body.primary.listQueryExcludesDocs, false);
     // NOTE: the shared test-fixture mock's orderBy() does not actually

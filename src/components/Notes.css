@@ -399,6 +399,42 @@ body.theme-light .notes-list__item {
   color: var(--notes-text-muted);
 }
 
+.notes-list__empty--error .notes-list__empty-title {
+  color: var(--fin-expense, #ff4757);
+}
+
+.notes-list__retry-btn {
+  margin-top: 4px;
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid var(--notes-card-border);
+  background: var(--notes-accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.notes-list__load-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--fin-expense, #ff4757) 12%, transparent);
+  border: 1px solid var(--fin-expense, #ff4757);
+  font-size: 13px;
+  color: var(--notes-text);
+}
+
+.notes-list__load-error-banner .notes-list__retry-btn {
+  margin-top: 0;
+  padding: 6px 14px;
+  flex-shrink: 0;
+}
+
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    Context menu overlay

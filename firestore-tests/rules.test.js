@@ -6,7 +6,7 @@ const { test, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@firebase/rules-unit-testing');
-const { doc, setDoc, updateDoc, deleteDoc, getDoc, serverTimestamp } = require('firebase/firestore');
+const { doc, setDoc, updateDoc, deleteDoc, getDoc, runTransaction, serverTimestamp } = require('firebase/firestore');
 
 let env;
 
@@ -196,4 +196,68 @@ test('notes: another user cannot read, update, or delete someone else\'s note', 
 test('notes: unauthenticated access is denied', async () => {
   await assertFails(getDoc(doc(anon(), 'notes/n1')));
   await assertFails(setDoc(doc(anon(), 'notes/anon1'), { userId: 'nobody', title: 'x', content: '', type: 'text', category: 'General', pinned: false }));
+});
+
+// ── optimistic-concurrency `rev` on a legacy document (ENMA notes-
+//    durability audit, item 6: "старые заметки без rev корректно
+//    открываются и сохраняются с rev=0 при первой записи"). notes/n1 is
+//    seeded with NO rev field at all — exactly what a pre-this-feature
+//    note looks like. This replicates NoteEditor.tsx's writeNote update
+//    path verbatim (src/components/NoteEditor.tsx: runTransaction reading
+//    snap.data()?.rev ?? 0, writing rev: serverRev + 1) against the real
+//    emulator, through the real rules, rather than assuming the client
+//    SDK's transaction semantics behave as the app's code expects. ─────
+
+test('notes: a legacy document with no rev field opens as rev=0 and the first write sets rev=1', async () => {
+  const db = alice();
+  const ref = doc(db, 'notes/n1');
+
+  // "Opens correctly": the load path reads rev as 0 when absent — never
+  // throws, never treats it as a malformed/corrupt document.
+  const loaded = await getDoc(ref);
+  const serverRevAtLoad = typeof loaded.data().rev === 'number' ? loaded.data().rev : 0;
+  assert.equal(serverRevAtLoad, 0);
+
+  // "Saves correctly on first write": same transaction shape as
+  // NoteEditor's update path — knownRevRef.current (0, from the load
+  // above) must match the server's rev (also 0, since the field is
+  // absent) for the write to proceed, and the result must be rev=1, not
+  // an error and not a forced resurrection-style overwrite.
+  let nextRev = 0;
+  await assertSucceeds(runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const serverRev = snap.exists() && typeof snap.data()?.rev === 'number' ? snap.data().rev : 0;
+    assert.equal(serverRev, 0, 'sanity: still 0 inside the transaction');
+    nextRev = serverRev + 1;
+    tx.set(ref, { content: 'milk, eggs, bread', updatedAt: serverTimestamp(), rev: nextRev }, { merge: true });
+  }));
+  assert.equal(nextRev, 1);
+
+  const after = await getDoc(ref);
+  assert.equal(after.data().rev, 1);
+  assert.equal(after.data().content, 'milk, eggs, bread');
+  // The rest of the legacy document survives the merge untouched.
+  assert.equal(after.data().title, 'Shopping list');
+});
+
+test('notes: a SECOND write after that first rev=1 continues the same sequence (rev=2), not a conflict', async () => {
+  const db = alice();
+  const ref = doc(db, 'notes/n1');
+
+  const firstWrite = async (known) => {
+    let nextRev = known;
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      const serverRev = snap.exists() && typeof snap.data()?.rev === 'number' ? snap.data().rev : 0;
+      if (serverRev !== known) throw new Error('unexpected conflict in test setup');
+      nextRev = serverRev + 1;
+      tx.set(ref, { updatedAt: serverTimestamp(), rev: nextRev }, { merge: true });
+    });
+    return nextRev;
+  };
+
+  const afterFirst = await firstWrite(0);
+  assert.equal(afterFirst, 1);
+  const afterSecond = await firstWrite(1);
+  assert.equal(afterSecond, 2);
 });

@@ -1399,7 +1399,10 @@ async function _notesDiagnosticForUid(uid) {
   // works fine, which would otherwise look identical to "notes missing
   // updatedAt" from the count mismatch alone.
   let listQueryCount = null;
-  let listQueryError = null;
+  let listQueryError = null;        // kept for backward compatibility with earlier diagnostic runs
+  let listQueryErrorCode = null;
+  let listQueryErrorMessage = null; // the FULL message — for FAILED_PRECONDITION on a missing index,
+                                     // this is where Firestore puts the console link to create it
   try {
     const listQuerySnap = await db.collection('notes')
       .where('userId', '==', uid)
@@ -1408,6 +1411,8 @@ async function _notesDiagnosticForUid(uid) {
     listQueryCount = listQuerySnap.size;
   } catch (err) {
     listQueryError = err.code || err.message;
+    listQueryErrorCode = err.code ?? null;
+    listQueryErrorMessage = err.message ?? null;
   }
 
   const flagged = [];
@@ -1445,7 +1450,9 @@ async function _notesDiagnosticForUid(uid) {
     uid,
     topLevelNoteCount: topLevel.size,          // db.collection('notes').where('userId','==',uid) — no orderBy
     listQueryCount,                             // the SAME query PLUS .orderBy('updatedAt','desc') — what NotesList.tsx actually runs
-    listQueryError,                             // non-null only if that exact query itself failed (e.g. missing index, permission-denied)
+    listQueryError,                             // deprecated alias of listQueryErrorCode — kept so an older stored diagnostic result stays readable
+    listQueryErrorCode,                         // e.g. "failed-precondition" — a missing composite index, permission-denied, etc.
+    listQueryErrorMessage,                      // the FULL error text — includes the Firebase console link to create a missing index
     listQueryExcludesDocs: listQueryError === null && listQueryCount !== null && listQueryCount !== topLevel.size,
     missingUpdatedAtCount,                      // of topLevel — these are exactly the docs orderBy would drop, if any
     missingRevCount,                            // legacy docs predating the rev field — expected to be harmless, not itself a problem

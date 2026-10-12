@@ -76,6 +76,9 @@ const T = {
     unsavedHint: 'This note was never saved online',
     recover: 'Open',
     discard: 'Discard',
+    loadErrorTitle: "Couldn't load your notes",
+    loadErrorHint: 'This is not the same as having no notes — your notes may still be there.',
+    retry: 'Retry',
   },
   ru: {
     search: 'Поиск заметок…',
@@ -97,6 +100,9 @@ const T = {
     unsavedHint: 'Эта заметка никогда не была сохранена онлайн',
     recover: 'Открыть',
     discard: 'Удалить',
+    loadErrorTitle: 'Не удалось загрузить заметки',
+    loadErrorHint: 'Это не значит, что заметок нет — возможно, они всё ещё на месте.',
+    retry: 'Повторить',
   },
 };
 
@@ -145,6 +151,15 @@ const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor, onR
   const allLabel = defaultCats[0];
 
   const [notes, setNotes] = useState<FireNote[]>([]);
+  // ENMA notes-durability audit — incident: a FAILED_PRECONDITION (missing
+  // composite index) from onSnapshot was only console.warn'ed, leaving
+  // `notes` at its initial empty array forever — indistinguishable in the
+  // UI from "this account genuinely has zero notes" (showed the empty
+  // state, not an error). loadError makes that distinction explicit so
+  // the UI can never claim "no notes" when it actually means "couldn't
+  // load notes".
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
   const [orphanDrafts, setOrphanDrafts] = useState<NoteDraft[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState(allLabel);
@@ -159,7 +174,7 @@ const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor, onR
 
   useEffect(() => {
     const uid = user?.uid ?? null;
-    if (!uid) { setNotes([]); return; }
+    if (!uid) { setNotes([]); setLoadError(null); return; }
 
     let mounted = true;
     let unsub: (() => void) | null = null;
@@ -175,6 +190,7 @@ const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor, onR
         q,
         snap => {
           if (!mounted) return;
+          setLoadError(null);
           const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as FireNote));
           // Sort client-side: pinned first, then by updatedAt desc (already ordered by query)
           data.sort((a, b) => {
@@ -186,6 +202,10 @@ const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor, onR
         err => {
           if (!mounted) return;
           console.warn('NotesList onSnapshot error', err);
+          // Deliberately NOT setNotes([]) here — a transient error must
+          // never erase an already-successfully-loaded list; it only ever
+          // adds the error banner on top of whatever's currently shown.
+          setLoadError(err.code || err.message || 'unknown');
         }
       );
     }, 100);
@@ -196,7 +216,12 @@ const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor, onR
       if (unsub) unsub();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uid ?? null]);
+  }, [user?.uid ?? null, retryTick]);
+
+  const handleRetryLoad = useCallback(() => {
+    setLoadError(null);
+    setRetryTick(t => t + 1);
+  }, []);
 
   // ENMA notes-durability audit — recover new notes that never reached
   // Firestore. A note that never completed its first create (offline, or
@@ -382,6 +407,19 @@ const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor, onR
   return (
     <>
     <div className="notes-list">
+      {/* A load error while a (possibly stale) list is still showing —
+          the dedicated empty-state error view above only covers the
+          isEmpty case; this covers "list currently shows something, but
+          a later refresh failed and may be out of date". */}
+      {loadError && !isEmpty && (
+        <div className="notes-list__load-error-banner" role="alert">
+          <span>{t.loadErrorTitle}</span>
+          <button type="button" className="notes-list__retry-btn" onClick={handleRetryLoad}>
+            {t.retry}
+          </button>
+        </div>
+      )}
+
       {/* Unsaved-note recovery — see the listForUser effect above */}
       {orphanDrafts.map(draft => (
         <div className="notes-list__orphan-banner" key={draft.noteId} role="alert">
@@ -458,8 +496,23 @@ const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor, onR
       )}
       {regular.map(renderNoteRow)}
 
-      {/* Empty state */}
-      {isEmpty && (
+      {/* Load-error state — takes priority over the empty state: an
+          onSnapshot error (missing index, permission-denied, offline,
+          etc.) must never be presented as "you have no notes". */}
+      {isEmpty && loadError && (
+        <div className="notes-list__empty notes-list__empty--error" role="alert">
+          <span className="notes-list__empty-icon">⚠️</span>
+          <span className="notes-list__empty-title">{t.loadErrorTitle}</span>
+          <span className="notes-list__empty-hint">{t.loadErrorHint}</span>
+          <button type="button" className="notes-list__retry-btn" onClick={handleRetryLoad}>
+            {t.retry}
+          </button>
+        </div>
+      )}
+
+      {/* Empty state — only shown once we know loading actually succeeded
+          and there genuinely are zero notes. */}
+      {isEmpty && !loadError && (
         <div className="notes-list__empty">
           <span className="notes-list__empty-icon">📝</span>
           <span className="notes-list__empty-title">
