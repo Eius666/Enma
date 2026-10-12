@@ -283,16 +283,6 @@
       ]
     },
     {
-      "collectionGroup": "messages",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "createdAt",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "reminders",
       "queryScope": "COLLECTION",
       "fields": [
