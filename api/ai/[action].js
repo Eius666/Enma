@@ -1414,6 +1414,84 @@ async function handleAdminHabitSmokeTestDelete(req, res) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Admin: notes forensics — read-only, single-uid diagnostic (ENMA notes-
+// durability audit). Mirrors scripts/diagnoseNotes.js but runs where the
+// Admin SDK credentials actually live (Vercel's own runtime env), so it
+// can be called with just the already-provisioned ADMIN_API_KEY instead of
+// needing FIREBASE_SERVICE_ACCOUNT pulled onto whatever machine is asking.
+//
+// Hard safety rules, not just conventions:
+//   - `uid` is REQUIRED in the body; there is no "scan everyone" mode.
+//   - A second, optional `compareUid` lets the caller check two SPECIFIC,
+//     already-known uids against each other in one call (e.g. the known
+//     test uid vs. whatever uid the caller found their current enma.su
+//     session to be) — never used to go looking for other uids itself.
+//   - The response never contains a note's title/content — only ids,
+//     counts, and structural flags.
+//   - Zero writes.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function _notesDiagnosticForUid(uid) {
+  const topLevel = await db.collection('notes').where('userId', '==', uid).get();
+
+  const flagged = [];
+  topLevel.forEach(docSnap => {
+    const d = docSnap.data();
+    const issues = [];
+    if (d.deletedAt || d.isDeleted) issues.push('marked_deleted');
+    if (d.archived) issues.push('archived');
+    if (typeof d.title !== 'string') issues.push('title_missing_or_wrong_type');
+    if (typeof d.content !== 'string' && d.type !== 'checklist') issues.push('content_missing_or_wrong_type');
+    if (!d.updatedAt || typeof d.updatedAt.toDate !== 'function') issues.push('updatedAt_missing_or_wrong_type');
+    if (typeof d.rev !== 'number') issues.push('rev_missing_legacy');
+    if (issues.length) flagged.push({ id: docSnap.id, issues });
+  });
+
+  const legacySubcol = await db.collection('users').doc(uid).collection('notes').get();
+  const legacyIds = legacySubcol.docs.map(d => d.id);
+
+  const counterSnap = await db.collection('users').doc(uid).collection('freeUsage').doc('counters').get();
+  const noteCount = counterSnap.exists ? (counterSnap.data().noteCount ?? null) : null;
+
+  const telegramLinkSnap = await db.collection('telegramUsers').where('firebaseUid', '==', uid).limit(1).get();
+
+  return {
+    uid,
+    topLevelNoteCount: topLevel.size,
+    flaggedNoteIds: flagged,
+    legacySubcollectionNoteIds: legacyIds, // users/{uid}/notes — dead path, no live code writes here
+    freeUsageNoteCounter: noteCount,
+    freeUsageCounterMismatch: noteCount !== null && noteCount !== topLevel.size,
+    linkedToTelegram: !telegramLinkSnap.empty,
+  };
+}
+
+async function handleAdminNotesDiagnostic(req, res) {
+  if (!requireAdmin(req, res)) return;
+
+  const uid = req.body?.uid;
+  if (!uid || typeof uid !== 'string') {
+    return res.status(400).json({ ok: false, error: 'uid_required' });
+  }
+  const compareUid = req.body?.compareUid;
+  if (compareUid !== undefined && typeof compareUid !== 'string') {
+    return res.status(400).json({ ok: false, error: 'compareUid_must_be_string' });
+  }
+
+  const primary = await _notesDiagnosticForUid(uid);
+  let secondary = null;
+  if (compareUid) {
+    secondary = await _notesDiagnosticForUid(compareUid);
+  }
+
+  return res.status(200).json({
+    ok: true,
+    primary,
+    compare: secondary ? { ...secondary, sameAccountAsPrimary: compareUid === uid } : null,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Admin: TOTP 2FA — verify and setup
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1637,6 +1715,7 @@ module.exports = async (req, res) => {
       case 'adminHabitSmokeTestCreate': return await handleAdminHabitSmokeTestCreate(req, res);
       case 'adminHabitSmokeTestStatus': return await handleAdminHabitSmokeTestStatus(req, res);
       case 'adminHabitSmokeTestDelete': return await handleAdminHabitSmokeTestDelete(req, res);
+      case 'adminNotesDiagnostic':      return await handleAdminNotesDiagnostic(req, res);
       default:
         return res.status(404).json({ error: `Unknown AI action: ${action}` });
     }
