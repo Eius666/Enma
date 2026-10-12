@@ -16,7 +16,7 @@ const admin = require('firebase-admin');
 if (!admin.apps.length) admin.initializeApp({ projectId: 'enma-rules-test' });
 const db = admin.firestore();
 
-const { transferGoalFunds, goalTransferDocId, GoalTransferError } = require('../goalTransfer');
+const { transferGoalFunds, closeGoal, goalTransferDocId, GoalTransferError } = require('../goalTransfer');
 
 function fakeFx(rates) {
   return {
@@ -40,6 +40,8 @@ beforeEach(wipe);
 
 const run = (input, fx = fakeFx({ USD: 86 })) =>
   transferGoalFunds({ uid: 'u1', ...input }, { firebase: { db, admin }, fx });
+const close = (input, fx = fakeFx({ USD: 86 })) =>
+  closeGoal({ uid: 'u1', ...input }, { firebase: { db, admin }, fx });
 
 test('two concurrent deposits with different operationIds both apply — real transaction isolation', async () => {
   await db.collection('goals').doc('g1').set({ userId: 'u1', title: 'Машина', targetAmount: 100000, currentAmount: 0, currency: 'RUB' });
@@ -96,4 +98,35 @@ test('withdrawing from a goal that does not belong to the caller is rejected, no
   );
   const g = (await db.collection('goals').doc('g1').get()).data();
   assert.equal(g.currentAmount, 500);
+});
+
+// ── closeGoal: real atomic delete + linked withdrawal, under real concurrency ─
+
+test('closing a goal atomically deletes it AND writes the linked withdrawal — real transaction, not two separate writes', async () => {
+  await db.collection('goals').doc('g1').set({ userId: 'u1', title: 'Телефон', targetAmount: 1000, currentAmount: 500, currentAmountRub: 40000, currency: 'RUB' });
+  const out = await close({ goalId: 'g1', operationId: 'close1' });
+  assert.equal(out.hadBalance, true);
+  assert.equal(out.returnedRubAmount, 500);
+
+  const goalSnap = await db.collection('goals').doc('g1').get();
+  assert.equal(goalSnap.exists, false);
+  const tx = (await db.collection('transactions').doc(goalTransferDocId('close1')).get()).data();
+  assert.equal(tx.type, 'goal_withdraw');
+  assert.equal(tx.goalClosed, true);
+  assert.equal(tx.rubAmount, 500);
+});
+
+test('two concurrent close attempts on the same goal: exactly one succeeds with a credit, the other is a no-op', async () => {
+  await db.collection('goals').doc('g1').set({ userId: 'u1', title: 'Отпуск', targetAmount: 1000, currentAmount: 1000, currency: 'RUB' });
+
+  const results = await Promise.all([
+    close({ goalId: 'g1', operationId: 'raceclose' }),
+    close({ goalId: 'g1', operationId: 'raceclose' }),
+  ]);
+
+  const goalSnap = await db.collection('goals').doc('g1').get();
+  assert.equal(goalSnap.exists, false);
+  const txSnap = await db.collection('transactions').where('goalId', '==', 'g1').get();
+  assert.equal(txSnap.size, 1); // exactly one linked transaction, never two
+  assert.equal(results.filter(r => r.returnedRubAmount === 1000).length >= 1, true);
 });

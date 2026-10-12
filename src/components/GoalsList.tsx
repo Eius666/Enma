@@ -53,6 +53,7 @@ const T = {
     confirm: 'Confirm',
     del: 'Delete',
     confirmDelete: 'Delete this goal?',
+    confirmDeleteWithBalance: (amt: string) => `Delete this goal? ${amt} will be returned to your free balance.`,
     left: 'left',
     reached: 'Goal reached!',
     until: 'by',
@@ -80,6 +81,7 @@ const T = {
     confirm: 'Готово',
     del: 'Удалить',
     confirmDelete: 'Удалить эту цель?',
+    confirmDeleteWithBalance: (amt: string) => `Удалить эту цель? ${amt} будет возвращено на свободный баланс.`,
     left: 'осталось',
     reached: 'Цель достигнута!',
     until: 'до',
@@ -163,9 +165,17 @@ const GoalsList: React.FC<GoalsListProps> = ({ user, language }) => {
     if (res.ok) { setAdjust(null); setAdjustAmount(''); }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm(t.confirmDelete)) return;
-    await call('goalDelete', { id });
+  const handleDelete = async (g: Goal) => {
+    // UX: deleting a goal with a balance returns it to free balance first
+    // (api/_lib/finance/goalTransfer.js's closeGoal) rather than vanishing
+    // it — the confirmation says so explicitly rather than surprising the
+    // user after the fact.
+    const cur = g.currency || 'RUB';
+    const confirmMsg = g.currentAmount > 0
+      ? t.confirmDeleteWithBalance(formatCurrency(g.currentAmount, cur, language))
+      : t.confirmDelete;
+    if (!window.confirm(confirmMsg)) return;
+    await call('goalDelete', { id: g.id, operationId: newOperationId() });
   };
 
   const fmtDeadline = (d: string) =>
@@ -284,7 +294,7 @@ const GoalsList: React.FC<GoalsListProps> = ({ user, language }) => {
                 <div className="goals__actions">
                   <button className="goals__btn goals__btn--primary" onClick={() => { setAdjust({ id: g.id, direction: 'deposit', operationId: newOperationId() }); setAdjustAmount(''); }} type="button">{t.deposit}</button>
                   <button className="goals__btn" onClick={() => { setAdjust({ id: g.id, direction: 'withdraw', operationId: newOperationId() }); setAdjustAmount(''); }} type="button">{t.withdraw}</button>
-                  <button className="goals__icon-btn" onClick={() => handleDelete(g.id)} aria-label={t.del} type="button"><FaTrash /></button>
+                  <button className="goals__icon-btn" onClick={() => handleDelete(g)} aria-label={t.del} type="button"><FaTrash /></button>
                 </div>
               )}
             </div>

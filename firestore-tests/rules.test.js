@@ -60,6 +60,7 @@ for (const [field, value] of [['rubAmount', 1], ['amount', 1], ['currency', 'RUB
 for (const [field, value] of [
   ['budgetImpact', true], ['goalTitleSnapshot', 'forged'], ['goalCurrency', 'USD'],
   ['amountInGoalCurrency', 999999], ['goalBalanceAfter', 999999], ['operationId', 'forged'],
+  ['goalClosed', true],
 ]) {
   test(`client cannot change ${field} of a goal-linked transaction`, async () => {
     await assertFails(updateDoc(doc(alice(), 'transactions/goallinked'), { [field]: value }));
@@ -107,6 +108,9 @@ test('unauthenticated access is denied', async () => {
 test('goals: owner can read, nobody can write from the client', async () => {
   await assertSucceeds(getDoc(doc(alice(), 'goals/g1')));
   await assertFails(updateDoc(doc(alice(), 'goals/g1'), { currentAmount: 1000000 }));
+  // currentAmountRub (the FX-neutral cost basis goalTransfer.js maintains)
+  // is just as server-owned as currentAmount itself — same blanket lock.
+  await assertFails(updateDoc(doc(alice(), 'goals/g1'), { currentAmountRub: 1000000 }));
   await assertFails(setDoc(doc(alice(), 'goals/g2'), { userId: 'alice', title: 'x', targetAmount: 1, currentAmount: 1 }));
   await assertFails(deleteDoc(doc(alice(), 'goals/g1')));
   await assertFails(getDoc(doc(mallory(), 'goals/g1')));

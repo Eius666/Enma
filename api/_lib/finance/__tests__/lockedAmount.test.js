@@ -76,6 +76,30 @@ test('balance: a goal transfer in a foreign currency uses its own locked rubAmou
   assert.equal(bal, 91400);
 });
 
+// ── Legacy goals: a documented boundary, not a bug ──────────────────────────
+//
+// A goal's pre-existing balance from before goal_deposit/goal_withdraw
+// transactions existed has NO transaction recording how that money got
+// moved. calculateCurrentBalance can only ever see transactions — it has no
+// way to know that income happened and some of it silently went into a
+// goal years ago, and inventing a backdated transaction to "fix" this would
+// misrepresent WHEN that money moved. Free Balance is therefore a
+// forward-looking correctness fix: accurate for every transfer from the
+// day this feature shipped onward, not retroactively reconciled against
+// history it was never told about. (Savings Balance / Total Funds, by
+// contrast, DO see legacy balances correctly — see goalTransfer.test.js's
+// "a legacy USD goal... gets a one-time baseline" — because those read
+// goal.currentAmount directly rather than deriving from transactions.)
+test('balance: a legacy goal\'s pre-existing balance (no transaction ever recorded it) does not reduce Free Balance', () => {
+  const bal = calculateCurrentBalance([
+    v2('RUB', 100000, 100000, 'income'),
+    // No goal_deposit for the 20000 RUB this user already had saved in a
+    // goal before this feature existed — there is nothing to filter out,
+    // by construction, since it was never a transaction to begin with.
+  ], 'RUB', null);
+  assert.equal(bal, 100000); // not 80000 — documented, not a defect
+});
+
 test('repository normalizeTransaction preserves v2 fields (and adds none for legacy)', () => {
   const n = normalizeTransaction({ id: 'a', data: () => ({ ...v2('USD', 100, 8600), fx: { rateToRub: 86 } }) });
   assert.equal(n.schemaVersion, 2); assert.equal(n.rubAmount, 8600); assert.equal(n.fx.rateToRub, 86);

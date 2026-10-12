@@ -181,8 +181,27 @@ async function transferGoalFunds(input, deps = {}) {
       direction === 'contribution' ? current + amountInGoalCurrency : current - amountInGoalCurrency
     );
 
+    // ── RUB cost-basis (PHASE: unified FX-neutral valuation) ───────────────
+    // currentAmountRub is a running total of LOCKED rubAmounts, maintained
+    // atomically alongside currentAmount — it never moves on its own just
+    // because today's exchange rate moved (no "phantom profit" from an
+    // ordinary FX fluctuation). The only time it's ever derived from a LIVE
+    // rate is the lazy, one-time baseline below, for a goal that predates
+    // this field (currentAmountRub missing) and already had a nonzero
+    // balance nobody ever recorded a locked rubAmount for. After that one
+    // conversion, it's locked forever and only moves via real transfers.
+    const existingRub = goalSnap.data().currentAmountRub;
+    const priorRub = typeof existingRub === 'number' && Number.isFinite(existingRub)
+      ? existingRub
+      : round2(current * goalRate.rateToRub); // one-time legacy baseline
+    const nextAmountRub = round2(direction === 'contribution' ? priorRub + rubAmount : priorRub - rubAmount);
+
     const title = goalSnap.data().title || '';
-    tx.update(goalRef, { currentAmount: nextAmount, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    tx.update(goalRef, {
+      currentAmount:    nextAmount,
+      currentAmountRub: nextAmountRub,
+      updatedAt:        admin.firestore.FieldValue.serverTimestamp(),
+    });
     tx.set(txRef, {
       userId:       uid,
       schemaVersion: 2,
@@ -218,4 +237,124 @@ async function transferGoalFunds(input, deps = {}) {
   };
 }
 
-module.exports = { transferGoalFunds, goalTransferDocId, GoalTransferError };
+/**
+ * Deletes a goal, returning any remaining balance to free balance FIRST —
+ * never just vanishing it. (UX: "Вернуть накопления на свободный баланс"
+ * instead of silently deleting the goal along with its money.)
+ *
+ * The closing withdrawal uses a FRESHLY locked rate, not the goal's
+ * currentAmountRub cost basis — this is an actual realization event (the
+ * goal's currency is genuinely being converted back to free balance right
+ * now), unlike the Savings Balance display figure, where using a live rate
+ * for an untouched balance would be a recurring, unrealized "phantom"
+ * fluctuation. A one-time gain/loss relative to cost basis at close time is
+ * real, not phantom.
+ *
+ * Idempotent the same way as transferGoalFunds: operationId is required,
+ * and a retry after a successful close returns the same result rather than
+ * erroring — "the goal is already gone" is success for a delete, not a
+ * failure, as long as it's THIS operation that closed it (never treats an
+ * unrelated NOT_FOUND, e.g. a typo'd goalId, as success).
+ *
+ * @param {object} input  { uid, goalId, operationId, source }
+ * @param {object} deps   { firebase: {db, admin}, fx }
+ */
+async function closeGoal(input, deps = {}) {
+  const { db, admin } = deps.firebase || require('../firebaseAdmin');
+  const fx = deps.fx || require('../fx');
+
+  const { uid, goalId } = input;
+  if (!uid) throw new GoalTransferError('UNAUTHENTICATED', 'uid is required');
+  if (!goalId || typeof goalId !== 'string') throw new GoalTransferError('VALIDATION_ERROR', 'goalId is required');
+  if (!input.operationId || typeof input.operationId !== 'string') {
+    throw new GoalTransferError('VALIDATION_ERROR', 'operationId is required for idempotency');
+  }
+
+  const txDocId = goalTransferDocId(input.operationId);
+  const txRef   = db.collection('transactions').doc(txDocId);
+  const goalRef = db.collection('goals').doc(goalId);
+
+  // Fast path: this exact close already happened.
+  const existingFast = await txRef.get();
+  if (existingFast.exists) {
+    const d = existingFast.data();
+    return { ok: true, duplicate: true, goalId, returnedRubAmount: d.rubAmount ?? 0, hadBalance: (d.rubAmount ?? 0) > 0 };
+  }
+
+  const goalSnapPre = await goalRef.get();
+  if (!goalSnapPre.exists || goalSnapPre.data().userId !== uid) {
+    throw new GoalTransferError('NOT_FOUND', 'Goal not found');
+  }
+  const goalData     = goalSnapPre.data();
+  const goalCurrency = goalData.currency || HOME_BUDGET_CURRENCY;
+  const title        = goalData.title || '';
+  const isoDate       = new Date().toISOString();
+
+  // Nothing saved — nothing to return, just delete. No linked transaction
+  // needed (there would be nothing for it to record).
+  if (!(Number(goalData.currentAmount) > 0)) {
+    await db.runTransaction(async (tx) => {
+      const [goalSnap, existingTxSnap] = await Promise.all([tx.get(goalRef), tx.get(txRef)]);
+      if (existingTxSnap.exists) return;
+      if (!goalSnap.exists || goalSnap.data().userId !== uid) return; // already gone
+      tx.delete(goalRef);
+    });
+    return { ok: true, duplicate: false, goalId, returnedRubAmount: 0, hadBalance: false };
+  }
+
+  // Lock the closing rate BEFORE the transaction (PHASE 5).
+  const goalRate = await lockRateToRub(goalCurrency, 'withdrawal', isoDate, fx);
+
+  const result = await db.runTransaction(async (tx) => {
+    const [goalSnap, existingTxSnap] = await Promise.all([tx.get(goalRef), tx.get(txRef)]);
+
+    if (existingTxSnap.exists) {
+      const d = existingTxSnap.data();
+      return { duplicate: true, returnedRubAmount: d.rubAmount ?? 0, hadBalance: (d.rubAmount ?? 0) > 0 };
+    }
+    if (!goalSnap.exists || goalSnap.data().userId !== uid) {
+      // Already closed by someone/something else between our pre-read and
+      // now, with no matching operationId doc — treat as a no-op success
+      // rather than erroring a delete that already achieved its goal.
+      return { duplicate: false, returnedRubAmount: 0, hadBalance: false, alreadyGone: true };
+    }
+
+    const freshAmount = Number(goalSnap.data().currentAmount) || 0;
+    if (freshAmount <= 0) {
+      tx.delete(goalRef);
+      return { duplicate: false, returnedRubAmount: 0, hadBalance: false };
+    }
+
+    const rubAmount = round2(freshAmount * goalRate.rateToRub);
+    tx.delete(goalRef);
+    tx.set(txRef, {
+      userId:       uid,
+      schemaVersion: 2,
+      type:         'goal_withdraw',
+      budgetImpact: false,
+      amount:       round2(freshAmount),
+      currency:     goalCurrency,
+      rubAmount,
+      fx:           fxBlock(goalRate.fx),
+      categoryId:   'cat-goal',
+      goalId,
+      goalTitleSnapshot:    title,
+      goalCurrency,
+      amountInGoalCurrency: round2(freshAmount),
+      goalBalanceAfter:     0,
+      goalClosed:   true, // this goal no longer exists — distinguishes a closing return from an ordinary withdrawal
+      operationId:  input.operationId,
+      description:  `Закрытие цели: возврат остатка — ${title}`,
+      date:         isoDate,
+      source:       input.source || 'web-app',
+      createdAt:    admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return { duplicate: false, returnedRubAmount: rubAmount, hadBalance: true };
+  });
+
+  return { ok: true, duplicate: result.duplicate, goalId, returnedRubAmount: result.returnedRubAmount, hadBalance: result.hadBalance };
+}
+
+module.exports = { transferGoalFunds, closeGoal, goalTransferDocId, GoalTransferError };

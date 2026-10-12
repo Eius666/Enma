@@ -174,26 +174,37 @@ const FinanceList: React.FC<FinanceListProps> = ({
   const [goalInfoTxId, setGoalInfoTxId] = useState<string | null>(null);
 
   // Independent subscription (same pattern as GoalsList) — only reads
-  // currentAmount/currency/title, purely for the compact "Отложено" line
+  // currentAmount(Rub)/currency, purely for the compact "Отложено" line
   // below; never written to from here.
-  const [goals, setGoals] = useState<{ currentAmount: number; currency?: string }[]>([]);
+  const [goals, setGoals] = useState<{ currentAmount: number; currentAmountRub?: number; currency?: string }[]>([]);
   useEffect(() => {
     if (!user) { setGoals([]); return; }
     const q = query(collection(db, 'goals'), where('userId', '==', user.uid));
     return onSnapshot(
       q,
-      snap => setGoals(snap.docs.map(d => d.data() as { currentAmount: number; currency?: string })),
+      snap => setGoals(snap.docs.map(d => d.data() as { currentAmount: number; currentAmountRub?: number; currency?: string })),
       err => console.warn('FinanceList goals listener error', err),
     );
   }, [user]);
 
-  // Live conversion for display only — never locked/stored. Each goal's own
-  // running currentAmount is already the full historical truth (new AND
-  // legacy contributions alike), so this is a straight read, not a sum over
-  // transactions — summing goal_deposit/goal_withdraw records instead would
-  // double-count any goal that had a balance before this feature existed.
+  // currentAmountRub is the RUB cost basis maintained atomically by
+  // api/_lib/finance/goalTransfer.js (every real transfer's LOCKED
+  // rubAmount, summed) — it never drifts just because today's exchange
+  // rate moved, so an ordinary FX fluctuation never shows up here as
+  // "phantom profit" in Total Funds. The live conversion below is a
+  // fallback ONLY for a legacy goal that predates this field and hasn't
+  // been touched (deposited/withdrawn into) since — the very first
+  // transfer into it locks a one-time baseline and it never needs a live
+  // rate again. A never-touched legacy goal's figure can still drift with
+  // FX until that first touch; there's no way to avoid that without
+  // inventing a rate for a moment nobody actually transacted at.
   const savingsBalance = useMemo(
-    () => goals.reduce((s, g) => s + convertCurrency(g.currentAmount || 0, g.currency || 'RUB', currency, rates), 0),
+    () => goals.reduce((s, g) => {
+      const rub = typeof g.currentAmountRub === 'number'
+        ? g.currentAmountRub
+        : convertCurrency(g.currentAmount || 0, g.currency || 'RUB', 'RUB', rates);
+      return s + convertCurrency(rub, 'RUB', currency, rates);
+    }, 0),
     [goals, currency, rates],
   );
 

@@ -11,7 +11,7 @@ const { hasLockedRub } = require('./finance/lockedAmount');
 const { resolveTransactionCurrency } = require('./finance/resolveLegacyCurrency');
 const { createFinancialTransaction, TransactionValidationError } = require('./transactions/financialTransaction');
 const { FxUnavailableError } = require('./fx');
-const { transferGoalFunds, GoalTransferError } = require('./finance/goalTransfer');
+const { transferGoalFunds, closeGoal, GoalTransferError } = require('./finance/goalTransfer');
 
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -1307,6 +1307,7 @@ async function createGoal(args, userId, currency) {
     title,
     targetAmount,
     currentAmount: 0,
+    currentAmountRub: 0, // RUB cost-basis, maintained by goalTransfer.js — 0 is exact, no FX needed for a brand-new goal
     currency: goalCurrency,
     deadline:  deadline  || null,
     category:  category  || null,
@@ -1440,14 +1441,32 @@ async function listGoals(userId, currency) {
   return { ok: true, message: `🎯 <b>Цели накопления:</b>\n\n${lines.join('\n\n')}` };
 }
 
-async function deleteGoal(args, userId) {
+// Returns any remaining balance to free balance BEFORE deleting — see
+// api/_lib/finance/goalTransfer.js's closeGoal. Never silently vanishes it.
+async function deleteGoal(args, userId, chatId, messageId) {
   const { goalId } = args;
-  const ref  = db.collection('goals').doc(goalId);
-  const snap = await ref.get();
+  const snap = await db.collection('goals').doc(goalId).get();
   if (!snap.exists || snap.data().userId !== userId) return { ok: false, error: 'Цель не найдена' };
   const title = snap.data().title;
-  await ref.delete();
-  return { ok: true, message: `✅ Цель «${title}» удалена.` };
+
+  let out;
+  try {
+    out = await closeGoal({
+      uid: userId,
+      goalId,
+      operationId: goalOperationId(chatId, messageId, goalId, 'close'),
+      source: 'telegram-bot',
+    });
+  } catch (err) {
+    if (err instanceof GoalTransferError) return { ok: false, error: err.message };
+    throw err;
+  }
+
+  if (!out.hadBalance) return { ok: true, message: `✅ Цель «${title}» удалена.` };
+  return {
+    ok: true,
+    message: `✅ Цель «${title}» удалена.\n💰 Возвращено на свободный баланс: ${out.returnedRubAmount} ₽`,
+  };
 }
 
 // ── Dispatcher ────────────────────────────────────────────────────────────────
@@ -1482,7 +1501,7 @@ async function executeTool(name, args, userId, chatId, timezone, currency = 'RUB
     case 'deposit_to_goal':     return depositToGoal(args, userId, chatId, currency, messageId);
     case 'withdraw_from_goal':  return withdrawFromGoal(args, userId, chatId, currency, messageId);
     case 'list_goals':          return listGoals(userId, currency);
-    case 'delete_goal':         return deleteGoal(args, userId);
+    case 'delete_goal':         return deleteGoal(args, userId, chatId, messageId);
     // search_web is intercepted by the caller
     case 'search_web':          return { ok: false, error: 'SEARCH_WEB_REDIRECT', query: args?.query };
     default:                    return { ok: false, error: `Unknown tool: ${name}` };

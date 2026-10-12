@@ -28,7 +28,7 @@ service cloud.firestore {
         // Goal-transfer fields (api/_lib/finance/goalTransfer.js) — same
         // "server decides, client reads" guarantee as the money fields above.
         'budgetImpact', 'goalTitleSnapshot', 'goalCurrency',
-        'amountInGoalCurrency', 'goalBalanceAfter', 'operationId'
+        'amountInGoalCurrency', 'goalBalanceAfter', 'operationId', 'goalClosed'
       ]);
     }
 

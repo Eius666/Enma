@@ -350,6 +350,7 @@ async function handleGoalCreate(req, res) {
       title: title.trim(),
       targetAmount: round2(targetAmount),
       currentAmount: 0,
+      currentAmountRub: 0, // RUB cost-basis, maintained by goalTransfer.js — 0 is exact, no FX needed for a brand-new goal
       currency: HOME_BUDGET_CURRENCY,
       deadline: deadline ? String(deadline) : null,
       category: null,
@@ -402,18 +403,24 @@ async function handleGoalAdjust(req, res) {
   }
 }
 
+// Deleting a goal returns any remaining balance to free balance FIRST — see
+// api/_lib/finance/goalTransfer.js's closeGoal. Never just vanishes the
+// money (UX: "Вернуть накопления на свободный баланс", not a silent delete).
 async function handleGoalDelete(req, res) {
   const uid = await requireAuth(req, res);
   if (!uid) return;
-  const { id } = req.body ?? {};
+  const { id, operationId } = req.body ?? {};
   if (typeof id !== 'string' || !id) return res.status(400).json({ error: 'Invalid request', code: 'VALIDATION_ERROR' });
+  if (typeof operationId !== 'string' || !operationId.trim()) {
+    return res.status(400).json({ error: 'Missing operationId', code: 'VALIDATION_ERROR' });
+  }
+
+  const { closeGoal, GoalTransferError } = require('../_lib/finance/goalTransfer');
   try {
-    const ref = db.collection('goals').doc(id);
-    const snap = await ref.get();
-    if (!snap.exists || snap.data().userId !== uid) return res.status(404).json({ error: 'Goal not found' });
-    await ref.delete();
-    return res.status(200).json({ ok: true, id });
+    const out = await closeGoal({ uid, goalId: id, operationId: String(operationId).trim().slice(0, 200), source: 'web-app' });
+    return res.status(200).json({ ok: true, id, returnedRubAmount: out.returnedRubAmount, hadBalance: out.hadBalance, duplicate: out.duplicate });
   } catch (err) {
+    if (err instanceof GoalTransferError && err.code === 'NOT_FOUND') return res.status(404).json({ error: 'Goal not found' });
     console.error('[ai/goalDelete] error:', err.message);
     return res.status(500).json({ error: 'Failed to delete goal' });
   }
