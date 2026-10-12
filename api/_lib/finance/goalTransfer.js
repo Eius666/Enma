@@ -242,13 +242,19 @@ async function transferGoalFunds(input, deps = {}) {
  * never just vanishing it. (UX: "Вернуть накопления на свободный баланс"
  * instead of silently deleting the goal along with its money.)
  *
- * The closing withdrawal uses a FRESHLY locked rate, not the goal's
- * currentAmountRub cost basis — this is an actual realization event (the
- * goal's currency is genuinely being converted back to free balance right
- * now), unlike the Savings Balance display figure, where using a live rate
- * for an untouched balance would be a recurring, unrealized "phantom"
- * fluctuation. A one-time gain/loss relative to cost basis at close time is
- * real, not phantom.
+ * The closing withdrawal settles at the goal's own currentAmountRub cost
+ * basis, NOT a freshly fetched market rate — see the comment at its call
+ * site below for the full reasoning. In short: Savings Balance already
+ * counts this goal via currentAmountRub; crediting back anything other
+ * than that exact figure would make
+ *   Free Balance + Savings Balance == Total Funds
+ * momentarily false at the instant of closing, by exactly however far the
+ * market rate drifted since the goal was last touched — reintroducing, at
+ * the moment of deletion, precisely the "phantom" FX-driven change the
+ * unified valuation (currentAmountRub) exists to prevent everywhere else.
+ * A live rate is only ever fetched here for a goal that has NEVER been
+ * touched since currentAmountRub existed (no cost basis to settle at yet)
+ * — a one-time, unavoidable first pricing, not a recurring fluctuation.
  *
  * Idempotent the same way as transferGoalFunds: operationId is required,
  * and a retry after a successful close returns the same result rather than
@@ -288,7 +294,7 @@ async function closeGoal(input, deps = {}) {
   const goalData     = goalSnapPre.data();
   const goalCurrency = goalData.currency || HOME_BUDGET_CURRENCY;
   const title        = goalData.title || '';
-  const isoDate       = new Date().toISOString();
+  const isoDate      = new Date().toISOString();
 
   // Nothing saved — nothing to return, just delete. No linked transaction
   // needed (there would be nothing for it to record).
@@ -302,8 +308,29 @@ async function closeGoal(input, deps = {}) {
     return { ok: true, duplicate: false, goalId, returnedRubAmount: 0, hadBalance: false };
   }
 
-  // Lock the closing rate BEFORE the transaction (PHASE 5).
-  const goalRate = await lockRateToRub(goalCurrency, 'withdrawal', isoDate, fx);
+  // ── Settle at cost basis, not a fresh market rate ───────────────────────
+  // This is the critical choice for the Total Funds invariant: Savings
+  // Balance already counts this goal via currentAmountRub (the sum of every
+  // LOCKED rubAmount that ever moved into/out of it). If closing credited
+  // free balance at TODAY's rate instead, Total Funds would jump by exactly
+  // however far the rate drifted since the goal was last touched — the
+  // very "phantom" effect the unified valuation was built to eliminate,
+  // just relocated to the moment of deletion instead of every render.
+  // Crediting back currentAmountRub exactly keeps
+  //   Free Balance + Savings Balance == Total Funds
+  // true with NO dependency on today's market rate, for any goal that has
+  // been touched at least once since currentAmountRub was introduced.
+  //
+  // The ONE case that still needs a live rate: a goal that has NEVER been
+  // touched since this field existed (no currentAmountRub at all) and is
+  // being closed directly, with no prior transfer to have captured a
+  // baseline. That first conversion has to happen at SOME rate — this is
+  // it, and it only ever happens once, same as transferGoalFunds's own
+  // lazy baseline capture; it is not a recurring "phantom" fluctuation,
+  // it is the one real, unavoidable first pricing of a never-priced
+  // balance.
+  const needsLiveRate = typeof goalData.currentAmountRub !== 'number' || !Number.isFinite(goalData.currentAmountRub);
+  const legacyRate = needsLiveRate ? await lockRateToRub(goalCurrency, 'withdrawal', isoDate, fx) : null;
 
   const result = await db.runTransaction(async (tx) => {
     const [goalSnap, existingTxSnap] = await Promise.all([tx.get(goalRef), tx.get(txRef)]);
@@ -316,16 +343,45 @@ async function closeGoal(input, deps = {}) {
       // Already closed by someone/something else between our pre-read and
       // now, with no matching operationId doc — treat as a no-op success
       // rather than erroring a delete that already achieved its goal.
-      return { duplicate: false, returnedRubAmount: 0, hadBalance: false, alreadyGone: true };
+      return { duplicate: false, returnedRubAmount: 0, hadBalance: false };
     }
 
-    const freshAmount = Number(goalSnap.data().currentAmount) || 0;
+    const freshData   = goalSnap.data();
+    const freshAmount  = Number(freshData.currentAmount) || 0;
     if (freshAmount <= 0) {
       tx.delete(goalRef);
       return { duplicate: false, returnedRubAmount: 0, hadBalance: false };
     }
 
-    const rubAmount = round2(freshAmount * goalRate.rateToRub);
+    const freshRubRaw = freshData.currentAmountRub;
+    const hasCostBasis = typeof freshRubRaw === 'number' && Number.isFinite(freshRubRaw);
+    // Prefer the FRESH cost basis read inside the transaction over the
+    // pre-transaction legacyRate check — a concurrent transfer between our
+    // pre-read and now may have already established one.
+    const rubAmount = hasCostBasis ? freshRubRaw : round2(freshAmount * legacyRate.rateToRub);
+
+    // RUB-denominated goals never had FX in the first place (rateToRub is
+    // always 1) — fx stays null, same convention as every RUB transaction
+    // elsewhere. A foreign-currency goal settled at cost basis gets a
+    // synthetic snapshot carrying the EFFECTIVE blended rate implied by
+    // that cost basis, clearly labeled so it's never confused with a real
+    // bank quote; one settled via the legacy one-time baseline gets the
+    // genuine locked quote instead.
+    let fxRecord = null;
+    if (goalCurrency !== HOME_BUDGET_CURRENCY) {
+      fxRecord = hasCostBasis
+        ? fxBlock({
+            rateToRub:  round2(rubAmount / freshAmount),
+            source:     'cost_basis_settlement',
+            provider:   'enma-internal',
+            capturedAt: isoDate,
+            method:     'locked_cost_basis',
+            rateSide:   'cost_basis', // not a real bank_buys/bank_sells quote — fxBlock requires the key present
+            rateDate:   isoDate.slice(0, 10),
+          })
+        : fxBlock(legacyRate.fx);
+    }
+
     tx.delete(goalRef);
     tx.set(txRef, {
       userId:       uid,
@@ -335,7 +391,7 @@ async function closeGoal(input, deps = {}) {
       amount:       round2(freshAmount),
       currency:     goalCurrency,
       rubAmount,
-      fx:           fxBlock(goalRate.fx),
+      fx:           fxRecord,
       categoryId:   'cat-goal',
       goalId,
       goalTitleSnapshot:    title,

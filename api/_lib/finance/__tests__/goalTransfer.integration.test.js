@@ -103,7 +103,9 @@ test('withdrawing from a goal that does not belong to the caller is rejected, no
 // ── closeGoal: real atomic delete + linked withdrawal, under real concurrency ─
 
 test('closing a goal atomically deletes it AND writes the linked withdrawal — real transaction, not two separate writes', async () => {
-  await db.collection('goals').doc('g1').set({ userId: 'u1', title: 'Телефон', targetAmount: 1000, currentAmount: 500, currentAmountRub: 40000, currency: 'RUB' });
+  // currentAmountRub matches currentAmount here, as it always does for a
+  // RUB goal (rate is always 1 — no FX ever enters the picture for either).
+  await db.collection('goals').doc('g1').set({ userId: 'u1', title: 'Телефон', targetAmount: 1000, currentAmount: 500, currentAmountRub: 500, currency: 'RUB' });
   const out = await close({ goalId: 'g1', operationId: 'close1' });
   assert.equal(out.hadBalance, true);
   assert.equal(out.returnedRubAmount, 500);
@@ -129,4 +131,22 @@ test('two concurrent close attempts on the same goal: exactly one succeeds with 
   const txSnap = await db.collection('transactions').where('goalId', '==', 'g1').get();
   assert.equal(txSnap.size, 1); // exactly one linked transaction, never two
   assert.equal(results.filter(r => r.returnedRubAmount === 1000).length >= 1, true);
+});
+
+test('closing a USD goal after a real rate change still credits exactly its cost basis, not a fresh conversion', async () => {
+  // Contribute $100 at 86, then close with the FX stub reconfigured to a
+  // very different rate — proves end to end, against the real emulator,
+  // that closing never calls fx at all once a cost basis exists.
+  await db.collection('goals').doc('g1').set({ userId: 'u1', title: 'Авто', targetAmount: 5000, currentAmount: 0, currency: 'USD' });
+  await run({ goalId: 'g1', direction: 'contribution', amount: 100, currency: 'USD', operationId: 'd1' }, fakeFx({ USD: 86 }));
+
+  let fxCalls = 0;
+  const countingFx = { async getBankRateToRub(args) { fxCalls++; return fakeFx({ USD: 999 }).getBankRateToRub(args); } };
+  const out = await closeGoal({ uid: 'u1', goalId: 'g1', operationId: 'close1' }, { firebase: { db, admin }, fx: countingFx });
+
+  assert.equal(fxCalls, 0); // never asked — settled purely from the goal's own currentAmountRub
+  assert.equal(out.returnedRubAmount, 8600); // the ORIGINAL locked rate (86), not 999
+  const tx = (await db.collection('transactions').doc(goalTransferDocId('close1')).get()).data();
+  assert.equal(tx.rubAmount, 8600);
+  assert.equal(tx.fx.source, 'cost_basis_settlement');
 });

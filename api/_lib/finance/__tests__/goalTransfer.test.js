@@ -328,15 +328,70 @@ test('17. closing a RUB goal with a balance returns it and deletes the goal', as
   assert.equal(db._count('goals/'), 0);
 });
 
-test('18. closing a USD goal converts the remainder at a freshly locked rate', async () => {
+test('18. closing a USD goal settles at its own cost basis, NOT today\'s market rate', async () => {
+  // currentAmountRub (7000) was locked from past contributions at whatever
+  // rates were real then; today's rate (86) would say $100 = 8600. Closing
+  // must credit exactly 7000 — anything else would move Total Funds purely
+  // from the rate having drifted since the goal was last touched.
   const { close, tx } = setup({ 'goals/g1': { ...GOAL_USD, currentAmount: 100, currentAmountRub: 7000 } }, { USD: 86 });
-  // Even though the cost basis says 7000, closing uses TODAY's rate (86) for
-  // the actual realized conversion — $100 × 86 = 8600.
   const out = await close({ goalId: 'g1' });
-  assert.equal(out.returnedRubAmount, 8600);
+  assert.equal(out.returnedRubAmount, 7000);
   const t = await tx(goalTransferDocId('close-1'));
-  assert.equal(t.rubAmount, 8600);
+  assert.equal(t.rubAmount, 7000);
   assert.equal(t.currency, 'USD');
+  assert.equal(t.amount, 100);
+  assert.equal(t.fx.source, 'cost_basis_settlement');
+  assert.equal(t.fx.rateToRub, 70); // the effective blended rate implied by the cost basis (7000/100)
+  // Every fxBlock() key must be a real value, never undefined — the
+  // in-memory mock here would silently store it; real Firestore rejects it
+  // outright (caught by the emulator suite, not this one — see
+  // goalTransfer.integration.test.js). Asserted here too so a regression
+  // fails fast without needing the emulator running.
+  for (const k of ['rateToRub', 'source', 'provider', 'capturedAt', 'method', 'rateSide', 'rateDate']) {
+    assert.notEqual(t.fx[k], undefined, `fx.${k} must not be undefined`);
+  }
+});
+
+test('18b. a goal that has NEVER been touched (no currentAmountRub at all) still gets a one-time live conversion on close', async () => {
+  // This is the one legitimate exception: there is no cost basis to settle
+  // at yet, so the first (and, since it's being deleted, only) pricing has
+  // to happen at SOME rate — exactly like transferGoalFunds's own lazy
+  // baseline capture, not a recurring fluctuation.
+  const { close, tx } = setup({ 'goals/g1': { ...GOAL_USD, currentAmount: 100 } }, { USD: 90 }); // no currentAmountRub field
+  const out = await close({ goalId: 'g1' });
+  assert.equal(out.returnedRubAmount, 9000);
+  const t = await tx(goalTransferDocId('close-1'));
+  assert.equal(t.rubAmount, 9000);
+  assert.equal(t.fx.source, 'bank_average'); // a genuine locked quote, not a synthetic cost-basis block
+});
+
+test('18c. RUB goals never carry an fx block when closed — never any FX to begin with', async () => {
+  const { close, tx } = setup({ 'goals/g1': { ...GOAL_RUB, currentAmount: 3000, currentAmountRub: 3000 } });
+  const out = await close({ goalId: 'g1' });
+  assert.equal(out.returnedRubAmount, 3000);
+  const t = await tx(goalTransferDocId('close-1'));
+  assert.equal(t.fx, null);
+});
+
+test('18d. Total Funds is exactly preserved across contribute → rate change → close, regardless of how far the rate moved', async () => {
+  const { run, close, goal, fx, db } = setup({ 'goals/g1': { ...GOAL_USD, currentAmount: 0, currentAmountRub: 0 } }, { USD: 86 });
+  await run({ goalId: 'g1', direction: 'contribution', amount: 100, currency: 'USD', operationId: 'd1' }); // locks 8600
+  const freeBalanceDelta_fromContribution = -8600; // what Free Balance lost at contribution time
+
+  const afterDeposit = await goal('g1');
+  assert.equal(afterDeposit.currentAmountRub, 8600); // Savings Balance's contribution right now
+
+  // Whatever the rate is "now" is irrelevant — reset the call log and prove
+  // closeGoal never asks fx for a quote at all once a cost basis exists.
+  fx.calls.length = 0;
+
+  const out = await close({ goalId: 'g1' });
+  const freeBalanceDelta_fromClose = out.returnedRubAmount;
+
+  assert.equal(fx.calls.length, 0); // no live FX lookup happened at all — settled purely from cost basis
+  assert.equal(freeBalanceDelta_fromClose, 8600);
+  assert.equal(freeBalanceDelta_fromClose, -freeBalanceDelta_fromContribution);
+  assert.equal(db._count('goals/'), 0); // goal is gone; its 8600 is now accounted for entirely in Free Balance
 });
 
 test('19. closing a goal with a ZERO balance deletes it with no linked transaction', async () => {
