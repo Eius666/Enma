@@ -2,7 +2,7 @@
 
 const { db, admin } = require('../_lib/firebaseAdmin');
 const { HOME_BUDGET_CURRENCY } = require('../_lib/config');
-const { createEntityInFirestore, getActivePlan } = require('../_lib/entities/createEntity');
+const { createEntityInFirestore, getActivePlan, ENTITY_COLLECTION_MAP } = require('../_lib/entities/createEntity');
 const { createFinancialTransaction, buildTransactionUpdate, TransactionValidationError } = require('../_lib/transactions/financialTransaction');
 const { FxUnavailableError } = require('../_lib/fx');
 const { rateLimit, getClientIp } = require('../_lib/rateLimit');
@@ -90,21 +90,14 @@ async function requireAuth(req, res) {
 // Handlers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ENTITY_COLLECTION_MAP = {
-  task:        'tasks',
-  habit:       'habits',
-  note:        'notes',
-  transaction: 'transactions',
-};
-
-const FREE_ENTITY_CONFIG = {
-  task:        { field: 'dailyTaskCount',   limit: 5,  windowField: 'date'  },
-  habit:       { field: 'habitCount',       limit: 3                        },
-  note:        { field: 'noteCount',        limit: 10                       },
-  transaction: { field: 'transactionCount', limit: 30, windowField: 'month' },
-};
-
-const currentDate = () => new Date().toISOString().slice(0, 10);
+// ENMA notes-durability audit: ENTITY_COLLECTION_MAP/FREE_ENTITY_CONFIG used
+// to be duplicated here AND in api/_lib/entities/createEntity.js, with
+// handleEntityCreate below reimplementing the free-tier limit check inline
+// instead of calling createEntityInFirestore — the two copies had already
+// drifted (this one never decremented/recomputed on delete, which is the
+// root cause of "лимит заметок достигнут, но все заметки исчезли"; see
+// createEntity.js's FREE_ENTITY_CONFIG comment). Now imported from the one
+// real implementation instead of redefined here.
 
 // Converts a local date+time string in a given IANA timezone to a UTC Date.
 // Same algorithm as tools.js localToUtc — kept inline to avoid coupling.
@@ -185,60 +178,21 @@ async function handleEntityCreate(req, res) {
     }
   }
 
-  const cfg       = FREE_ENTITY_CONFIG[entityType];
-  const entityRef = docId
-    ? db.collection(collection).doc(String(docId))
-    : db.collection(collection).doc();
-  const now     = admin.firestore.FieldValue.serverTimestamp();
-  const baseDoc = { ...data, userId, createdAt: now, updatedAt: now };
-
   try {
-    const plan   = await getActivePlan(userId);
-    const isFree = plan === 'free';
-
-    if (isFree && cfg) {
-      const counterRef = db.collection('users').doc(userId)
-        .collection('freeUsage').doc('counters');
-
-      const win = cfg.windowField === 'month' ? currentMonth()
-                : cfg.windowField === 'date'  ? currentDate()
-                : null;
-
-      let limitExceeded = false;
-      let currentCount  = 0;
-
-      await db.runTransaction(async tx => {
-        const counterSnap = await tx.get(counterRef);
-        const counterData = counterSnap.exists ? counterSnap.data() : {};
-
-        const storedWin = win !== null ? String(counterData[cfg.windowField] ?? '') : null;
-        const used = (storedWin !== null && storedWin !== win)
-          ? 0
-          : Number(counterData[cfg.field] ?? 0);
-
-        currentCount = used;
-
-        if (used >= cfg.limit) {
-          limitExceeded = true;
-          return;
-        }
-
-        tx.set(entityRef, baseDoc);
-
-        const counterPatch = { userId, [cfg.field]: used + 1, updatedAt: now };
-        if (win !== null) counterPatch[cfg.windowField] = win;
-        tx.set(counterRef, counterPatch, { merge: true });
+    // Single implementation of the free-tier limit check (see
+    // createEntity.js for why the previous inline copy here was the actual
+    // root cause of "лимит заметок достигнут, но все заметки исчезли" —
+    // this one derives `used` from a live count of the user's own
+    // documents for habit/note instead of a counter nothing ever
+    // decrements).
+    const created = await createEntityInFirestore(userId, entityType, data, docId);
+    if (!created.ok) {
+      return res.status(429).json({
+        error: 'Limit exceeded', code: 'free_limit',
+        limit: created.limit, current: created.current,
       });
-
-      if (limitExceeded) {
-        return res.status(429).json({
-          error: 'Limit exceeded', code: 'free_limit',
-          limit: cfg.limit, current: currentCount,
-        });
-      }
-    } else {
-      await entityRef.set(baseDoc);
     }
+    const entityId = created.id;
 
     // Create a reminder in Firestore when a task has a specific time set.
     // The cron (api/telegram/cron.js or Firebase sendDueReminders) will pick it up.
@@ -258,12 +212,12 @@ async function handleEntityCreate(req, res) {
               scheduledAt:  admin.firestore.Timestamp.fromDate(scheduledAt),
               status:       'pending',
               telegramText: `Задача: ${data.title || ''}`,
-              taskId:       entityRef.id,
+              taskId:       entityId,
               source:       'web-app',
               createdAt:    admin.firestore.FieldValue.serverTimestamp(),
               updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
             });
-            console.log('[entityCreate] reminder created for task', entityRef.id, 'at', scheduledAt.toISOString());
+            console.log('[entityCreate] reminder created for task', entityId, 'at', scheduledAt.toISOString());
           }
         }
       } catch (reminderErr) {
@@ -271,7 +225,7 @@ async function handleEntityCreate(req, res) {
       }
     }
 
-    return res.status(200).json({ ok: true, id: entityRef.id });
+    return res.status(200).json({ ok: true, id: entityId });
   } catch (err) {
     console.error('[ai/entityCreate] error:', err.message);
     return res.status(500).json({ error: 'Failed to create entity' });
@@ -1432,23 +1386,55 @@ async function handleAdminHabitSmokeTestDelete(req, res) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function _notesDiagnosticForUid(uid) {
+  // The plain, unordered query — every doc actually owned by this uid,
+  // regardless of whether it would survive the real app's orderBy.
   const topLevel = await db.collection('notes').where('userId', '==', uid).get();
 
+  // The EXACT query NotesList.tsx runs (src/components/NotesList.tsx:
+  // where('userId','==',uid) + orderBy('updatedAt','desc')). Firestore's
+  // orderBy silently excludes any document missing that field — this
+  // directly tests that hypothesis rather than assuming it. Caught
+  // separately: a missing composite index fails this specific query with
+  // `failed-precondition` while the plain where-only query above still
+  // works fine, which would otherwise look identical to "notes missing
+  // updatedAt" from the count mismatch alone.
+  let listQueryCount = null;
+  let listQueryError = null;
+  try {
+    const listQuerySnap = await db.collection('notes')
+      .where('userId', '==', uid)
+      .orderBy('updatedAt', 'desc')
+      .get();
+    listQueryCount = listQuerySnap.size;
+  } catch (err) {
+    listQueryError = err.code || err.message;
+  }
+
   const flagged = [];
+  let archivedCount = 0, deletedCount = 0, missingUpdatedAtCount = 0, missingRevCount = 0;
+  const byType = {}, byCategory = {};
   topLevel.forEach(docSnap => {
     const d = docSnap.data();
     const issues = [];
-    if (d.deletedAt || d.isDeleted) issues.push('marked_deleted');
-    if (d.archived) issues.push('archived');
+    if (d.deletedAt || d.isDeleted) { issues.push('marked_deleted'); deletedCount++; }
+    if (d.archived) { issues.push('archived'); archivedCount++; }
     if (typeof d.title !== 'string') issues.push('title_missing_or_wrong_type');
     if (typeof d.content !== 'string' && d.type !== 'checklist') issues.push('content_missing_or_wrong_type');
-    if (!d.updatedAt || typeof d.updatedAt.toDate !== 'function') issues.push('updatedAt_missing_or_wrong_type');
-    if (typeof d.rev !== 'number') issues.push('rev_missing_legacy');
+    if (!d.updatedAt || typeof d.updatedAt.toDate !== 'function') { issues.push('updatedAt_missing_or_wrong_type'); missingUpdatedAtCount++; }
+    if (typeof d.rev !== 'number') { issues.push('rev_missing_legacy'); missingRevCount++; }
     if (issues.length) flagged.push({ id: docSnap.id, issues });
+
+    const typeKey = typeof d.type === 'string' ? d.type : '(missing)';
+    byType[typeKey] = (byType[typeKey] || 0) + 1;
+    const catKey = typeof d.category === 'string' ? d.category : '(missing)';
+    byCategory[catKey] = (byCategory[catKey] || 0) + 1;
   });
 
+  // Dead legacy subcollection path (users/{uid}/notes) from the old
+  // workspace-subcollection rules/model — no live code writes or reads it.
   const legacySubcol = await db.collection('users').doc(uid).collection('notes').get();
   const legacyIds = legacySubcol.docs.map(d => d.id);
+  const legacyMissingUserId = legacySubcol.docs.filter(d => !d.data().userId).length;
 
   const counterSnap = await db.collection('users').doc(uid).collection('freeUsage').doc('counters').get();
   const noteCount = counterSnap.exists ? (counterSnap.data().noteCount ?? null) : null;
@@ -1457,9 +1443,19 @@ async function _notesDiagnosticForUid(uid) {
 
   return {
     uid,
-    topLevelNoteCount: topLevel.size,
+    topLevelNoteCount: topLevel.size,          // db.collection('notes').where('userId','==',uid) — no orderBy
+    listQueryCount,                             // the SAME query PLUS .orderBy('updatedAt','desc') — what NotesList.tsx actually runs
+    listQueryError,                             // non-null only if that exact query itself failed (e.g. missing index, permission-denied)
+    listQueryExcludesDocs: listQueryError === null && listQueryCount !== null && listQueryCount !== topLevel.size,
+    missingUpdatedAtCount,                      // of topLevel — these are exactly the docs orderBy would drop, if any
+    missingRevCount,                            // legacy docs predating the rev field — expected to be harmless, not itself a problem
+    archivedCount,
+    deletedCount,
+    byType,
+    byCategory,
     flaggedNoteIds: flagged,
-    legacySubcollectionNoteIds: legacyIds, // users/{uid}/notes — dead path, no live code writes here
+    legacySubcollectionNoteIds: legacyIds,      // users/{uid}/notes — dead path, no live code writes here
+    legacySubcollectionMissingUserId: legacyMissingUserId,
     freeUsageNoteCounter: noteCount,
     freeUsageCounterMismatch: noteCount !== null && noteCount !== topLevel.size,
     linkedToTelegram: !telegramLinkSnap.empty,

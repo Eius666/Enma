@@ -37,6 +37,7 @@
     "test:rules": "firebase emulators:exec --only firestore --project enma-rules-test \"node --test firestore-tests/rules.test.js\"",
     "test:migration": "firebase emulators:exec --only firestore --project enma-rules-test \"node --test firestore-tests/migration.test.js\"",
     "test:finance-integration": "firebase emulators:exec --only firestore --project enma-rules-test \"node --test api/_lib/finance/__tests__/goalTransfer.integration.test.js\"",
+    "test:entity-integration": "firebase emulators:exec --only firestore --project enma-rules-test \"node --test api/_lib/entities/__tests__/createEntity.integration.test.js\"",
     "pretest:functions-integration": "npm --prefix functions run build",
     "test:functions-integration": "firebase emulators:exec --only firestore --project enma-rules-test \"node --test functions/lib/__tests__/materializeHabitReminders.integration.test.js\"",
     "test:brain": "node api/_lib/evals/runner.js",

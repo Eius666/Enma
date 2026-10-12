@@ -104,11 +104,13 @@ test('adminNotesDiagnostic: flags a legacy note missing rev/updatedAt without ev
     assert.ok(flagged, 'legacy doc should be flagged');
     assert.ok(flagged.issues.includes('rev_missing_legacy'));
     assert.ok(flagged.issues.includes('updatedAt_missing_or_wrong_type'));
+    assert.equal(res.body.primary.missingUpdatedAtCount, 1);
+    assert.equal(res.body.primary.missingRevCount, 1);
     assert.ok(!JSON.stringify(res.body).includes('secret personal text'));
   } finally { teardown(); }
 });
 
-test('adminNotesDiagnostic: surfaces the dead legacy users/{uid}/notes subcollection path separately', async () => {
+test('adminNotesDiagnostic: surfaces the dead legacy users/{uid}/notes subcollection path separately, including docs missing userId', async () => {
   injectEnv({
     'users/alice/notes/old1': { title: 'from the old workspace subcollection model' },
   });
@@ -118,6 +120,45 @@ test('adminNotesDiagnostic: surfaces the dead legacy users/{uid}/notes subcollec
     const res = mockRes();
     await handler(req, res);
     assert.deepEqual(res.body.primary.legacySubcollectionNoteIds, ['old1']);
+    assert.equal(res.body.primary.legacySubcollectionMissingUserId, 1);
+  } finally { teardown(); }
+});
+
+test('adminNotesDiagnostic: counts archived/deleted notes and breaks down by type/category', async () => {
+  injectEnv({
+    'notes/n1': { userId: 'alice', title: 'a', content: '', type: 'text', category: 'Work', rev: 1, updatedAt: { toDate: () => new Date() } },
+    'notes/n2': { userId: 'alice', title: 'b', content: '', type: 'checklist', category: 'Work', archived: true, rev: 1, updatedAt: { toDate: () => new Date() } },
+    'notes/n3': { userId: 'alice', title: 'c', content: '', type: 'text', category: 'General', isDeleted: true, rev: 1, updatedAt: { toDate: () => new Date() } },
+  });
+  try {
+    const handler = require(MODULE_PATH);
+    const req = mockReq({ body: { uid: 'alice' }, headers: { 'x-admin-key': ADMIN_KEY } });
+    const res = mockRes();
+    await handler(req, res);
+    assert.equal(res.body.primary.archivedCount, 1);
+    assert.equal(res.body.primary.deletedCount, 1);
+    assert.deepEqual(res.body.primary.byType, { text: 2, checklist: 1 });
+    assert.deepEqual(res.body.primary.byCategory, { Work: 2, General: 1 });
+  } finally { teardown(); }
+});
+
+test('adminNotesDiagnostic: reports the real list-query (where+orderBy) count alongside the plain count', async () => {
+  injectEnv({
+    'notes/n1': { userId: 'alice', title: 'a', content: '', type: 'text', rev: 1, updatedAt: { toDate: () => new Date() } },
+  });
+  try {
+    const handler = require(MODULE_PATH);
+    const req = mockReq({ body: { uid: 'alice' }, headers: { 'x-admin-key': ADMIN_KEY } });
+    const res = mockRes();
+    await handler(req, res);
+    assert.equal(res.body.primary.listQueryError, null);
+    assert.equal(res.body.primary.listQueryCount, 1);
+    assert.equal(res.body.primary.listQueryExcludesDocs, false);
+    // NOTE: the shared test-fixture mock's orderBy() does not actually
+    // drop documents missing the sort field (unlike real Firestore) — the
+    // real exclusion behavior is verified against the Firestore EMULATOR
+    // in api/_lib/entities/__tests__/createEntity.integration.test.js
+    // instead, not asserted here.
   } finally { teardown(); }
 });
 
