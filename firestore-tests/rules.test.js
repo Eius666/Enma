@@ -35,6 +35,11 @@ beforeEach(async () => {
     await setDoc(doc(db, 'transactions/bobs'), { ...V2, userId: 'bob' });
     await setDoc(doc(db, 'transactions/goallinked'), GOAL_LINKED);
     await setDoc(doc(db, 'goals/g1'), { userId: 'alice', title: 'Car', targetAmount: 1000, currentAmount: 0, currency: 'RUB' });
+    // Notes audit: a free-tier counter well under the limit so create
+    // tests exercise the real rule, not an incidental 429-equivalent deny.
+    await setDoc(doc(db, 'users/alice/freeUsage/counters'), { noteCount: 0 });
+    await setDoc(doc(db, 'users/mallory/freeUsage/counters'), { noteCount: 0 });
+    await setDoc(doc(db, 'notes/n1'), { userId: 'alice', title: 'Shopping list', content: 'milk, eggs', type: 'text', category: 'General', pinned: false });
   });
 });
 
@@ -114,4 +119,62 @@ test('goals: owner can read, nobody can write from the client', async () => {
   await assertFails(setDoc(doc(alice(), 'goals/g2'), { userId: 'alice', title: 'x', targetAmount: 1, currentAmount: 1 }));
   await assertFails(deleteDoc(doc(alice(), 'goals/g1')));
   await assertFails(getDoc(doc(mallory(), 'goals/g1')));
+});
+
+// ── notes — ENMA notes-recovery audit, PHASE 6 ──────────────────────────────
+// Regression coverage locking in CURRENT, correct behavior (no rules bug
+// was found here — these exist so a future change can't silently break it).
+
+test('notes: owner can create their own note within the free limit', async () => {
+  await assertSucceeds(setDoc(doc(alice(), 'notes/new1'), {
+    userId: 'alice', title: 'New', content: 'hello', type: 'text', category: 'General', pinned: false,
+  }));
+});
+
+test('notes: create is rejected once the free-tier note limit is reached', async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'users/alice/freeUsage/counters'), { noteCount: 10 });
+  });
+  await assertFails(setDoc(doc(alice(), 'notes/over-limit'), {
+    userId: 'alice', title: 'One too many', content: '', type: 'text', category: 'General', pinned: false,
+  }));
+});
+
+test('notes: a paid user can create past the free-tier count', async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'users/alice/freeUsage/counters'), { noteCount: 50 });
+    await setDoc(doc(ctx.firestore(), 'subscriptions/alice'), { status: 'active', plan: 'pro', endDateMs: Date.now() + 86400000 });
+  });
+  await assertSucceeds(setDoc(doc(alice(), 'notes/paid-ok'), {
+    userId: 'alice', title: 'Still works', content: '', type: 'text', category: 'General', pinned: false,
+  }));
+});
+
+test('notes: client cannot create a note under someone else\'s userId', async () => {
+  await assertFails(setDoc(doc(alice(), 'notes/forged'), {
+    userId: 'mallory', title: 'x', content: '', type: 'text', category: 'General', pinned: false,
+  }));
+});
+
+test('notes: owner can read, update (content, pin, category) and delete their own note', async () => {
+  await assertSucceeds(getDoc(doc(alice(), 'notes/n1')));
+  await assertSucceeds(updateDoc(doc(alice(), 'notes/n1'), { content: 'milk, eggs, bread', updatedAt: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(alice(), 'notes/n1'), { pinned: true, updatedAt: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(alice(), 'notes/n1'), { category: 'Work', updatedAt: serverTimestamp() }));
+  await assertSucceeds(deleteDoc(doc(alice(), 'notes/n1')));
+});
+
+test('notes: client cannot change the userId of an existing note', async () => {
+  await assertFails(updateDoc(doc(alice(), 'notes/n1'), { userId: 'mallory' }));
+});
+
+test('notes: another user cannot read, update, or delete someone else\'s note', async () => {
+  await assertFails(getDoc(doc(mallory(), 'notes/n1')));
+  await assertFails(updateDoc(doc(mallory(), 'notes/n1'), { content: 'hacked' }));
+  await assertFails(deleteDoc(doc(mallory(), 'notes/n1')));
+});
+
+test('notes: unauthenticated access is denied', async () => {
+  await assertFails(getDoc(doc(anon(), 'notes/n1')));
+  await assertFails(setDoc(doc(anon(), 'notes/anon1'), { userId: 'nobody', title: 'x', content: '', type: 'text', category: 'General', pinned: false }));
 });

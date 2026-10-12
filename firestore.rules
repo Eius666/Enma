@@ -211,10 +211,19 @@ service cloud.firestore {
 
     // Notes — 10 total for Free
     match /notes/{noteId} {
-      allow read:           if ownsDoc();
-      allow create:         if writesOwnUid() &&
-                               (hasPaidAccess(request.auth.uid) || freeNoteOk(request.auth.uid));
-      allow update, delete: if ownsDoc();
+      allow read:   if ownsDoc();
+      allow create: if writesOwnUid() &&
+                       (hasPaidAccess(request.auth.uid) || freeNoteOk(request.auth.uid));
+      // ownsDoc() alone only checks the EXISTING doc's userId — it says
+      // nothing about what the new data sets userId TO. Found during the
+      // ENMA notes-recovery audit (PHASE 6): a client could previously
+      // reassign a note's userId to a different uid on update, orphaning
+      // it from its real owner's queries/reads (NotesList filters on
+      // userId == the signed-in uid, so a reassigned note would simply
+      // vanish from that owner's list — indistinguishable, from the UI,
+      // from actual data loss).
+      allow update: if ownsDoc() && request.resource.data.userId == resource.data.userId;
+      allow delete: if ownsDoc();
     }
 
     // Day-flow tasks — 5/day for Free

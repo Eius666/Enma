@@ -22,6 +22,7 @@ import type { ChecklistItem } from './NotesList';
 import type { Subscription } from '../subscription';
 import { getActivePlan, FREE_LIMITS } from '../subscription';
 import { subscribeFreeUsage } from '../lib/usageCounters';
+import { createNoteSaveQueue, SaveStatus } from '../lib/noteSaveQueue';
 import Paywall, { LimitBanner } from './Paywall';
 import './Notes.css';
 
@@ -54,6 +55,7 @@ const T = {
     lastEdited: 'Last edited',
     saving: 'Saving…',
     saved: 'Saved',
+    saveError: 'Could not save — your text is still here, edit it to retry',
     confirmDelete: 'Delete this note?',
     todoPlaceholder: 'New item…',
   },
@@ -71,6 +73,7 @@ const T = {
     lastEdited: 'Изменено',
     saving: 'Сохранение…',
     saved: 'Сохранено',
+    saveError: 'Не удалось сохранить — текст на месте, продолжите редактирование для повтора',
     confirmDelete: 'Удалить эту заметку?',
     todoPlaceholder: 'Новый пункт…',
   },
@@ -108,12 +111,13 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
   const [category, setCategory] = useState(initialCategory ?? defaultCats[0]);
   const [pinned, setPinned] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
-  const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [savingState, setSavingState] = useState<SaveStatus>('idle');
   const [menuOpen, setMenuOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [usedNotes, setUsedNotes] = useState<number | null>(null);
   const limitPassedRef = useRef(false);
+  const paywallHitRef = useRef(false);
 
   const near80 = usedNotes !== null && usedNotes >= Math.floor(limit * 0.8);
 
@@ -123,8 +127,17 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
   }, [user, isFree, isNew]);
 
   const titleRef = useRef<HTMLInputElement>(null);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  type NotePatch = {
+    id: string;
+    title: string;
+    content: string;
+    type: 'text' | 'checklist';
+    checklistItems: ChecklistItem[];
+    category: string;
+    pinned: boolean;
+  };
 
   // ── Load existing note ──────────────────────────────────────────────────
   useEffect(() => {
@@ -173,108 +186,119 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
     return () => document.removeEventListener('mousedown', handler);
   }, [menuOpen]);
 
-  // ── Debounced save ──────────────────────────────────────────────────────
-  const saveToFirestore = useCallback(
-    async (
-      id: string,
-      patch: {
-        title: string;
-        content: string;
-        type: 'text' | 'checklist';
-        checklistItems: ChecklistItem[];
-        category: string;
-        pinned: boolean;
-      }
-    ) => {
-      if (!user) return;
+  // ── Save queue ───────────────────────────────────────────────────────────
+  // ENMA notes audit — PHASE 7/12: a bare debounce timer only cancels a
+  // write that hasn't fired yet; once in flight, an earlier (now stale)
+  // write could still land AFTER a newer one and silently revert the
+  // note. Unmounting (back button, switching tabs, closing the app) used
+  // to just clearTimeout() the pending debounce outright — any edit made
+  // within the last DEBOUNCE_MS before navigating away was never written
+  // at all, with no error and no warning. createNoteSaveQueue (src/lib)
+  // fixes both: writes are serialized (never two in flight, always commit
+  // in request order) and flush()/cancelAndWait() give unmount and delete
+  // a way to settle pending work instead of silently discarding it.
+  const writeNote = useCallback(
+    async (patch: NotePatch): Promise<void> => {
+      if (!user) throw new Error('not signed in');
+      const { id, ...fields } = patch;
 
       if (isNew && !limitPassedRef.current) {
-        // First save of this note — create via API (handles free limit check atomically)
-        setSavingState('saving');
-        try {
-          const token = await user.getIdToken();
-          const resp = await fetch('/api/ai/entityCreate', {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({
-              userId:     user.uid,
-              entityType: 'note',
-              docId:      id,
-              data:       { id, ...patch },
-            }),
-          });
-          if (resp.status === 429) {
-            const body = await resp.json().catch(() => ({}));
-            setUsedNotes(body.current ?? limit);
-            setShowPaywall(true);
-            setSavingState('idle');
-            return;
-          }
-          if (!resp.ok) {
-            console.error('NoteEditor create error', resp.status);
-            setSavingState('idle');
-            return;
-          }
-          limitPassedRef.current = true;
-          setUpdatedAt(new Date());
-          setSavingState('saved');
-          setTimeout(() => setSavingState('idle'), 1500);
-        } catch (err) {
-          console.error('NoteEditor create error', err);
-          setSavingState('idle');
+        // First save of this note — create via API (handles the free-plan
+        // limit check atomically). The queue guarantees this can only ever
+        // run once at a time, so limitPassedRef can't race with itself.
+        const token = await user.getIdToken();
+        const resp = await fetch('/api/ai/entityCreate', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({
+            userId:     user.uid,
+            entityType: 'note',
+            docId:      id,
+            data:       { id, ...fields },
+          }),
+        });
+        if (resp.status === 429) {
+          const body = await resp.json().catch(() => ({}));
+          setUsedNotes(body.current ?? limit);
+          setShowPaywall(true);
+          // A 429 is an expected, actionable outcome (paywall), not a
+          // transient failure — don't report it as a retryable save error.
+          // It's also not a success: nothing was written, so the queue's
+          // normal "returned without throwing → saved" status needs to be
+          // suppressed here (see paywallHitRef below), or the toolbar would
+          // claim "Сохранено" for a note that doesn't exist yet.
+          limitPassedRef.current = false;
+          paywallHitRef.current = true;
+          return;
         }
+        if (!resp.ok) throw new Error(`entityCreate failed: ${resp.status}`);
+        limitPassedRef.current = true;
+        setUpdatedAt(new Date());
         return;
       }
 
       // Update existing note (or already-created new note on subsequent auto-saves)
-      setSavingState('saving');
-      try {
-        await setDoc(
-          doc(db, 'notes', id),
-          { ...patch, userId: user.uid, updatedAt: serverTimestamp() },
-          { merge: true }
-        );
-        setUpdatedAt(new Date());
-        setSavingState('saved');
-        setTimeout(() => setSavingState('idle'), 1500);
-      } catch (err) {
-        console.error('NoteEditor save error', err);
-        setSavingState('idle');
-      }
+      await setDoc(
+        doc(db, 'notes', id),
+        { ...fields, userId: user.uid, updatedAt: serverTimestamp() },
+        { merge: true }
+      );
+      setUpdatedAt(new Date());
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [user, isNew, limit]
   );
 
-  const scheduleSave = useCallback(
-    (
-      id: string,
-      patch: {
-        title: string;
-        content: string;
-        type: 'text' | 'checklist';
-        checklistItems: ChecklistItem[];
-        category: string;
-        pinned: boolean;
-      }
-    ) => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => saveToFirestore(id, patch), DEBOUNCE_MS);
-    },
-    [saveToFirestore]
-  );
+  // The queue is created exactly once and never recreated (that would drop
+  // any in-flight/pending work) — writeNoteRef lets it always call the
+  // LATEST writeNote closure (fresh `user`/`isNew`/`limit`) through a
+  // reference that's stable for the queue's entire lifetime.
+  const writeNoteRef = useRef(writeNote);
+  writeNoteRef.current = writeNote;
+
+  const idleResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveQueueRef = useRef<ReturnType<typeof createNoteSaveQueue<NotePatch>> | null>(null);
+  if (!saveQueueRef.current) {
+    saveQueueRef.current = createNoteSaveQueue<NotePatch>({
+      write: (patch) => writeNoteRef.current(patch),
+      debounceMs: DEBOUNCE_MS,
+      onStatusChange: (status) => {
+        if (status === 'saved' && paywallHitRef.current) {
+          // writeNote hit the free-plan limit and returned without
+          // throwing (it's not a retryable error, the Paywall already
+          // covers the UI response) — but nothing was actually written,
+          // so this is not a "saved" moment. Go straight back to idle.
+          paywallHitRef.current = false;
+          setSavingState('idle');
+          return;
+        }
+        setSavingState(status);
+        if (idleResetTimer.current) clearTimeout(idleResetTimer.current);
+        // 'saved' fades back to idle after a moment, same as before. 'error'
+        // does NOT auto-clear — per PHASE 12, it must stay visible (and the
+        // text stays editable) until the user retries, not vanish on its own.
+        if (status === 'saved') {
+          idleResetTimer.current = setTimeout(() => setSavingState(s => (s === 'saved' ? 'idle' : s)), 1500);
+        }
+      },
+    });
+  }
 
   // Trigger save whenever editable fields change
   useEffect(() => {
     if (!loaded || !docId) return;
-    scheduleSave(docId, { title, content, type, checklistItems, category, pinned });
+    saveQueueRef.current?.schedule({ id: docId, title, content, type, checklistItems, category, pinned });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, content, type, checklistItems, category, pinned, loaded]);
+  }, [title, content, type, checklistItems, category, pinned, loaded, docId]);
 
-  // Flush on unmount
+  // Flush on unmount — the exact fix for the "edits silently lost" bug:
+  // whatever's still pending gets written now instead of discarded. This
+  // is a fire-and-forget (the component is gone, there's no UI left to
+  // show "saving"/"saved" to) — the write itself still completes; the
+  // Firestore client is a module-level singleton independent of this
+  // component's lifecycle, so it isn't cancelled by the unmount either.
   useEffect(() => {
     return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveQueueRef.current?.flush().catch(() => {});
     };
   }, []);
 
@@ -327,20 +351,14 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
   };
 
   // ── Pin toggle ──────────────────────────────────────────────────────────
-  const handlePin = async () => {
-    const next = !pinned;
-    setPinned(next);
+  // Just updates state — the save-trigger effect above already watches
+  // `pinned` and schedules it through the SAME queue as every other field.
+  // (It used to also fire its own direct setDoc() here, racing with
+  // whatever the debounced content-save was about to write — one write
+  // path for every field, no exceptions, is the fix.)
+  const handlePin = () => {
+    setPinned(prev => !prev);
     setMenuOpen(false);
-    if (!docId) return;
-    try {
-      await setDoc(
-        doc(db, 'notes', docId),
-        { pinned: next, updatedAt: serverTimestamp() },
-        { merge: true }
-      );
-    } catch (err) {
-      console.warn('Pin error', err);
-    }
   };
 
   // ── Delete ──────────────────────────────────────────────────────────────
@@ -348,11 +366,30 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
     setMenuOpen(false);
     if (!docId) { onBack(); return; }
     if (!window.confirm(t.confirmDelete)) return;
+    // Discard any pending auto-save first — flush() would write stale
+    // content into a document about to be removed, silently recreating it
+    // right after delete (setDoc(…, {merge:true}) on a missing doc just
+    // creates it). Still wait for anything already mid-write so it can't
+    // land AFTER the delete either.
+    await saveQueueRef.current?.cancelAndWait();
     try {
       await deleteDoc(doc(db, 'notes', docId));
     } catch (err) {
       console.warn('Delete error', err);
     }
+    onBack();
+  };
+
+  // ── Back ────────────────────────────────────────────────────────────────
+  // Flushes any still-pending edit (debounced or in-flight) and waits for
+  // it before navigating away — the explicit, user-facing counterpart to
+  // the unmount flush above. On failure, stays on screen: the typed text
+  // is untouched (local state was never cleared) and savingState shows
+  // the error, so editing again naturally retries via the normal debounce.
+  const handleBack = async () => {
+    if (!saveQueueRef.current?.hasPendingWork()) { onBack(); return; }
+    const ok = await saveQueueRef.current.flush();
+    if (!ok) return;
     onBack();
   };
 
@@ -403,7 +440,12 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
 
       {/* ── Toolbar ── */}
       <div className="note-editor__toolbar">
-        <button className="note-editor__back-btn" onClick={onBack} type="button">
+        <button
+          className="note-editor__back-btn"
+          onClick={handleBack}
+          disabled={savingState === 'saving'}
+          type="button"
+        >
           <FaArrowLeft /> {t.back}
         </button>
 
@@ -412,6 +454,16 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
             <span className="note-editor__saving">
               <span className="note-editor__saving-dot" />
               {t.saving}
+            </span>
+          )}
+          {savingState === 'saved' && (
+            <span className="note-editor__saving note-editor__saving--saved">
+              {t.saved}
+            </span>
+          )}
+          {savingState === 'error' && (
+            <span className="note-editor__saving note-editor__saving--error" role="alert">
+              {t.saveError}
             </span>
           )}
           <button

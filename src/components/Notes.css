@@ -945,3 +945,15 @@ body.theme-light .note-editor__type-toggle {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.3; }
 }
+
+.note-editor__saving--saved {
+  color: var(--fin-income, #2ecc71);
+}
+
+.note-editor__saving--error {
+  color: var(--fin-expense, #ff4757);
+  font-weight: 600;
+  max-width: 200px;
+  text-align: right;
+  white-space: normal;
+}
