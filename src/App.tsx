@@ -671,6 +671,9 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<PrimaryTab>('day-flow');
   const [notesView, setNotesView] = useState<'list' | 'editor'>('list');
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
+  // Set only when opening a note recovered from NotesList's "unsaved note"
+  // banner — see NoteEditor's recoveredDraftId prop.
+  const [recoveredDraftId, setRecoveredDraftId] = useState<string | null>(null);
   const [financeView, setFinanceView] = useState<'list' | 'editor'>('list');
   const [habitsSection, setHabitsSection] = useState<'habits' | 'goals'>('habits');
   const [activeTransactionId, setActiveTransactionId] = useState<string | null>(null);
@@ -1834,6 +1837,12 @@ const App: React.FC = () => {
             language={language}
             onOpenEditor={(id) => {
               setActiveNoteId(id);
+              setRecoveredDraftId(null);
+              setNotesView('editor');
+            }}
+            onRecoverDraft={(draftId) => {
+              setActiveNoteId(null);
+              setRecoveredDraftId(draftId);
               setNotesView('editor');
             }}
           />
@@ -1841,12 +1850,14 @@ const App: React.FC = () => {
         {activeTab === 'notes' && notesView === 'editor' && (
           <NoteEditor
             noteId={activeNoteId}
+            recoveredDraftId={recoveredDraftId}
             user={user}
             language={language}
             subscription={subscription}
             onBack={() => {
               setNotesView('list');
               setActiveNoteId(null);
+              setRecoveredDraftId(null);
             }}
           />
         )}

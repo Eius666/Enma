@@ -21,6 +21,8 @@ import {
   FaTimes,
 } from 'react-icons/fa';
 import { db } from '../firebase';
+import { getNoteDraftStore } from '../lib/noteDrafts';
+import type { NoteDraft } from '../lib/noteDrafts';
 import './Notes.css';
 
 export interface FireNote {
@@ -46,6 +48,8 @@ interface NotesListProps {
   user: User | null;
   language: 'en' | 'ru';
   onOpenEditor: (noteId: string | null) => void;
+  /** Opens NoteEditor on a recovered, never-synced new note's local id. */
+  onRecoverDraft: (draftId: string) => void;
 }
 
 const DEFAULT_CATEGORIES_EN = ['All', 'General', 'Work', 'Personal', 'Ideas'];
@@ -68,6 +72,10 @@ const T = {
     categoryPlaceholder: 'Category name',
     confirmDelete: 'Delete this note?',
     actions: 'Actions',
+    unsavedTitle: 'Unsaved note found on this device',
+    unsavedHint: 'This note was never saved online',
+    recover: 'Open',
+    discard: 'Discard',
   },
   ru: {
     search: 'Поиск заметок…',
@@ -85,6 +93,10 @@ const T = {
     categoryPlaceholder: 'Название категории',
     confirmDelete: 'Удалить эту заметку?',
     actions: 'Действия',
+    unsavedTitle: 'Найдена несохранённая заметка на этом устройстве',
+    unsavedHint: 'Эта заметка никогда не была сохранена онлайн',
+    recover: 'Открыть',
+    discard: 'Удалить',
   },
 };
 
@@ -127,12 +139,13 @@ function notePreview(note: FireNote): string {
   return note.content?.slice(0, 120) ?? '';
 }
 
-const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor }) => {
+const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor, onRecoverDraft }) => {
   const t = T[language];
   const defaultCats = language === 'ru' ? DEFAULT_CATEGORIES_RU : DEFAULT_CATEGORIES_EN;
   const allLabel = defaultCats[0];
 
   const [notes, setNotes] = useState<FireNote[]>([]);
+  const [orphanDrafts, setOrphanDrafts] = useState<NoteDraft[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState(allLabel);
   const [extraCategories, setExtraCategories] = useState<string[]>([]);
@@ -184,6 +197,40 @@ const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor }) =
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid ?? null]);
+
+  // ENMA notes-durability audit — recover new notes that never reached
+  // Firestore. A note that never completed its first create (offline, or
+  // the app/WebView was killed before entityCreate finished) has no
+  // server document at all, so it can never appear in the `notes` query
+  // above — its ONLY trace is the local draft (src/lib/noteDrafts.ts)
+  // saved on every keystroke, keyed by a noteId nobody else knows. This
+  // re-checks local storage whenever the live Firestore list changes, and
+  // surfaces anything whose id isn't (yet) a real note as recoverable.
+  //
+  // A draft can also legitimately exist for a note that IS already in
+  // Firestore (actively being edited right now, debounce not fired yet) —
+  // filtering those out by id is what keeps this from flagging ordinary,
+  // healthy in-progress edits as "lost".
+  useEffect(() => {
+    const uid = user?.uid ?? null;
+    if (!uid) { setOrphanDrafts([]); return; }
+    let mounted = true;
+    const knownIds = new Set(notes.map(n => n.id));
+    getNoteDraftStore().listForUser(uid).then(drafts => {
+      if (!mounted) return;
+      const hasContent = (d: NoteDraft) =>
+        d.title.trim() !== '' || d.content.trim() !== '' || d.checklistItems.some(i => i.text.trim() !== '');
+      setOrphanDrafts(drafts.filter(d => !knownIds.has(d.noteId) && hasContent(d)));
+    }).catch(() => {
+      if (mounted) setOrphanDrafts([]);
+    });
+    return () => { mounted = false; };
+  }, [user?.uid, notes]);
+
+  const handleDiscardDraft = useCallback(async (draft: NoteDraft) => {
+    await getNoteDraftStore().clear(draft.uid, draft.noteId);
+    setOrphanDrafts(prev => prev.filter(d => d.noteId !== draft.noteId));
+  }, []);
 
   // Derive categories from notes + defaults
   const categories = useMemo(() => {
@@ -335,6 +382,30 @@ const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor }) =
   return (
     <>
     <div className="notes-list">
+      {/* Unsaved-note recovery — see the listForUser effect above */}
+      {orphanDrafts.map(draft => (
+        <div className="notes-list__orphan-banner" key={draft.noteId} role="alert">
+          <div className="notes-list__orphan-text">
+            <strong>{t.unsavedTitle}</strong>
+            <span>{draft.title || t.unsavedHint}</span>
+          </div>
+          <div className="notes-list__orphan-actions">
+            <button type="button" className="notes-list__orphan-btn" onClick={() => onRecoverDraft(draft.noteId)}>
+              {t.recover}
+            </button>
+            <button
+              type="button"
+              className="notes-list__orphan-btn notes-list__orphan-btn--secondary"
+              onClick={() => {
+                if (window.confirm(t.confirmDelete)) handleDiscardDraft(draft);
+              }}
+            >
+              {t.discard}
+            </button>
+          </div>
+        </div>
+      ))}
+
       {/* Search */}
       <div className="notes-list__search-wrap">
         <FaSearch className="notes-list__search-icon" />

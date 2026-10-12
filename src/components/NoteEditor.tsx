@@ -35,6 +35,17 @@ interface NoteEditorProps {
   subscription?: Subscription | null;
   initialCategory?: string;
   onBack: () => void;
+  /**
+   * Set when opening a draft recovered from NotesList's "unsaved note"
+   * banner (src/lib/noteDrafts.ts) — a new note whose first create never
+   * reached Firestore (offline/killed before entityCreate completed), so
+   * there is no server document and no noteId anyone outside this local
+   * draft knows about. Distinct from `noteId`: passing a recovered id
+   * here still goes through the free-tier-limited entityCreate path on
+   * first save (isNew stays true), just reusing this id instead of
+   * minting a fresh one, so recovering twice can't create a duplicate.
+   */
+  recoveredDraftId?: string | null;
 }
 
 const DEBOUNCE_MS = 500;
@@ -110,16 +121,20 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
   subscription,
   initialCategory,
   onBack,
+  recoveredDraftId,
 }) => {
   const t = T[language];
   const defaultCats = language === 'ru' ? DEFAULT_CATEGORIES_RU : DEFAULT_CATEGORIES_EN;
+  // recoveredDraftId deliberately does NOT flip isNew to false — it's a
+  // new note (never created on the server) that's reusing a known local
+  // id instead of minting a fresh one. See NoteEditorProps for why.
   const isNew = !noteId;
 
   const plan    = getActivePlan(subscription ?? null);
   const isFree  = plan === 'free';
   const limit   = FREE_LIMITS.notes;
 
-  const [docId, setDocId] = useState<string | null>(noteId);
+  const [docId, setDocId] = useState<string | null>(noteId ?? recoveredDraftId ?? null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [type, setType] = useState<'text' | 'checklist'>('text');
@@ -185,8 +200,31 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
   useEffect(() => {
     if (!user) return;
 
-    const id = noteId ?? makeNoteId();
+    const id = noteId ?? recoveredDraftId ?? makeNoteId();
     setDocId(id);
+
+    if (!noteId && recoveredDraftId) {
+      // Recovering a new note that never reached Firestore (ENMA
+      // notes-durability audit, PHASE 3/recovery). There is no server
+      // document to race against — nothing was ever created — so just
+      // load the local draft directly and resume as a normal first save
+      // (isNew stays true, so writeNote still goes through the
+      // free-tier-limited entityCreate path on the next schedule()).
+      getNoteDraftStore().load(user.uid, recoveredDraftId).then(draft => {
+        if (draft) {
+          setTitle(draft.title);
+          setContent(draft.content);
+          setType(draft.type);
+          setChecklistItems(draft.checklistItems);
+          setCategory(draft.category);
+          setPinned(draft.pinned);
+        }
+        knownRevRef.current = 0;
+        setLoaded(true);
+        setTimeout(() => titleRef.current?.focus(), 80);
+      });
+      return;
+    }
 
     if (noteId) {
       // Load from Firestore
@@ -443,10 +481,16 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
   useEffect(() => {
     if (!loaded || !docId || !user) return;
     const patch: NotePatch = { id: docId, title, content, type, checklistItems, category, pinned };
+    // save() never throws — it resolves to false (rather than rejecting)
+    // when local storage is unavailable/full/blocked, so a degraded local
+    // safety net is logged for debugging but never blocks or fails the
+    // real Firestore write path scheduled right below.
     getNoteDraftStore().save({
       uid: user.uid, noteId: docId, title, content, type, checklistItems, category, pinned,
       baseRev: knownRevRef.current, savedAtLocal: Date.now(),
-    }).catch(() => {});
+    }).then(ok => {
+      if (!ok) console.warn('NoteEditor: local draft persist failed (storage unavailable/full) — Firestore write is unaffected');
+    });
     // While a conflict banner is up, the draft above still gets refreshed
     // (so further edits during review aren't lost either), but the write
     // itself stays paused — scheduling it here would silently resolve the

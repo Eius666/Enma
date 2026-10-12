@@ -71,6 +71,10 @@ interface KVBackend {
   get(key: string): Promise<string | null>;
   set(key: string, value: string): Promise<void>;
   delete(key: string): Promise<void>;
+  /** All [key, value] pairs currently stored. Used only for listForUser —
+   *  scanning the whole (small — one entry per actively-edited note) store
+   *  is simpler and safer than maintaining a separate per-uid index. */
+  entries(): Promise<Array<[string, string]>>;
 }
 
 function createMemoryBackend(): KVBackend {
@@ -84,6 +88,9 @@ function createMemoryBackend(): KVBackend {
     },
     async delete(key) {
       map.delete(key);
+    },
+    async entries() {
+      return Array.from(map.entries());
     },
   };
 }
@@ -144,6 +151,23 @@ function createIndexedDBBackend(): KVBackend {
           })
       );
     },
+    entries() {
+      return openDb().then(
+        (db) =>
+          new Promise<Array<[string, string]>>((resolve, reject) => {
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const keysReq = store.getAllKeys();
+            const valuesReq = store.getAll();
+            tx.oncomplete = () => {
+              const keys = keysReq.result as string[];
+              const values = valuesReq.result as string[];
+              resolve(keys.map((k, i) => [k, values[i]]));
+            };
+            tx.onerror = () => reject(tx.error);
+          })
+      );
+    },
   };
 }
 
@@ -161,11 +185,21 @@ export class NoteDraftStore {
   // reduces how much local protection is available, which is reported
   // honestly rather than assumed away.
 
-  async save(draft: NoteDraft): Promise<void> {
+  /**
+   * Returns true only once the underlying storage transaction has actually
+   * completed (not just been requested) — `set()` on both backends
+   * resolves on commit (IndexedDB: `tx.oncomplete`), never on request
+   * start. Returns false, rather than throwing, if local storage is
+   * unavailable or the write failed (quota exceeded, blocked, private
+   * mode) — callers treat this as "the local safety net is degraded right
+   * now", never as a reason to fail the real Firestore write path.
+   */
+  async save(draft: NoteDraft): Promise<boolean> {
     try {
       await this.backend.set(draftKey(draft.uid, draft.noteId), JSON.stringify(draft));
+      return true;
     } catch {
-      /* best-effort only */
+      return false;
     }
   }
 
@@ -190,6 +224,36 @@ export class NoteDraftStore {
       /* best-effort only */
     }
   }
+
+  /**
+   * All drafts left behind for this uid — including ones for a note that
+   * never reached Firestore at all (a brand-new note whose first
+   * entityCreate never completed has no server doc and no noteId anyone
+   * else knows about; this is the only way to find it again). The caller
+   * (NotesList) is responsible for cross-checking each noteId against the
+   * user's actual Firestore notes to tell "never synced" apart from "still
+   * being edited right now in another tab" — this method only reads local
+   * storage, never Firestore.
+   */
+  async listForUser(uid: string): Promise<NoteDraft[]> {
+    try {
+      const prefix = `${uid}::`;
+      const all = await this.backend.entries();
+      const result: NoteDraft[] = [];
+      for (const [key, raw] of all) {
+        if (!key.startsWith(prefix)) continue;
+        try {
+          const parsed = JSON.parse(raw) as NoteDraft;
+          if (parsed.uid === uid) result.push(parsed);
+        } catch {
+          /* skip a corrupted entry rather than fail the whole listing */
+        }
+      }
+      return result;
+    } catch {
+      return [];
+    }
+  }
 }
 
 let sharedStore: NoteDraftStore | null = null;
@@ -203,4 +267,63 @@ export function getNoteDraftStore(): NoteDraftStore {
  *  real IndexedDB or the module-level singleton. */
 export function createInMemoryDraftStoreForTests(): NoteDraftStore {
   return new NoteDraftStore(createMemoryBackend());
+}
+
+/**
+ * Test-only: a store whose backend rejects on every operation — simulates
+ * local storage being fully unavailable (quota exceeded, private browsing
+ * blocking IndexedDB, "clear site data" mid-session, a disabled storage
+ * permission). Every NoteDraftStore method must degrade to its safe
+ * fallback (false/null/[]) rather than throwing.
+ */
+export function createFailingDraftStoreForTests(): NoteDraftStore {
+  const failing: KVBackend = {
+    get: () => Promise.reject(new Error('storage unavailable')),
+    set: () => Promise.reject(new Error('storage unavailable')),
+    delete: () => Promise.reject(new Error('storage unavailable')),
+    entries: () => Promise.reject(new Error('storage unavailable')),
+  };
+  return new NoteDraftStore(failing);
+}
+
+/**
+ * Test-only: a store that already has one genuinely corrupted entry (not
+ * valid JSON, or valid JSON missing the shape a draft needs) sitting
+ * alongside otherwise-normal data — simulates e.g. a half-written value
+ * left behind by a previous crash. Bypasses NoteDraftStore.save() (which
+ * only ever writes well-formed JSON) by writing the raw string directly
+ * into the backend, the only way such an entry could realistically exist.
+ */
+export function createDraftStoreWithRawEntryForTests(key: string, rawValue: string): NoteDraftStore {
+  const backend = createMemoryBackend();
+  // Deliberately not awaited inside this sync factory — `set` on the
+  // in-memory backend resolves synchronously under the hood, so the
+  // entry is present before this function returns; callers that need a
+  // stricter guarantee can `await` their own subsequent calls as usual.
+  void backend.set(key, rawValue);
+  return new NoteDraftStore(backend);
+}
+
+/**
+ * Test-only: a backend that stores real data (so load/entries reflect
+ * what was actually written) but whose `set` rejects every Nth call —
+ * simulates an intermittently full/throttled store rather than a
+ * completely dead one.
+ */
+export function createFlakyDraftStoreForTests(failEveryNthSet: number): NoteDraftStore {
+  const inner = createMemoryBackend();
+  let setCalls = 0;
+  const flaky: KVBackend = {
+    get: inner.get,
+    delete: inner.delete,
+    entries: inner.entries,
+    set: (key, value) => {
+      setCalls += 1;
+      if (setCalls % failEveryNthSet === 0) {
+        return Promise.reject(new Error('simulated quota exceeded'));
+      }
+      return inner.set(key, value);
+    },
+  };
+  return new NoteDraftStore(flaky);
 }

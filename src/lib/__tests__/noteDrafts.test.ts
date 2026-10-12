@@ -4,6 +4,9 @@ import {
   draftKey,
   decideDraftAction,
   createInMemoryDraftStoreForTests,
+  createFailingDraftStoreForTests,
+  createFlakyDraftStoreForTests,
+  createDraftStoreWithRawEntryForTests,
 } from '../noteDrafts.ts';
 import type { NoteDraft } from '../noteDrafts.ts';
 
@@ -51,10 +54,11 @@ test('decideDraftAction: draft rev ahead of server (should not normally happen) 
 // ── NoteDraftStore (in-memory backend — exercises the same code paths the
 //    real IndexedDB backend runs, without touching a browser API) ───────
 
-test('NoteDraftStore: round-trips save -> load', async () => {
+test('NoteDraftStore: round-trips save -> load, and save() resolves true only once the write actually completed', async () => {
   const store = createInMemoryDraftStoreForTests();
   const draft = makeDraft();
-  await store.save(draft);
+  const ok = await store.save(draft);
+  assert.equal(ok, true);
   const loaded = await store.load('alice', 'n1');
   assert.deepEqual(loaded, draft);
 });
@@ -95,4 +99,76 @@ test('NoteDraftStore: a saved draft with new content overwrites the previous one
   await store.save(makeDraft({ content: 'first' }));
   await store.save(makeDraft({ content: 'second' }));
   assert.equal((await store.load('alice', 'n1'))?.content, 'second');
+});
+
+// ── listForUser (recovering new notes that never reached Firestore) ─────
+
+test('listForUser: returns every draft saved for that uid', async () => {
+  const store = createInMemoryDraftStoreForTests();
+  await store.save(makeDraft({ uid: 'alice', noteId: 'n1' }));
+  await store.save(makeDraft({ uid: 'alice', noteId: 'n2' }));
+  const drafts = await store.listForUser('alice');
+  assert.deepEqual(drafts.map(d => d.noteId).sort(), ['n1', 'n2']);
+});
+
+test('listForUser: never includes another uid\'s drafts', async () => {
+  const store = createInMemoryDraftStoreForTests();
+  await store.save(makeDraft({ uid: 'alice', noteId: 'n1' }));
+  await store.save(makeDraft({ uid: 'bob', noteId: 'n2' }));
+  const drafts = await store.listForUser('alice');
+  assert.deepEqual(drafts.map(d => d.noteId), ['n1']);
+});
+
+test('listForUser: returns an empty array, not an error, when nothing is saved', async () => {
+  const store = createInMemoryDraftStoreForTests();
+  assert.deepEqual(await store.listForUser('alice'), []);
+});
+
+test('load(): a corrupted (not valid JSON) entry is treated as absent, not thrown', async () => {
+  const store = createDraftStoreWithRawEntryForTests('alice::bad', '{not-json');
+  assert.equal(await store.load('alice', 'bad'), null);
+});
+
+test('listForUser: skips a corrupted entry instead of failing the whole listing', async () => {
+  const store = createDraftStoreWithRawEntryForTests('alice::bad', '{not-json');
+  await store.save(makeDraft({ uid: 'alice', noteId: 'good' }));
+  const drafts = await store.listForUser('alice');
+  assert.deepEqual(drafts.map(d => d.noteId), ['good']);
+});
+
+// ── Local-storage failure handling (PHASE: "обработка ошибок локального
+//    хранилища") — every method must degrade gracefully, never throw, and
+//    never block/break the caller (the real Firestore write path does not
+//    depend on any of this succeeding). ──────────────────────────────────
+
+test('A fully unavailable backend: save() resolves false, never rejects', async () => {
+  const store = createFailingDraftStoreForTests();
+  const ok = await store.save(makeDraft());
+  assert.equal(ok, false);
+});
+
+test('A fully unavailable backend: load() resolves null, never rejects', async () => {
+  const store = createFailingDraftStoreForTests();
+  assert.equal(await store.load('alice', 'n1'), null);
+});
+
+test('A fully unavailable backend: clear() resolves (no-op), never rejects', async () => {
+  const store = createFailingDraftStoreForTests();
+  await assert.doesNotReject(() => store.clear('alice', 'n1'));
+});
+
+test('A fully unavailable backend: listForUser() resolves [], never rejects', async () => {
+  const store = createFailingDraftStoreForTests();
+  assert.deepEqual(await store.listForUser('alice'), []);
+});
+
+test('A flaky backend (every 2nd write fails, e.g. intermittent quota pressure): failed saves are reported false, successful ones are not lost', async () => {
+  const store = createFlakyDraftStoreForTests(2);
+  const first = await store.save(makeDraft({ content: 'v1' }));   // call 1: succeeds
+  const second = await store.save(makeDraft({ content: 'v2' }));  // call 2: simulated failure
+  assert.equal(first, true);
+  assert.equal(second, false);
+  // The last successful write (v1) must still be readable — a failed
+  // later save must not have corrupted or half-written anything.
+  assert.equal((await store.load('alice', 'n1'))?.content, 'v1');
 });
