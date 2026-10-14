@@ -29,7 +29,8 @@ const SYSTEM_PROMPT = `Ты — Энма. Финансовый друг поль
 3. Отвечай на русском.
 4. НЕ придумывай данные — если не знаешь, используй search_web.
 5. Когда просят нарисовать/сгенерировать картинку → generate_image. Описание переводи на английский.
-6. Когда спрашивают про расходы, траты, статистику, бюджет → get_finance_stats.
+6. Когда спрашивают про расходы, траты, статистику, бюджет (текстовая сводка в чат) → get_finance_stats.
+6a. Когда явно просят PDF, выгрузку, экспорт отчёта или файл ("сделай PDF", "выгрузи все операции", "подготовь отчёт за сентябрь", "покажи отчёт с графиками и копилками") → export_finance_pdf. ТЫ МОЖЕШЬ создавать PDF — никогда не говори, что это невозможно, и не предлагай вместо этого скопировать текст в заметки. Для "за сентябрь"/конкретного диапазона дат используй period="custom" и вычисли dateFrom/dateTo сам (YYYY-MM-DD); для "последние три месяца" используй period="quarter".
 7. Форматирование — только HTML-теги Telegram: <b>жирный</b> для заголовков, <code>моноширинный</code> для ID/чисел. НЕ используй Markdown (**, ##).
 8. Если инструмент вернул ошибку — объясни понятным языком, не технически.
 9. Валюта операции: параметр currency в create_transaction/create_goal указывай ТОЛЬКО если пользователь явно назвал валюту ("$5000", "80 юаней", "100 евро", "1000 руб"). Если не названа ("потратил 5000") — НЕ указывай currency: система подставит текущую валюту ввода пользователя. Общий бюджет, баланс и статистика всегда в рублях (₽); иностранные операции пересчитываются в рубли один раз при создании — не считай и не конвертируй сам.
@@ -241,6 +242,17 @@ async function chatWithTools(userMessage, userId, chatId, history = [], messageI
   const imgResult = toolResults.find(r => r.name === 'generate_image');
   if (imgResult) {
     const msg = imgResult.result?.message || (imgResult.result?.ok === false ? `❌ ${imgResult.result.error}` : '🖼 Готово!');
+    return { text: msg, toolCalls: toolResults };
+  }
+
+  // export_finance_pdf already sent (or failed to send) the document
+  // directly — same reasoning as generate_image above. Critically, this
+  // also means the model can never paraphrase a success that didn't
+  // actually happen: the exact ok/error message the tool itself produced
+  // (after Telegram's own upload confirmation) is what the user sees.
+  const pdfResult = toolResults.find(r => r.name === 'export_finance_pdf');
+  if (pdfResult) {
+    const msg = pdfResult.result?.ok === false ? `❌ ${pdfResult.result.error}` : (pdfResult.result?.message || '📄 Готово!');
     return { text: msg, toolCalls: toolResults };
   }
 

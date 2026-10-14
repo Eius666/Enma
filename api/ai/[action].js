@@ -5,6 +5,8 @@ const { HOME_BUDGET_CURRENCY } = require('../_lib/config');
 const { createEntityInFirestore, getActivePlan, ENTITY_COLLECTION_MAP } = require('../_lib/entities/createEntity');
 const { createFinancialTransaction, buildTransactionUpdate, TransactionValidationError } = require('../_lib/transactions/financialTransaction');
 const { FxUnavailableError } = require('../_lib/fx');
+const { checkAndIncrementAiUsage, AI_LIMITS } = require('../_lib/aiUsage');
+const { exportFinancePdf } = require('../_lib/pdf/exportFinancePdf');
 const { rateLimit, getClientIp } = require('../_lib/rateLimit');
 const {
   verifyTelegramLoginWidget, issuePartnerSession, verifyPartnerSession, bearerToken,
@@ -271,6 +273,70 @@ async function handleTransactionUpdate(req, res) {
     console.error('[ai/transactionUpdate] error:', err.message);
     return res.status(500).json({ error: 'Failed to update transaction' });
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Finance PDF export — the Web counterpart of tools.js's export_finance_pdf
+// Telegram tool. Both call the SAME api/_lib/pdf/exportFinancePdf.js
+// orchestrator (PHASE 7: one shared generator for both surfaces).
+//
+// There is no conversational "Web AI chat" surface in this codebase today
+// (confirmed by reading App.tsx's tab list and finding no chat UI/route —
+// api/ai/[action].js has no 'chat' action, and chatWithTools/
+// TOOL_DEFINITIONS are only ever imported by api/telegram/webhook.js) —
+// so this is a direct, authenticated REST action a Web UI button calls,
+// not a natural-language tool call. It still delivers the exact same PDF.
+//
+// Delivery is the PDF bytes themselves, streamed back as THIS request's
+// response body (Content-Type: application/pdf) — never written to any
+// bucket, never a signed URL. There is no file to secure after the fact
+// because there is no file after the fact: it only ever exists in memory
+// for the duration of one already-authenticated request, which is a
+// stronger guarantee than a short-lived link (nothing to leak, expire, or
+// clean up later).
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function handleExportFinancePdf(req, res) {
+  const verifiedUid = await requireAuth(req, res);
+  if (!verifiedUid) return;
+
+  const plan = await getActivePlan(verifiedUid);
+  const usage = await checkAndIncrementAiUsage(verifiedUid, AI_LIMITS[plan] || AI_LIMITS.free, 'pdf');
+  if (!usage.allowed) {
+    return res.status(429).json({
+      error: plan === 'premium'
+        ? 'Лимит PDF-отчётов на этот месяц исчерпан.'
+        : 'PDF-отчёты доступны на тарифе Premium.',
+      code: 'pdf_limit', plan, used: usage.used, limit: usage.limit,
+    });
+  }
+
+  const body = req.body ?? {};
+  const result = await exportFinancePdf({
+    uid: verifiedUid,
+    period: body.period,
+    dateFrom: body.dateFrom,
+    dateTo: body.dateTo,
+    includeTransactions: body.includeTransactions,
+    includeCategories: body.includeCategories,
+    includeAccounts: body.includeAccounts,
+    includeGoals: body.includeGoals,
+    includeCharts: body.includeCharts,
+  });
+
+  if (!result.ok) {
+    const status = result.code === 'INVALID_PERIOD' || result.code === 'INVALID_DATE_RANGE' ? 400
+      : result.code === 'TOO_MANY_TRANSACTIONS' ? 413
+      : result.code === 'DATA_UNAVAILABLE' || result.code === 'FX_UNAVAILABLE' ? 503
+      : 500;
+    return res.status(status).json({ error: result.error, code: result.code });
+  }
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+  res.setHeader('Content-Length', String(result.buffer.length));
+  res.setHeader('Cache-Control', 'no-store'); // sensitive financial data — never cached by any intermediary
+  return res.status(200).send(result.buffer);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1693,6 +1759,7 @@ module.exports = async (req, res) => {
     switch (action) {
       case 'entityCreate':     return await handleEntityCreate(req, res);
       case 'transactionUpdate': return await handleTransactionUpdate(req, res);
+      case 'exportFinancePdf': return await handleExportFinancePdf(req, res);
       case 'goalCreate':       return await handleGoalCreate(req, res);
       case 'goalAdjust':       return await handleGoalAdjust(req, res);
       case 'goalDelete':       return await handleGoalDelete(req, res);

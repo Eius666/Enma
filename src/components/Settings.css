@@ -570,6 +570,44 @@ body.theme-light .sett-ai-usage__bar {
   background: linear-gradient(90deg, #6c5ce7, #fd79a8);
 }
 
+.sett-ai-usage__fill--pdf {
+  background: linear-gradient(90deg, #00b894, #55efc4);
+}
+
+/* ━━━ PDF export button ━━━ */
+.sett-row--column {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 10px 16px 12px;
+}
+
+.sett-export-pdf-btn {
+  width: 100%;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(162, 155, 254, 0.35);
+  background: rgba(162, 155, 254, 0.1);
+  color: #a29bfe;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+.sett-export-pdf-btn:hover:not(:disabled) {
+  background: rgba(162, 155, 254, 0.18);
+}
+.sett-export-pdf-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.sett-export-pdf-error {
+  font-size: 12px;
+  color: var(--fin-expense, #ff4757);
+}
+
 /* ── Referral section ─────────────────────────────── */
 
 .sett-referral-balance {

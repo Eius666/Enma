@@ -81,6 +81,10 @@ const T = {
     subTrial: 'Premium trial — {days} days left',
     aiUsageLabel: 'AI requests remaining',
     aiImageLabel: 'AI images remaining',
+    aiPdfLabel: 'PDF reports remaining',
+    exportPdfButton: 'Export full finance report (PDF)',
+    exportPdfLoading: 'Generating report…',
+    exportPdfUpgrade: 'PDF export is a Premium feature',
     manageSub: 'Manage subscription',
     freeLimitsTitle: 'Free plan usage',
     freeTasksLabel: 'Tasks today',
@@ -132,6 +136,10 @@ const T = {
     subTrial: 'Пробный Premium — осталось {days} дн.',
     aiUsageLabel: 'AI-запросы',
     aiImageLabel: 'AI-изображения',
+    aiPdfLabel: 'PDF-отчёты',
+    exportPdfButton: 'Выгрузить полный финансовый отчёт (PDF)',
+    exportPdfLoading: 'Формируем отчёт…',
+    exportPdfUpgrade: 'Экспорт в PDF доступен на тарифе Premium',
     manageSub: 'Управление подпиской',
     freeLimitsTitle: 'Использование Free',
     freeTasksLabel: 'Задачи сегодня',
@@ -175,6 +183,9 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [bankInput,    setBankInput]    = useState('');
   const [aiTextUsed,   setAiTextUsed]   = useState<number | null>(null);
   const [aiImgUsed,    setAiImgUsed]    = useState<number | null>(null);
+  const [aiPdfUsed,    setAiPdfUsed]    = useState<number | null>(null);
+  const [pdfExportState, setPdfExportState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [pdfExportError, setPdfExportError] = useState<string | null>(null);
   const [freeUsage,    setFreeUsage]    = useState<FreeUsageSnapshot | null>(null);
 
   const [referralBalance,        setReferralBalance]        = useState(0);
@@ -198,12 +209,14 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const aiLimits    = AI_LIMITS[activePlan];
   const aiTextLimit = aiLimits.textRequests;
   const aiImgLimit  = aiLimits.imageRequests;
+  const aiPdfLimit  = aiLimits.pdfReports;
 
   useEffect(() => {
     if (!user || activePlan === 'free') return;
     return subscribeAiUsage(user.uid, u => {
       setAiTextUsed(u.textRequests);
       setAiImgUsed(u.imageRequests);
+      setAiPdfUsed(u.pdfReports);
     });
   }, [user, activePlan]);
 
@@ -256,6 +269,45 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       tgWebApp.openLink(url);
     } else {
       window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  // Delivers the PDF directly as this one authenticated request's
+  // response body (api/ai/[action].js: exportFinancePdf) — never a
+  // separately-stored file or a signed URL. The blob only ever exists in
+  // this tab's memory, released as soon as the download starts.
+  const handleExportPdf = async () => {
+    if (!user) return;
+    setPdfExportState('loading');
+    setPdfExportError(null);
+    try {
+      const token = await user.getIdToken();
+      const resp = await fetch('/api/ai/exportFinancePdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ period: 'all' }),
+      });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        throw new Error(body.error || `Не удалось сформировать отчёт (${resp.status})`);
+      }
+      const blob = await resp.blob();
+      const disposition = resp.headers.get('Content-Disposition') || '';
+      const match = disposition.match(/filename="([^"]+)"/);
+      const filename = match ? match[1] : 'ENMA-finance-report.pdf';
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setPdfExportState('idle');
+    } catch (err) {
+      setPdfExportState('error');
+      setPdfExportError(err instanceof Error ? err.message : 'Не удалось сформировать отчёт.');
     }
   };
 
@@ -525,6 +577,46 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             </div>
           </>
         )}
+        {aiPdfLimit > 0 && aiPdfUsed !== null && (
+          <>
+            <div className="sett-row__divider" />
+            <div className="sett-ai-usage">
+              <div className="sett-ai-usage__row">
+                <span className="sett-ai-usage__label">{t.aiPdfLabel}</span>
+                <span className="sett-ai-usage__count">
+                  {Math.max(0, aiPdfLimit - aiPdfUsed)}/{aiPdfLimit}
+                </span>
+              </div>
+              <div className="sett-ai-usage__bar">
+                <div
+                  className="sett-ai-usage__fill sett-ai-usage__fill--pdf"
+                  style={{ width: `${Math.min(100, (aiPdfUsed / aiPdfLimit) * 100)}%` }}
+                />
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Export button — PDF export is Premium-only (aiPdfLimit === 0
+            for free/pro); shown disabled with an upgrade hint otherwise,
+            never hidden outright, so non-Premium users can discover and
+            upgrade into it rather than not knowing it exists. */}
+        <div className="sett-row__divider" />
+        <div className="sett-row sett-row--column">
+          <button
+            type="button"
+            className="sett-export-pdf-btn"
+            onClick={aiPdfLimit > 0 ? handleExportPdf : handleManageSub}
+            disabled={pdfExportState === 'loading'}
+          >
+            {pdfExportState === 'loading' ? t.exportPdfLoading
+              : aiPdfLimit > 0 ? t.exportPdfButton
+              : t.exportPdfUpgrade}
+          </button>
+          {pdfExportState === 'error' && pdfExportError && (
+            <span className="sett-export-pdf-error" role="alert">{pdfExportError}</span>
+          )}
+        </div>
       </div>
 
       {/* Free plan usage meters — only for free users */}

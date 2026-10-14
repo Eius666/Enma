@@ -12,6 +12,9 @@ const { resolveTransactionCurrency } = require('./finance/resolveLegacyCurrency'
 const { createFinancialTransaction, TransactionValidationError } = require('./transactions/financialTransaction');
 const { FxUnavailableError } = require('./fx');
 const { transferGoalFunds, closeGoal, GoalTransferError } = require('./finance/goalTransfer');
+const { getActivePlan } = require('./entities/createEntity');
+const { checkAndIncrementAiUsage, AI_LIMITS } = require('./aiUsage');
+const { exportFinancePdf } = require('./pdf/exportFinancePdf');
 
 const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -659,6 +662,30 @@ const TOOL_DEFINITIONS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'export_finance_pdf',
+      description: 'Сформировать и отправить ПОЛНОЦЕННЫЙ PDF-файл финансового отчёта (сводка, доходы/расходы по категориям, счета, цели/копилки, полная история операций). Используй именно этот инструмент, когда пользователь явно просит PDF, выгрузку, экспорт отчёта или файл ("сделай PDF", "выгрузи все операции", "подготовь отчёт по финансам за сентябрь") — НЕ get_finance_stats (тот только для текстовой статистики в чате). НИКОГДА не отвечай, что PDF сделать невозможно — этот инструмент существует именно для этого.',
+      parameters: {
+        type: 'object',
+        properties: {
+          period: {
+            type: 'string',
+            enum: ['today', 'week', 'month', 'quarter', 'year', 'all', 'custom'],
+            description: 'Период отчёта. По умолчанию "all". Для "последние три месяца" используй quarter. Для конкретного месяца/диапазона, который не укладывается в стандартные периоды ("за сентябрь", "с 1 по 15 июня") — используй "custom" и вычисли dateFrom/dateTo сам.',
+          },
+          dateFrom: { type: 'string', description: 'YYYY-MM-DD — только при period="custom".' },
+          dateTo:   { type: 'string', description: 'YYYY-MM-DD — только при period="custom".' },
+          includeTransactions: { type: 'boolean', description: 'Включить полную историю операций (по умолчанию true).' },
+          includeCategories:   { type: 'boolean', description: 'Включить аналитику по категориям (по умолчанию true).' },
+          includeAccounts:     { type: 'boolean', description: 'Включить раздел по счетам/банкам (по умолчанию true).' },
+          includeGoals:         { type: 'boolean', description: 'Включить раздел по целям/копилкам (по умолчанию true).' },
+          includeCharts:        { type: 'boolean', description: 'Включить простые графики (по умолчанию true).' },
+        },
+      },
+    },
+  },
 ];
 
 // ── Tool implementations ──────────────────────────────────────────────────────
@@ -1113,6 +1140,80 @@ async function getFinanceStats(args, userId, currency = 'RUB') {
   return { ok: true, message: lines.join('\n') };
 }
 
+// ── export_finance_pdf ───────────────────────────────────────────────────────
+// Generates the real PDF (via api/_lib/pdf/exportFinancePdf.js — the SAME
+// orchestrator the Web /api/ai/exportFinancePdf route uses, per PHASE 7:
+// one shared generator for both surfaces) and uploads it directly to
+// Telegram via sendDocument, mirroring generateImage's own sendPhoto
+// upload above. Never reports success to the chat loop unless Telegram
+// itself confirmed the upload (checked via the response body, not just a
+// non-throwing fetch — a non-2xx Telegram response does not throw).
+//
+// PDF export is premium-only (src/subscription.ts's AI_LIMITS —
+// pdfReports: 0 for free AND pro) — the only ENMA AI feature on Telegram
+// that is actually plan-gated right now, since the general subscription
+// prompt in api/telegram/webhook.js (sendSubscriptionPrompt) exists but is
+// never called from anywhere. Enforcing this one existing, explicit
+// contract rather than leaving PDF export as ungated as everything else.
+const TELEGRAM_MAX_DOCUMENT_BYTES = 45 * 1024 * 1024; // Telegram's own bot-upload cap is 50MB; stay under it with margin.
+
+async function exportFinancePdfTool(args, userId, chatId, timezone) {
+  const plan = await getActivePlan(userId);
+  const usage = await checkAndIncrementAiUsage(userId, AI_LIMITS[plan] || AI_LIMITS.free, 'pdf');
+  if (!usage.allowed) {
+    return {
+      ok: false,
+      error: plan === 'premium'
+        ? `Лимит PDF-отчётов на этот месяц исчерпан (${usage.used}/${usage.limit}). Новый лимит появится в следующем месяце.`
+        : 'PDF-отчёты доступны на тарифе Premium. Оформи подписку, чтобы выгружать полный финансовый отчёт в PDF.',
+    };
+  }
+
+  const result = await exportFinancePdf({
+    uid: userId,
+    period: args?.period,
+    dateFrom: args?.dateFrom,
+    dateTo: args?.dateTo,
+    includeTransactions: args?.includeTransactions,
+    includeCategories: args?.includeCategories,
+    includeAccounts: args?.includeAccounts,
+    includeGoals: args?.includeGoals,
+    includeCharts: args?.includeCharts,
+    timezone,
+  });
+
+  if (!result.ok) {
+    console.error('[export_finance_pdf] generation failed:', result.code, result.error);
+    return { ok: false, error: result.error };
+  }
+
+  if (result.buffer.length > TELEGRAM_MAX_DOCUMENT_BYTES) {
+    return { ok: false, error: 'Отчёт получился слишком большим для отправки в Telegram. Попробуй выбрать более короткий период.' };
+  }
+
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const formData = new FormData();
+  formData.append('chat_id', String(chatId));
+  formData.append('caption', `📄 Финансовый отчёт — ${result.period.label}`);
+  formData.append('document', new Blob([result.buffer], { type: 'application/pdf' }), result.filename);
+
+  let tgResp;
+  try {
+    tgResp = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, { method: 'POST', body: formData });
+  } catch (err) {
+    console.error('[export_finance_pdf] Telegram upload failed:', err.message);
+    return { ok: false, error: 'PDF сформирован, но не удалось отправить его в Telegram. Попробуй ещё раз.' };
+  }
+
+  const tgData = await tgResp.json().catch(() => null);
+  if (!tgResp.ok || !tgData?.ok) {
+    console.error('[export_finance_pdf] Telegram rejected the document:', tgResp.status, tgData?.description);
+    return { ok: false, error: 'PDF сформирован, но Telegram не принял файл. Попробуй ещё раз.' };
+  }
+
+  return { ok: true, message: `📄 Финансовый отчёт готов и отправлен (${result.transactionCount} операций, ${result.period.label}).` };
+}
+
 async function createAutomation(args, userId, chatId, timezone) {
   const { name, message_text, schedule_type, time, days_of_week, day_of_month } = args;
   const tz = timezone || DEFAULT_TZ;
@@ -1502,6 +1603,7 @@ async function executeTool(name, args, userId, chatId, timezone, currency = 'RUB
     case 'withdraw_from_goal':  return withdrawFromGoal(args, userId, chatId, currency, messageId);
     case 'list_goals':          return listGoals(userId, currency);
     case 'delete_goal':         return deleteGoal(args, userId, chatId, messageId);
+    case 'export_finance_pdf':  return exportFinancePdfTool(args, userId, chatId, timezone);
     // search_web is intercepted by the caller
     case 'search_web':          return { ok: false, error: 'SEARCH_WEB_REDIRECT', query: args?.query };
     default:                    return { ok: false, error: `Unknown tool: ${name}` };
