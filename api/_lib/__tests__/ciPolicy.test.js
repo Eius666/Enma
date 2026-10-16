@@ -68,7 +68,7 @@ const goodPreflightEnv = () => ({
   REACT_APP_FIREBASE_API_KEY: 'k', REACT_APP_FIREBASE_AUTH_DOMAIN: 'enmadev-aa7b1.firebaseapp.com',
   REACT_APP_FIREBASE_PROJECT_ID: EXPECTED.firebaseProjectId, REACT_APP_FIREBASE_STORAGE_BUCKET: 'enmadev-aa7b1.appspot.com',
   REACT_APP_FIREBASE_MESSAGING_SENDER_ID: '1', REACT_APP_FIREBASE_APP_ID: 'a',
-  REACT_APP_URL: 'https://enma-dev.vercel.app', REACT_APP_BOT_USERNAME: EXPECTED.botUsername,
+  REACT_APP_URL: 'https://enma-l4lh.vercel.app', REACT_APP_BOT_USERNAME: EXPECTED.botUsername,
 });
 const failing = (env) => runChecks(env).filter((r) => !r.ok).map((r) => r.name);
 

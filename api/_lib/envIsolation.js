@@ -17,7 +17,13 @@ const PROD_FIREBASE_PROJECT_ID = 'enma-4ea29';
 // with production Firebase credentials even if ENMA_ENV was forgotten.
 const PROD_VERCEL_PROJECT_ID   = 'prj_sfP2tRu4Q7iM1v0RVu9oFFE5gdeX';
 const PROD_BOT_USERNAME        = 'YourArc_bot';
-const PROD_ORIGINS             = ['https://enma.su', 'https://www.enma.su'];
+// The DEV Vercel project (`enma-l4lh`). A deployment running on it must be in
+// ENMA_ENV=dev: forgetting the variable would otherwise leave every DEV guard off.
+const KNOWN_DEV_VERCEL_PROJECT_ID = 'prj_wwGqJR959AHCKURTDE20rRXrsb2c';
+// The only app URL DEV may use (REACT_APP_URL feeds the client bundle AND the
+// server's Telegram buttons/links). Extend deliberately when the DEV domain changes.
+const DEV_APP_ORIGINS = ['https://enma-l4lh.vercel.app'];
+const PROD_APP_HOSTS  = ['enma.su', 'www.enma.su', 'enma-silk.vercel.app'];
 
 class EnvIsolationError extends Error {
   constructor(code) {
@@ -44,8 +50,32 @@ function parseChatIds(raw) {
   return String(raw || '').split(',').map((s) => s.trim()).filter(Boolean);
 }
 
-function originOf(url) {
-  try { return new URL(url).origin; } catch { return null; }
+/**
+ * DEV app URL: absolute https URL, origin exactly in DEV_APP_ORIGINS, never a
+ * production host, no credentials / query / fragment / path.
+ * Only used for ENMA_ENV=dev; production URLs are not validated here.
+ */
+function assertDevAppUrl(raw) {
+  const s = String(raw === undefined || raw === null ? '' : raw);
+  if (!s) throw new EnvIsolationError('DEV_CLIENT_URL_MISSING');
+  if (s !== s.trim()) throw new EnvIsolationError('DEV_URL_INVALID');
+  let u;
+  try { u = new URL(s); } catch { throw new EnvIsolationError('DEV_URL_NOT_ABSOLUTE'); } // relative / no scheme
+  if (u.protocol !== 'https:') throw new EnvIsolationError('DEV_URL_NOT_HTTPS');
+  if (!u.hostname) throw new EnvIsolationError('DEV_URL_NOT_ABSOLUTE');
+  if (u.username || u.password) throw new EnvIsolationError('DEV_URL_HAS_CREDENTIALS');
+  if (s.includes('?') || s.includes('#')) throw new EnvIsolationError('DEV_URL_HAS_QUERY_OR_FRAGMENT');
+  const host = u.hostname.toLowerCase();
+  if (PROD_APP_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))) throw new EnvIsolationError('DEV_URL_IS_PROD');
+  if (u.pathname !== '/') throw new EnvIsolationError('DEV_URL_HAS_PATH');
+  if (!DEV_APP_ORIGINS.includes(u.origin)) throw new EnvIsolationError('DEV_URL_NOT_ALLOWED');
+}
+
+/** The known DEV Vercel project must run with ENMA_ENV=dev (no silent "production" mode). */
+function assertKnownDevProjectIsDev(env, envName) {
+  if (env.VERCEL_PROJECT_ID === KNOWN_DEV_VERCEL_PROJECT_ID && envName !== 'dev') {
+    throw new EnvIsolationError('DEV_PROJECT_WITHOUT_ENMA_ENV_DEV');
+  }
 }
 
 /**
@@ -57,6 +87,7 @@ function originOf(url) {
  */
 function assertEnvironmentIsolation({ serviceAccountProjectId, env = process.env } = {}) {
   const envName = getEnvName(env);
+  assertKnownDevProjectIsDev(env, envName);
 
   // Independent of ENMA_ENV: production Firebase credentials on a Vercel
   // project other than the production one.
@@ -135,11 +166,13 @@ function assertEnvironmentIsolation({ serviceAccountProjectId, env = process.env
  * Only enforced when ENMA_ENV=dev.
  */
 function assertClientConfig(env = process.env) {
-  if (getEnvName(env) !== 'dev') return;
+  const envName = getEnvName(env);
+  assertKnownDevProjectIsDev(env, envName);
+  if (envName !== 'dev') return;
   // Fail closed on missing parameters: a DEV build must declare what it targets.
   if (!env.DEV_FIREBASE_PROJECT_ID) throw new EnvIsolationError('DEV_FIREBASE_PROJECT_NOT_DECLARED');
   if (!env.REACT_APP_FIREBASE_PROJECT_ID) throw new EnvIsolationError('DEV_CLIENT_FIREBASE_PROJECT_MISSING');
-  if (!env.REACT_APP_URL) throw new EnvIsolationError('DEV_CLIENT_URL_MISSING');
+  assertDevAppUrl(env.REACT_APP_URL);
   for (const k of ['REACT_APP_FIREBASE_AUTH_DOMAIN', 'REACT_APP_FIREBASE_STORAGE_BUCKET']) {
     if (String(env[k] || '').includes(PROD_FIREBASE_PROJECT_ID)) throw new EnvIsolationError('DEV_CLIENT_USES_PROD_FIREBASE');
   }
@@ -159,11 +192,6 @@ function assertClientConfig(env = process.env) {
   if (String(env.REACT_APP_BOT_USERNAME).toLowerCase() === PROD_BOT_USERNAME.toLowerCase()) {
     throw new EnvIsolationError('DEV_CLIENT_USES_PROD_BOT');
   }
-  const origin = originOf(env.REACT_APP_URL);
-  if (origin && PROD_ORIGINS.includes(origin)) throw new EnvIsolationError('DEV_URL_IS_PROD');
-  if (/^https?:\/\/(www\.)?enma\.su(\/|$)/i.test(String(env.REACT_APP_URL || ''))) {
-    throw new EnvIsolationError('DEV_URL_IS_PROD');
-  }
 }
 
 /**
@@ -178,5 +206,6 @@ function isChatAllowed(chatId, env = process.env) {
 
 module.exports = {
   PROD_FIREBASE_PROJECT_ID, PROD_VERCEL_PROJECT_ID, PROD_BOT_USERNAME,
-  EnvIsolationError, getEnvName, assertEnvironmentIsolation, assertClientConfig, isChatAllowed,
+  KNOWN_DEV_VERCEL_PROJECT_ID, DEV_APP_ORIGINS,
+  EnvIsolationError, getEnvName, assertEnvironmentIsolation, assertClientConfig, assertDevAppUrl, isChatAllowed,
 };

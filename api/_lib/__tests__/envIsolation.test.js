@@ -22,7 +22,7 @@ const goodDev = (over = {}) => ({
   DEV_ALLOWED_CHAT_IDS: '111, 222',
   CRON_SECRET: 'dev-cron-secret-0123456789',
   REACT_APP_FIREBASE_PROJECT_ID: DEV_ID,
-  REACT_APP_URL: 'https://enma-dev.vercel.app',
+  REACT_APP_URL: 'https://enma-l4lh.vercel.app',
   REACT_APP_BOT_USERNAME: 'EnmaDev_bot',
   VERCEL_PROJECT_ID: 'prj_dev_other',
   DEV_VERCEL_PROJECT_ID: 'prj_dev_other',
@@ -235,4 +235,90 @@ test('vercel-dev wrapper: target only from env, never production, never a linked
   fs.writeFileSync(path.join(clean2, '.env.local'), 'X=1');
   assert.throws(() => vcheck(['env', 'ls'], ok, clean2), /\.env/);
   // (a developer checkout linked to production is refused by the .vercel rule above; a clean CI checkout has no link, so that is not asserted here)
+});
+
+// ── REACT_APP_URL validation (DEV) ───────────────────────────────────────────
+
+const urlCode = (u) => code(() => assertClientConfig(goodDev({ REACT_APP_URL: u })));
+
+test('DEV app URL: the correct DEV URL is accepted (with or without a trailing slash)', () => {
+  assert.equal(urlCode('https://enma-l4lh.vercel.app'), null);
+  assert.equal(urlCode('https://enma-l4lh.vercel.app/'), null);
+  assert.equal(urlCode('HTTPS://ENMA-L4LH.VERCEL.APP'), null, 'scheme/host are case-insensitive');
+  assert.equal(check(goodDev({ REACT_APP_URL: 'https://enma-l4lh.vercel.app' })), null);
+});
+
+test('DEV app URL: missing / no scheme / relative → refused (the real incident: "enma-l4lh.vercel.app")', () => {
+  assert.equal(urlCode(''), 'DEV_CLIENT_URL_MISSING');
+  assert.equal(urlCode('enma-l4lh.vercel.app'), 'DEV_URL_NOT_ABSOLUTE');
+  assert.equal(urlCode('//enma-l4lh.vercel.app'), 'DEV_URL_NOT_ABSOLUTE');
+  assert.equal(urlCode('/dev'), 'DEV_URL_NOT_ABSOLUTE');
+  assert.equal(urlCode('./'), 'DEV_URL_NOT_ABSOLUTE');
+  assert.notEqual(urlCode('enma-l4lh.vercel.app:443'), null);
+  assert.equal(urlCode(' https://enma-l4lh.vercel.app'), 'DEV_URL_INVALID');
+  assert.equal(urlCode('https://enma-l4lh.vercel.app '), 'DEV_URL_INVALID');
+  // the server-side entry point refuses it too
+  assert.equal(check(goodDev({ REACT_APP_URL: 'enma-l4lh.vercel.app' })), 'DEV_URL_NOT_ABSOLUTE');
+});
+
+test('DEV app URL: http:// and other schemes → refused', () => {
+  assert.equal(urlCode('http://enma-l4lh.vercel.app'), 'DEV_URL_NOT_HTTPS');
+  assert.equal(urlCode('ftp://enma-l4lh.vercel.app'), 'DEV_URL_NOT_HTTPS');
+  assert.equal(urlCode('javascript:alert(1)'), 'DEV_URL_NOT_HTTPS');
+});
+
+test('DEV app URL: production and legacy domains → refused (any scheme, path or subdomain)', () => {
+  for (const u of ['https://enma.su', 'https://www.enma.su', 'https://enma.su/', 'https://enma.su/x', 'https://ENMA.SU',
+                   'https://enma-silk.vercel.app', 'https://enma-silk.vercel.app/', 'https://x.enma.su', 'https://www.enma-silk.vercel.app']) {
+    assert.equal(urlCode(u), 'DEV_URL_IS_PROD', u);
+  }
+  assert.equal(urlCode('http://enma.su'), 'DEV_URL_NOT_HTTPS');
+});
+
+test('DEV app URL: credentials, query, fragment, path, port and look-alike hosts → refused', () => {
+  assert.equal(urlCode('https://user:pw@enma-l4lh.vercel.app'), 'DEV_URL_HAS_CREDENTIALS');
+  assert.equal(urlCode('https://user@enma-l4lh.vercel.app'), 'DEV_URL_HAS_CREDENTIALS');
+  assert.equal(urlCode('https://enma-l4lh.vercel.app?x=1'), 'DEV_URL_HAS_QUERY_OR_FRAGMENT');
+  assert.equal(urlCode('https://enma-l4lh.vercel.app/?'), 'DEV_URL_HAS_QUERY_OR_FRAGMENT');
+  assert.equal(urlCode('https://enma-l4lh.vercel.app#x'), 'DEV_URL_HAS_QUERY_OR_FRAGMENT');
+  assert.equal(urlCode('https://enma-l4lh.vercel.app/app'), 'DEV_URL_HAS_PATH');
+  assert.equal(urlCode('https://enma-l4lh.vercel.app:8443'), 'DEV_URL_NOT_ALLOWED');
+  assert.equal(urlCode('https://enma-l4lh.vercel.app.evil.test'), 'DEV_URL_NOT_ALLOWED');
+  assert.equal(urlCode('https://enma-l4lh-eius666s-projects.vercel.app'), 'DEV_URL_NOT_ALLOWED');
+  assert.equal(urlCode('https://evil.test'), 'DEV_URL_NOT_ALLOWED');
+  assert.equal(urlCode('https://enma-l4lh.vercel.app@evil.test'), 'DEV_URL_HAS_CREDENTIALS');
+});
+
+test('production (ENMA_ENV unset) is not subject to the DEV URL rules', () => {
+  for (const u of ['https://enma.su', 'enma.su', undefined, 'https://enma-silk.vercel.app']) {
+    assert.equal(code(() => assertClientConfig({ REACT_APP_URL: u })), null, String(u));
+    assert.equal(code(() => assertEnvironmentIsolation({ serviceAccountProjectId: PROD_FIREBASE_PROJECT_ID, env: { REACT_APP_URL: u, VERCEL_PROJECT_ID: PROD_VERCEL_PROJECT_ID } })), null, String(u));
+  }
+});
+
+// ── known DEV project cannot silently run in "production" mode ────────────────
+
+const { KNOWN_DEV_VERCEL_PROJECT_ID } = require('../envIsolation');
+
+test('the known DEV Vercel project without ENMA_ENV=dev is refused (server guard and build guard)', () => {
+  const envs = [
+    { VERCEL_PROJECT_ID: KNOWN_DEV_VERCEL_PROJECT_ID },                                   // ENMA_ENV forgotten
+    { VERCEL_PROJECT_ID: KNOWN_DEV_VERCEL_PROJECT_ID, ENMA_ENV: 'production' },
+    { VERCEL_PROJECT_ID: KNOWN_DEV_VERCEL_PROJECT_ID, ENMA_ENV: '' },
+    { VERCEL_PROJECT_ID: KNOWN_DEV_VERCEL_PROJECT_ID, VERCEL_ENV: 'production', REACT_APP_URL: 'https://enma-l4lh.vercel.app' },
+  ];
+  for (const e of envs) {
+    assert.equal(code(() => assertEnvironmentIsolation({ serviceAccountProjectId: DEV_ID, env: e })), 'DEV_PROJECT_WITHOUT_ENMA_ENV_DEV', JSON.stringify(e));
+    assert.equal(code(() => assertClientConfig(e)), 'DEV_PROJECT_WITHOUT_ENMA_ENV_DEV', JSON.stringify(e));
+  }
+  // an unrecognised value cannot downgrade it either (ENMA_ENV_INVALID, still a refusal)
+  assert.equal(check({ VERCEL_PROJECT_ID: KNOWN_DEV_VERCEL_PROJECT_ID, ENMA_ENV: 'staging' }), 'ENMA_ENV_INVALID');
+});
+
+test('known DEV project with ENMA_ENV=dev follows the normal DEV rules; other projects are unaffected', () => {
+  assert.equal(check(goodDev({ VERCEL_PROJECT_ID: KNOWN_DEV_VERCEL_PROJECT_ID, DEV_VERCEL_PROJECT_ID: KNOWN_DEV_VERCEL_PROJECT_ID, VERCEL_ENV: 'production' })), null);
+  // production project and unrelated projects: no new requirement
+  assert.equal(code(() => assertEnvironmentIsolation({ serviceAccountProjectId: PROD_FIREBASE_PROJECT_ID, env: { VERCEL_PROJECT_ID: PROD_VERCEL_PROJECT_ID } })), null);
+  assert.equal(code(() => assertClientConfig({ VERCEL_PROJECT_ID: 'prj_other' })), null);
+  assert.equal(code(() => assertClientConfig({})), null);
 });

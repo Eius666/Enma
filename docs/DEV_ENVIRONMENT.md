@@ -60,7 +60,7 @@ Scope for every row: **Production** of the `enma-dev` project (that project's on
 | FIREBASE_SERVICE_ACCOUNT | owner, Firebase console → DEV service account | yes | **yes** | runtime |
 | FIREBASE_STORAGE_BUCKET | Firebase console | no (only file storage) | no | runtime |
 | REACT_APP_FIREBASE_API_KEY / AUTH_DOMAIN / PROJECT_ID / STORAGE_BUCKET / MESSAGING_SENDER_ID / APP_ID | Firebase console → DEV Web App | yes (all six) | no (public) | build |
-| REACT_APP_URL | temporary `enma-dev` URL | yes | no | build (+ server `appUrl`) |
+| REACT_APP_URL | `https://enma-l4lh.vercel.app` (scheme required; validated by the guard at prebuild and server start) | yes | no | build (+ server `appUrl`) |
 | REACT_APP_BOT_USERNAME | `Enmadevbot` | yes | no | build |
 | REACT_APP_TONCONNECT_MANIFEST | leave unset | no | no | build |
 | CRON_SECRET | owner, random | yes (guard) | **yes** | runtime |
@@ -163,3 +163,11 @@ Vercel rejected the first DEV deployments with `exceeded_serverless_functions_pe
 - `vercel.json`: the four `functions` entries became `"api/cron/[job].js": { "maxDuration": 30 }` (same 30 s as before).
 - Function count: 12 Node.js entry points → **9** (+ the Edge middleware = 10 outputs).
 - No scheduler is configured for these routes in this repository (no `crons`, GitHub workflow disabled); whoever triggers them externally keeps using the same URLs.
+
+---
+
+# Stage DEV-13A — URL validation and "known DEV project must be dev"
+
+- `REACT_APP_URL` in DEV must be an absolute **https** URL whose origin is exactly `https://enma-l4lh.vercel.app` (optional trailing `/`; no credentials, query, fragment or path). Production hosts (`enma.su`, `www.enma.su`, `enma-silk.vercel.app` and their subdomains) are refused with `DEV_URL_IS_PROD`. Checked at **prebuild** (`scripts/assertEnvIsolation.js`) and at **server start** (Firebase Admin init). Incident that motivated it: the value was entered as `enma-l4lh.vercel.app`, baked into the bundle, and produced invalid Telegram buttons.
+- A deployment on Vercel project `prj_wwGqJR959AHCKURTDE20rRXrsb2c` (DEV) with `ENMA_ENV` missing/not `dev` is refused (`DEV_PROJECT_WITHOUT_ENMA_ENV_DEV`) at prebuild and at server start, so forgetting `ENMA_ENV=dev` can no longer switch the DEV guards off.
+- Production (`ENMA_ENV` unset, other projects) is not affected by either rule.
