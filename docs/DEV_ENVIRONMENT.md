@@ -151,3 +151,15 @@ The push publishes 26 commits plus the SEC-12/DEV commit. Nothing is built in pr
 
 ## 5. Webhook (separate approval)
 `setWebhook` for the DEV bot only: `url=https://<dev-url>/api/telegram/webhook`, `secret_token=<DEV secret>`, no `drop_pending_updates`; then `getWebhookInfo`; then BotFather Mini App/menu URL.
+
+---
+
+# Stage DEV-09 — cron consolidation (Hobby function cap)
+
+Vercel rejected the first DEV deployments with `exceeded_serverless_functions_per_deployment` (Hobby: max 12 Functions; the Stage-08 builder counts the Edge middleware too). The four cron handlers now share **one** Function:
+
+- `api/cron/[job].js` routes `/api/cron/content-plan | content-publish | maintenance | insights` (URLs, methods, `CRON_SECRET` checks and responses unchanged — the handlers themselves are untouched and live in `api/_cron/`, an underscore directory that Vercel does not deploy).
+- Job comes from the URL path, exact-match allowlist, literal `require()` per job, unknown job → 404.
+- `vercel.json`: the four `functions` entries became `"api/cron/[job].js": { "maxDuration": 30 }` (same 30 s as before).
+- Function count: 12 Node.js entry points → **9** (+ the Edge middleware = 10 outputs).
+- No scheduler is configured for these routes in this repository (no `crons`, GitHub workflow disabled); whoever triggers them externally keeps using the same URLs.
