@@ -5,6 +5,8 @@
 //   CONTENT_ADMIN_CHAT_ID — admin's personal chat ID for moderation
 //   TELEGRAM_CONTENT_CHANNEL_ID — public channel where posts are published
 
+require('../devEgressGuard'); // DEV only; no-op in production
+
 const TELEGRAM_API = 'https://api.telegram.org';
 
 function getAdminChatId() {

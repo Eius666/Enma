@@ -3,6 +3,15 @@
 const crypto = require('crypto');
 
 /**
+ * True on any Vercel deployment (production, preview, DEV) and whenever
+ * NODE_ENV=production. Only a bare local run (no VERCEL_ENV, NODE_ENV not
+ * "production") may skip the webhook secret check.
+ */
+function isDeployedEnv() {
+  return Boolean(process.env.VERCEL_ENV) || process.env.NODE_ENV === 'production';
+}
+
+/**
  * Verify the `X-Telegram-Bot-Api-Secret-Token` header on incoming webhook
  * requests from Telegram.
  *
@@ -13,29 +22,39 @@ const crypto = require('crypto');
  * POST as the `X-Telegram-Bot-Api-Secret-Token` header.  We compare it in
  * constant time to prevent timing-oracle attacks.
  *
+ * Result carries an HTTP `status` for rejections. Never 2xx: Telegram retries
+ * non-2xx deliveries, so a genuine update is delayed (not lost) if the secret
+ * is misconfigured.
+ *   401 — header missing / wrong (forged or mis-registered webhook)
+ *   503 — server has no secret configured in a deployed environment
+ *         (fail closed; our misconfiguration, so ask Telegram to retry)
+ *
  * @param {import('http').IncomingMessage} req
- * @returns {{ ok: boolean, reason?: string }}
+ * @returns {{ ok: boolean, status?: number, reason?: string }}
  */
 function verifyWebhookSignature(req) {
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
 
-  // If no secret is configured we skip the check (allows local dev without
-  // needing the env var).  Log a warning so this is visible in prod logs.
   if (!secret) {
-    console.warn('[verifyWebhookSig] TELEGRAM_WEBHOOK_SECRET not set — skipping signature check');
+    // Local dev only: allow without the env var. Any deployed environment
+    // fails closed.
+    if (isDeployedEnv()) {
+      return { ok: false, status: 503, reason: 'TELEGRAM_WEBHOOK_SECRET not configured' };
+    }
+    console.warn('[verifyWebhookSig] TELEGRAM_WEBHOOK_SECRET not set — skipping signature check (local only)');
     return { ok: true };
   }
 
   const header = req.headers['x-telegram-bot-api-secret-token'];
   if (!header) {
-    return { ok: false, reason: 'Missing X-Telegram-Bot-Api-Secret-Token header' };
+    return { ok: false, status: 401, reason: 'Missing X-Telegram-Bot-Api-Secret-Token header' };
   }
 
   // Constant-time comparison to prevent timing attacks.
   const expected = Buffer.from(secret, 'utf8');
   const received = Buffer.from(String(header), 'utf8');
   if (expected.length !== received.length || !crypto.timingSafeEqual(expected, received)) {
-    return { ok: false, reason: 'Invalid webhook secret token' };
+    return { ok: false, status: 401, reason: 'Invalid webhook secret token' };
   }
 
   return { ok: true };

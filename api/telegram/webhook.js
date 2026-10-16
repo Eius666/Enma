@@ -2,6 +2,7 @@
 
 const { db, admin }                                        = require('../_lib/firebaseAdmin');
 const { verifyWebhookSignature }                           = require('../_lib/verifyWebhookSig');
+const { isChatAllowed }                                    = require('../_lib/envIsolation');
 const { rateLimit, getClientIp }                           = require('../_lib/rateLimit');
 const { checkSubscription, getTrialUsed, incrementTrialUsed, TRIAL_LIMIT } = require('../_lib/ai/subscription');
 const { chatWithTools }                                    = require('../_lib/llm-chat');
@@ -352,7 +353,21 @@ module.exports = async (req, res) => {
 
   // [2] Signature
   const sigCheck = verifyWebhookSignature(req);
-  if (!sigCheck.ok) { res.status(200).json({ ok: true }); return; }
+  if (!sigCheck.ok) {
+    // Non-2xx on purpose: Telegram retries, so a genuine update survives a
+    // secret misconfiguration. Reason is a fixed string — never the secret.
+    console.warn('[WH][sig] rejected:', sigCheck.status, sigCheck.reason);
+    res.status(sigCheck.status || 401).json({ ok: false });
+    return;
+  }
+
+  // [2b] DEV only: ignore updates from chats outside DEV_ALLOWED_CHAT_IDS.
+  // Production (ENMA_ENV unset) → isChatAllowed is always true.
+  {
+    const u = req.body || {};
+    const senderId = u.message?.chat?.id ?? u.callback_query?.from?.id ?? u.pre_checkout_query?.from?.id;
+    if (!isChatAllowed(senderId)) { res.status(200).json({ ok: true }); return; }
+  }
 
   // [3] Rate limit
   const ip      = getClientIp(req);

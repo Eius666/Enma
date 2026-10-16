@@ -1,0 +1,66 @@
+name: CI
+
+# Single branch: main. Every commit is verified here.
+# Deployment is NOT done by this workflow: DEV is deployed by the Vercel Git
+# Integration of the DEV project (`enma-l4lh`, prj_wwGqJR959AHCKURTDE20rRXrsb2c),
+# so there is exactly one DEV deployer and no duplicate deployments. There is
+# intentionally NO deployment job and NO deployment secret in this repository's
+# workflows — production releases are manual, per approved SHA.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FIREBASE_TOOLS_VERSION: "15.28.2"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install
+        run: |
+          npm ci
+          npm --prefix functions ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm run test:unit
+      - name: Firestore rules (emulator)
+        run: npx --yes firebase-tools@${FIREBASE_TOOLS_VERSION} emulators:exec --only firestore --project enma-rules-test "node --test firestore-tests/rules.test.js"
+      - name: Integration tests (emulator)
+        run: |
+          npm --prefix functions run build
+          T="npx --yes firebase-tools@${FIREBASE_TOOLS_VERSION} emulators:exec --only firestore --project enma-rules-test"
+          $T "node --test firestore-tests/migration.test.js"
+          $T "node --test api/_lib/finance/__tests__/goalTransfer.integration.test.js"
+          $T "node --test api/_lib/entities/__tests__/createEntity.integration.test.js"
+          $T "node --test api/_lib/pdf/__tests__/exportFinancePdf.integration.test.js"
+          $T "node --test functions/lib/__tests__/materializeHabitReminders.integration.test.js"
+      - name: Production build (dummy public config, no secrets)
+        env:
+          CI: "false"
+          REACT_APP_FIREBASE_API_KEY: ci-dummy
+          REACT_APP_FIREBASE_AUTH_DOMAIN: ci-dummy.firebaseapp.com
+          REACT_APP_FIREBASE_PROJECT_ID: ci-dummy
+          REACT_APP_FIREBASE_STORAGE_BUCKET: ci-dummy.appspot.com
+          REACT_APP_FIREBASE_MESSAGING_SENDER_ID: "0"
+          REACT_APP_FIREBASE_APP_ID: ci-dummy
+        run: npm run build

@@ -1,4 +1,6 @@
 const admin = require('firebase-admin');
+const { assertEnvironmentIsolation } = require('./envIsolation');
+require('./devEgressGuard'); // DEV only: restricts outbound Telegram/payment calls (no-op in production)
 
 // A JSON.parse SyntaxError's own .message embeds a snippet of the string it
 // failed on (confirmed the hard way — see TELEGRAM_PASSWORDLESS_AUTOAUTH
@@ -24,6 +26,9 @@ const getServiceAccount = () => {
 const initAdmin = () => {
   if (admin.apps.length) return admin;
   const serviceAccount = getServiceAccount();
+  // Fail closed: DEV must never initialise with production credentials.
+  // No-op for production (ENMA_ENV unset). Throws a fixed ENV_ISOLATION:* code.
+  assertEnvironmentIsolation({ serviceAccountProjectId: serviceAccount.project_id });
   try {
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount)

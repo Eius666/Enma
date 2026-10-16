@@ -6,6 +6,7 @@ import {
   signInWithEmailAndPassword,
 } from 'firebase/auth';
 import { auth } from '../../firebase';
+import { env } from '../../config/env';
 import { createT } from '../../i18n/createT';
 import type { Language, Theme } from './types';
 
@@ -93,7 +94,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           <h1>{t('auth.title')}</h1>
           <p>{t('auth.subtitle')}</p>
           <a
-            href="https://t.me/YourArc_bot"
+            href={`https://t.me/${env.botUsername}`}
             target="_blank"
             rel="noopener noreferrer"
             className="auth-bot-link"

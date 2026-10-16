@@ -1,5 +1,6 @@
 'use strict';
 
+require('../_lib/devEgressGuard'); // DEV only; no-op in production
 const { rateLimit, getClientIp } = require('../_lib/rateLimit');
 const { verifyInitData } = require('../_lib/verifyWebhookSig');
 

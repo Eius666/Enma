@@ -71,6 +71,9 @@ export const env = {
   // ---------------------------------------------------------------------------
   // Falls back to the browser's own origin so this stays correct on whichever
   // domain actually served the app (old or new), instead of a hardcoded guess.
+  /** Public bot username for t.me links. DEV sets REACT_APP_BOT_USERNAME; default keeps production. */
+  botUsername: optional('REACT_APP_BOT_USERNAME', 'YourArc_bot') as string,
+
   appUrl: optional(
     'REACT_APP_URL',
     typeof window !== 'undefined' ? window.location.origin : 'https://enma.su'
