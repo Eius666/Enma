@@ -123,7 +123,35 @@ service cloud.firestore {
     // ─────────────────────────────────────────────────────────────────────────
 
     match /users/{userId} {
-      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      // Server-owned fields of the user document.
+      // The Admin SDK (api/*, functions/) bypasses rules and is the only
+      // writer of these; a client may neither create a document containing
+      // them nor add, change or remove them on update (diff() also covers a
+      // full-overwrite setDoc, which would otherwise "remove" them). A
+      // merge-write that leaves a protected field UNCHANGED (for example the
+      // legacy chatId sync for a Telegram-created account) is not an affected
+      // key and still passes.
+      function protectedUserKeys() {
+        return [
+          'referralBalance', 'balance', 'isPro', 'trialUsed', 'subscription',
+          'status', 'promoCode',
+          'referredBy', 'referredByInfluencer', 'referredByInfluencerPlatform',
+          'referralCode', 'referralLink', 'referralLinkClaimedAt',
+          'totalReferralEarnedRub', 'totalEarningsUsd', 'totalPaidUsd',
+          'pendingPayoutUsd', 'tonWalletAddress',
+          'chatId', 'telegramId', 'telegramChatId', 'uid', 'createdAt'
+        ];
+      }
+
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow create: if isAuthenticated() && request.auth.uid == userId &&
+                       !request.resource.data.keys().hasAny(protectedUserKeys());
+      allow update: if isAuthenticated() && request.auth.uid == userId &&
+                       !request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny(protectedUserKeys());
+      // No client flow deletes users/{uid} (grep of src/ found none); account
+      // removal, if ever needed, goes through the Admin SDK.
+      allow delete: if false;
 
       // AI chat history — written server-side by api/ai/[action].js (Admin SDK)
       match /aiChats/{docId} {

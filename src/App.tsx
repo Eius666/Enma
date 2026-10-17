@@ -25,6 +25,7 @@ import {
 import { Timestamp, doc, getDoc, serverTimestamp, setDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
 import './App.v2.css';
 import { auth, db } from './firebase';
+import { authedJsonHeaders } from './lib/authHeaders';
 import { useTelegramWebApp } from './hooks/useTelegramWebApp';
 import { decideBootstrap, AuthStatus } from './lib/authBootstrap';
 
@@ -1545,7 +1546,7 @@ const App: React.FC = () => {
     setTrialActivating(true);
     try {
       const res = await fetch('/api/payment/trial', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: await authedJsonHeaders(user),
         body: JSON.stringify({ userId: user.uid }),
       });
       if (res.ok) setShowOnboarding(false);

@@ -5,6 +5,7 @@
 //   POST     /api/payment/callback — Platega webhook
 //   POST     /api/payment/trial    — activate 7-day trial
 
+const { authenticatePaymentRequest } = require('../_lib/auth/paymentAuth');
 const { createSbpPayment, getSbpPaymentStatus }   = require('../_lib/platega');
 const { validatePromoCode }                        = require('../_lib/promoCodes');
 const { validateInfluencerCode }                   = require('../_lib/referral/influencer');
@@ -45,7 +46,7 @@ async function notifyUser(chatId, text) {
 async function handleCreate(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   try {
@@ -77,11 +78,17 @@ async function handleCreate(req, res) {
 
     if (req.method === 'POST') {
       const {
-        userId, userName,
+        userId: bodyUserId, userName,
         promoCode, referralCode,
         plan = 'pro', period = 'month',
         useBalance,
       } = req.body || {};
+
+      // Identity: the verified token uid when a token is supplied, otherwise
+      // the body userId (rollout mode).
+      const auth = await authenticatePaymentRequest(req, { action: 'create', bodyUserId });
+      if (!auth.ok) return res.status(auth.status).json({ ok: false, error: auth.error });
+      const userId = auth.uid || bodyUserId;
       if (!userId) return res.status(400).json({ ok: false, error: 'Missing userId' });
 
       const planKey   = ['pro', 'premium'].includes(plan)   ? plan   : 'pro';
@@ -373,27 +380,41 @@ async function handleCallback(req, res) {
 async function handleTrial(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { userId } = req.body ?? {};
+  const { userId: bodyUserId } = req.body ?? {};
+  if (bodyUserId !== undefined && bodyUserId !== null && typeof bodyUserId !== 'string') {
+    return res.status(400).json({ error: 'Missing userId' });
+  }
+
+  // The verified uid takes precedence; a mismatching body userId is rejected before any read/write.
+  const auth = await authenticatePaymentRequest(req, { action: 'trial', bodyUserId });
+  if (!auth.ok) return res.status(auth.status).json({ ok: false, error: auth.error });
+  const userId = auth.uid || bodyUserId;
   if (!userId || typeof userId !== 'string') {
     return res.status(400).json({ error: 'Missing userId' });
   }
 
   try {
-    const userRef  = db.collection('users').doc(userId);
-    const userSnap = await userRef.get();
-
-    if (userSnap.exists && userSnap.data()?.trialUsed === true) {
-      return res.status(409).json({ error: 'Trial already used', code: 'TRIAL_USED' });
-    }
+    const userRef = db.collection('users').doc(userId);
+    const subRef  = db.collection('subscriptions').doc(userId);
 
     const now      = new Date();
     const trialEnd = new Date(now);
     trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS);
     trialEnd.setHours(23, 59, 59, 999);
 
-    const subRef = db.collection('subscriptions').doc(userId);
+    // All checks and the write happen in ONE transaction. An existing
+    // subscriptions/{uid} document (any plan, active or expired) is never
+    // overwritten. users.trialUsed may hold a boolean or a numeric counter (see
+    // _lib/ai/subscription.js), so the subscription document is the
+    // authoritative marker that a trial or paid plan already exists.
+    const conflict = await db.runTransaction(async tx => {
+      const [userSnap, subSnap] = await Promise.all([tx.get(userRef), tx.get(subRef)]);
 
-    await db.runTransaction(async tx => {
+      if (subSnap.exists) {
+        return subSnap.data()?.paymentMethod === 'trial' ? 'TRIAL_USED' : 'SUBSCRIPTION_EXISTS';
+      }
+      if (userSnap.exists && userSnap.data()?.trialUsed === true) return 'TRIAL_USED';
+
       tx.set(subRef, {
         id:             `trial_${userId}`,
         userId,
@@ -411,7 +432,15 @@ async function handleTrial(req, res) {
         updatedAt:      admin.firestore.FieldValue.serverTimestamp(),
       });
       tx.set(userRef, { trialUsed: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      return null;
     });
+
+    if (conflict === 'TRIAL_USED') {
+      return res.status(409).json({ error: 'Trial already used', code: 'TRIAL_USED' });
+    }
+    if (conflict === 'SUBSCRIPTION_EXISTS') {
+      return res.status(409).json({ error: 'Subscription already exists', code: 'SUBSCRIPTION_EXISTS' });
+    }
 
     return res.status(200).json({ ok: true, trialEndDate: trialEnd.toISOString() });
   } catch (err) {

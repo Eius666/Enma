@@ -75,7 +75,7 @@ function verifyWebhookSignature(req) {
  * @param {string} initData  — raw initData string from Telegram.WebApp.initData
  * @returns {{ ok: boolean, user?: object, reason?: string }}
  */
-function verifyInitData(initData) {
+function verifyInitData(initData, options = {}) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   if (!botToken) {
     return { ok: false, reason: 'TELEGRAM_BOT_TOKEN not configured' };
@@ -103,6 +103,15 @@ function verifyInitData(initData) {
 
     if (!crypto.timingSafeEqual(Buffer.from(expectedHash, 'hex'), Buffer.from(hash, 'hex'))) {
       return { ok: false, reason: 'initData signature mismatch' };
+    }
+
+    // Optional freshness check (callers opt in; default behaviour unchanged).
+    if (options && Number.isFinite(options.maxAgeSeconds)) {
+      const authDate = Number(params.get('auth_date'));
+      if (!Number.isFinite(authDate) || authDate <= 0) return { ok: false, reason: 'Missing auth_date' };
+      if (Math.abs(Date.now() / 1000 - authDate) > options.maxAgeSeconds) {
+        return { ok: false, reason: 'initData expired' };
+      }
     }
 
     const userParam = params.get('user');

@@ -44,7 +44,7 @@ jobs:
       - name: Unit tests
         run: npm run test:unit
       - name: Firestore rules (emulator)
-        run: npx --yes firebase-tools@${FIREBASE_TOOLS_VERSION} emulators:exec --only firestore --project enma-rules-test "node --test firestore-tests/rules.test.js"
+        run: npx --yes firebase-tools@${FIREBASE_TOOLS_VERSION} emulators:exec --only firestore --project enma-rules-test "node --test --test-concurrency=1 firestore-tests/rules.test.js firestore-tests/rules.users.test.js"
       - name: Integration tests (emulator)
         run: |
           npm --prefix functions run build
@@ -53,6 +53,7 @@ jobs:
           $T "node --test api/_lib/finance/__tests__/goalTransfer.integration.test.js"
           $T "node --test api/_lib/entities/__tests__/createEntity.integration.test.js"
           $T "node --test api/_lib/pdf/__tests__/exportFinancePdf.integration.test.js"
+          $T "node --test api/payment/__tests__/trial.integration.test.js"
           $T "node --test functions/lib/__tests__/materializeHabitReminders.integration.test.js"
       - name: Production build (dummy public config, no secrets)
         env:

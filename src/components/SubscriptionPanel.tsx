@@ -17,6 +17,7 @@ import {
 import { getTelegramWebApp } from '../telegram';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
+import { authedJsonHeaders, authFailureMessage } from '../lib/authHeaders';
 import { User } from 'firebase/auth';
 import './Subscription.css';
 
@@ -441,7 +442,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
     try {
       const res = await fetch('/api/payment/trial', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await authedJsonHeaders(user),
         body:    JSON.stringify({ userId: user.uid }),
       });
       const data = await res.json();
@@ -470,7 +471,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       // Free activation via balance — works for all payment methods
       if (isFreeActivation) {
         const resp = await fetch('/api/payment/create', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: await authedJsonHeaders(user),
           body: JSON.stringify({
             userId: user.uid, userName: user.email || '',
             plan: paidPlan, period,
@@ -480,7 +481,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
           }),
         });
         const data = await resp.json();
-        if (!data.ok) throw new Error(data.error || 'Payment failed');
+        if (!data.ok) throw new Error(authFailureMessage(resp.status, language) || data.error || 'Payment failed');
         if (data.activated) {
           stopPoll();
           try {
@@ -646,7 +647,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
 
       if (method === 'sbp') {
         const resp = await fetch('/api/payment/create', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: await authedJsonHeaders(user),
           body: JSON.stringify({
             userId: user.uid, userName: user.email || '',
             plan: paidPlan, period,
@@ -656,7 +657,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
           }),
         });
         const data = await resp.json();
-        if (!data.ok) throw new Error(data.error || 'Payment failed');
+        if (!data.ok) throw new Error(authFailureMessage(resp.status, language) || data.error || 'Payment failed');
 
         // Free activation via referral balance
         if (data.activated) {
@@ -710,7 +711,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       setPayStatus('error');
       setTimeout(() => setPayStatus('idle'), 4000);
     }
-  }, [method, user, wallet, userAddress, paidPlan, period, promoCode, referralCode, effectiveDiscount, tonUsdRate, tonConnectUI, onSubscriptionChange, payStatus, stopPoll, useBalance, referralBalance, usdAfterBalance, balanceApplyRub, isFreeActivation]);
+  }, [method, user, wallet, userAddress, paidPlan, period, promoCode, referralCode, effectiveDiscount, tonUsdRate, tonConnectUI, onSubscriptionChange, payStatus, stopPoll, useBalance, referralBalance, usdAfterBalance, balanceApplyRub, isFreeActivation, language]);
 
   const btnLabel = useMemo(() => {
     if (payStatus === 'sending')   return t.processing;
