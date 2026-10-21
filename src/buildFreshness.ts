@@ -32,6 +32,8 @@
 //  - The new URL keeps every existing query param and only adds `_v`.
 //  - Never blocks first paint — this runs as a fire-and-forget check.
 
+import { fetchWithTimeout } from './lib/fetchWithTimeout';
+
 const BUILD_ID = process.env.REACT_APP_BUILD_ID || 'dev';
 const RELOAD_GUARD_KEY = 'enma_reloaded_for_build';
 
@@ -60,7 +62,7 @@ export function checkBuildFreshness(): void {
   if (BUILD_ID === 'dev') return;
   if (isRealTelegramSession()) return;
 
-  fetch('/api/payment/version', { cache: 'no-store' })
+  fetchWithTimeout('/api/payment/version', { cache: 'no-store', timeoutMs: 8_000 })
     .then((r) => r.json())
     .then((d: { buildId?: string }) => {
       if (!d?.buildId || d.buildId === BUILD_ID) return;

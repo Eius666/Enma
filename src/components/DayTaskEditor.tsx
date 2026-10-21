@@ -9,8 +9,8 @@ import {
 import { User } from 'firebase/auth';
 import { FaArrowLeft, FaTrash } from 'react-icons/fa';
 import { db } from '../firebase';
-import type { DayTask } from './DayList';
-import { PRIORITY_COLORS } from './DayList';
+import type { DayTask } from '../lib/dayTask';
+import { PRIORITY_COLORS } from '../lib/dayTask';
 import type { Subscription } from '../subscription';
 import { getActivePlan, FREE_LIMITS } from '../subscription';
 import { subscribeFreeUsage } from '../lib/usageCounters';

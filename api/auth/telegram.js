@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const { admin, db } = require('../_lib/firebaseAdmin');
+const { computeTrialWindow, buildTrialSubscription } = require('../_lib/subscription/plan');
 
 // Same freshness window as the (separate, Login-Widget-specific) check in
 // _lib/referral/partnerAuth.js — Telegram's own recommended practice for
@@ -289,8 +290,6 @@ async function telegramAuthHandler(req, res) {
   }
 }
 
-const TRIAL_DAYS = 7;
-
 async function setupNewUserIfNeeded(uid, tgUser, startParam) {
   const userRef = db.collection('users').doc(uid);
   const subRef  = db.collection('subscriptions').doc(uid);
@@ -307,10 +306,7 @@ async function setupNewUserIfNeeded(uid, tgUser, startParam) {
     );
   }
 
-  const now      = new Date();
-  const trialEnd = new Date(now);
-  trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS);
-  trialEnd.setHours(23, 59, 59, 999);
+  const trialWindow = computeTrialWindow(new Date());
 
   // The exists-check now happens INSIDE the transaction (tx.get, not a
   // pre-fetched snapshot) — see TELEGRAM_PASSWORDLESS_AUTOAUTH audit §7/§10:
@@ -341,22 +337,7 @@ async function setupNewUserIfNeeded(uid, tgUser, startParam) {
       tx.update(userRef, { trialUsed: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
     }
 
-    tx.set(subRef, {
-      id:              `trial_${uid}`,
-      userId:           uid,
-      plan:             'free',
-      trialPlan:        'premium',
-      period:           'month',
-      status:           'active',
-      startDate:        now.toISOString(),
-      endDate:          trialEnd.toISOString(),
-      endDateMs:        trialEnd.getTime(),
-      trialEndDate:     trialEnd.toISOString(),
-      trialEndDateMs:   trialEnd.getTime(),
-      paymentMethod:    'trial',
-      createdAt:        now.toISOString(),
-      updatedAt:        admin.firestore.FieldValue.serverTimestamp(),
-    });
+    tx.set(subRef, buildTrialSubscription(uid, trialWindow, admin.firestore.FieldValue.serverTimestamp()));
 
     return true;
   });

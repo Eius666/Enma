@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { format, addDays } from 'date-fns';
-import type { DayTask } from '../components/DayList';
+import type { DayTask } from '../lib/dayTask';
 
 export interface WeekDayGroup {
   dateKey: string;

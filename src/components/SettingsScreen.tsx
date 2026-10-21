@@ -19,6 +19,7 @@ import { subscribeAiUsage, subscribeFreeUsage } from '../lib/usageCounters';
 import type { FreeUsageSnapshot } from '../lib/usageCounters';
 import WalletConnect from './WalletConnect';
 import SubscriptionPanel from './SubscriptionPanel';
+import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 import './Settings.css';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -228,7 +229,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   useEffect(() => {
     if (!user) return;
     user.getIdToken()
-      .then(token => fetch('/api/ai/referralInfo', {
+      .then(token => fetchWithTimeout('/api/ai/referralInfo', {
+        timeoutMs: 15_000,
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body:    JSON.stringify({ userId: user.uid }),

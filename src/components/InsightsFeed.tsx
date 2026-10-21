@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { User } from 'firebase/auth';
+import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 import './Insights.css';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -128,7 +129,8 @@ const InsightsFeed: React.FC<InsightsFeedProps> = ({
     setLoading(true);
     try {
       const token = await user.getIdToken();
-      const resp  = await fetch('/api/insights/list', {
+      const resp  = await fetchWithTimeout('/api/insights/list', {
+        timeoutMs: 15_000,
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!resp.ok) return;
@@ -156,7 +158,8 @@ const InsightsFeed: React.FC<InsightsFeedProps> = ({
     setInsights(prev => prev.filter(i => i.fingerprint !== fingerprint));
     try {
       const token = await user.getIdToken();
-      await fetch('/api/insights/dismiss', {
+      await fetchWithTimeout('/api/insights/dismiss', {
+        timeoutMs: 15_000,
         method:  'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body:    JSON.stringify({ fingerprint }),

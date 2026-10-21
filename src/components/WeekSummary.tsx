@@ -1,7 +1,7 @@
 import React from 'react';
 import { format, parseISO } from 'date-fns';
 import { ru as ruLocale, enUS } from 'date-fns/locale';
-import { PRIORITY_COLORS } from './DayList';
+import { PRIORITY_COLORS } from '../lib/dayTask';
 import type { WeekDayGroup } from '../hooks/useWeekTasks';
 
 interface WeekSummaryProps {

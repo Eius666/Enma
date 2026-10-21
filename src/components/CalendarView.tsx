@@ -19,8 +19,8 @@ import {
 } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 import { db } from '../firebase';
-import type { DayTask } from './DayList';
-import { PRIORITY_COLORS } from './DayList';
+import type { DayTask } from '../lib/dayTask';
+import { PRIORITY_COLORS } from '../lib/dayTask';
 import './Calendar.css';
 
 // ── Props ─────────────────────────────────────────────────────────────────────

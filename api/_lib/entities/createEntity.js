@@ -11,6 +11,7 @@
 // api/_lib/entities/__tests__/createEntity.integration.test.js), the same
 // pattern already used by api/_lib/finance/goalTransfer.js.
 
+const { resolveActivePlan } = require('../subscription/plan');
 const defaultFirebase = require('../firebaseAdmin');
 
 const currentMonth = () => new Date().toISOString().slice(0, 7);
@@ -54,14 +55,7 @@ async function getActivePlan(userId, deps = {}) {
   try {
     const snap = await db.collection('subscriptions').doc(userId).get();
     if (!snap.exists) return 'free';
-    const sub = snap.data();
-    if (sub.status !== 'active') return 'free';
-    if (sub.plan === 'free' && sub.trialPlan && sub.trialEndDate) {
-      if (new Date(sub.trialEndDate) > new Date()) return sub.trialPlan;
-    }
-    const endMs = sub.endDateMs ?? sub.expiresAt?.toMillis?.() ?? 0;
-    if (endMs && endMs < Date.now()) return 'free';
-    return sub.plan ?? 'free';
+    return resolveActivePlan(snap.data());
   } catch { return 'free'; }
 }
 

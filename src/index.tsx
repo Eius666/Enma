@@ -32,23 +32,15 @@ if (window.location.pathname.startsWith('/admin')) {
     })
     .catch(showBootFailure);
 } else {
-  Promise.all([
-    import('./App'),
-    import('@tonconnect/ui-react'),
-  ]).then(([{ default: App }, { TonConnectUIProvider }]) => {
-    // Falls back to the current origin so this resolves correctly on whichever
-    // domain actually served the app (old or new), instead of a hardcoded one.
-    const TONCONNECT_MANIFEST_URL =
-      process.env.REACT_APP_TONCONNECT_MANIFEST ||
-      `${window.location.origin}/tonconnect-manifest.json`;
-    root.render(
-      <ErrorBoundary>
-        <TonConnectUIProvider manifestUrl={TONCONNECT_MANIFEST_URL}>
+  import('./App')
+    .then(({ default: App }) => {
+      root.render(
+        <ErrorBoundary>
           <App />
-        </TonConnectUIProvider>
-      </ErrorBoundary>
-    );
-  }).catch(showBootFailure);
+        </ErrorBoundary>
+      );
+    })
+    .catch(showBootFailure);
 }
 
 reportWebVitals();

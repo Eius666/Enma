@@ -18,6 +18,7 @@ import { getTelegramWebApp } from '../telegram';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { authedJsonHeaders, authFailureMessage } from '../lib/authHeaders';
+import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 import { User } from 'firebase/auth';
 import './Subscription.css';
 
@@ -253,7 +254,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
 
   useEffect(() => {
     if (method !== 'ton' && method !== 'usdt') return;
-    fetch('https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd')
+    fetchWithTimeout('https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd', { timeoutMs: 10_000 })
       .then(r => r.json())
       .then(d => { if (d['the-open-network']?.usd) setTonUsdRate(d['the-open-network'].usd); })
       .catch(() => {});
@@ -265,7 +266,8 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
     // effect; sending initData, when we have it, is what lets the backend
     // answer per-user instead of only the global flag.
     const tgWebApp = getTelegramWebApp();
-    fetch('/api/payment/starsPlans', {
+    fetchWithTimeout('/api/payment/starsPlans', {
+      timeoutMs: 10_000,
       headers: tgWebApp?.initData ? { 'x-telegram-init-data': tgWebApp.initData } : {},
     })
       .then(r => r.json())
@@ -361,7 +363,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
     setPromoMsg(null);
     try {
       const uidParam = user?.uid ? `&userId=${encodeURIComponent(user.uid)}` : '';
-      const resp = await fetch(`/api/payment/create?validatePromo=${encodeURIComponent(code)}${uidParam}`);
+      const resp = await fetchWithTimeout(`/api/payment/create?validatePromo=${encodeURIComponent(code)}${uidParam}`, { timeoutMs: 15_000 });
       const data = await resp.json();
       if (data.valid) {
         setPromoCode(code);
@@ -395,7 +397,8 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
     setReferralMsg(null);
     try {
       const token = user ? await user.getIdToken() : null;
-      const resp = await fetch('/api/ai/referralValidate', {
+      const resp = await fetchWithTimeout('/api/ai/referralValidate', {
+        timeoutMs: 15_000,
         method:  'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -531,7 +534,8 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
           // only flips to 'paid' after a verified successful_payment.
           pollRef.current = setInterval(async () => {
             try {
-              const r = await fetch(`/api/payment/starsSession?sessionId=${data.sessionId}`, {
+              const r = await fetchWithTimeout(`/api/payment/starsSession?sessionId=${data.sessionId}`, {
+                timeoutMs: 15_000,
                 headers: { 'x-telegram-init-data': tgWebApp.initData },
               });
               const d = await r.json();
@@ -684,7 +688,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
 
         pollRef.current = setInterval(async () => {
           try {
-            const r = await fetch(`/api/payment/create?transactionId=${data.transactionId}&uid=${user.uid}`);
+            const r = await fetchWithTimeout(`/api/payment/create?transactionId=${data.transactionId}&uid=${user.uid}`, { timeoutMs: 15_000 });
             const d = await r.json();
             if (d.status === 'CONFIRMED') {
               stopPoll();

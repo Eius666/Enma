@@ -31,9 +31,9 @@ export function ErrorFallback(): React.ReactElement {
     >
       <h1 style={{ fontSize: 20, margin: 0 }}>Что-то пошло не так / Something went wrong</h1>
       <p style={{ margin: 0, opacity: 0.8 }}>
-        Ваши данные сохранены. Перезапустите приложение.
+        Произошла ошибка. Перезапустите приложение.
         <br />
-        Your data is safe. Please restart the app.
+        An error occurred. Please restart the app.
       </p>
       <button
         type="button"

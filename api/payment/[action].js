@@ -6,6 +6,7 @@
 //   POST     /api/payment/trial    — activate 7-day trial
 
 const { authenticatePaymentRequest } = require('../_lib/auth/paymentAuth');
+const { computeTrialWindow, buildTrialSubscription } = require('../_lib/subscription/plan');
 const { createSbpPayment, getSbpPaymentStatus }   = require('../_lib/platega');
 const { validatePromoCode }                        = require('../_lib/promoCodes');
 const { validateInfluencerCode }                   = require('../_lib/referral/influencer');
@@ -21,7 +22,6 @@ const { createPaymentSession, getPaymentSession } = require('../_lib/stars/sessi
 const { isStarsEnabledForUser } = require('../_lib/stars/canary');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TRIAL_DAYS = 7;
 
 const SBP_PRICES = {
   pro:     { month: 750,  year: 7200 },
@@ -397,10 +397,8 @@ async function handleTrial(req, res) {
     const userRef = db.collection('users').doc(userId);
     const subRef  = db.collection('subscriptions').doc(userId);
 
-    const now      = new Date();
-    const trialEnd = new Date(now);
-    trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS);
-    trialEnd.setHours(23, 59, 59, 999);
+    const trialWindow = computeTrialWindow(new Date());
+    const { trialEnd } = trialWindow;
 
     // All checks and the write happen in ONE transaction. An existing
     // subscriptions/{uid} document (any plan, active or expired) is never
@@ -415,22 +413,7 @@ async function handleTrial(req, res) {
       }
       if (userSnap.exists && userSnap.data()?.trialUsed === true) return 'TRIAL_USED';
 
-      tx.set(subRef, {
-        id:             `trial_${userId}`,
-        userId,
-        plan:           'free',
-        trialPlan:      'premium',
-        period:         'month',
-        status:         'active',
-        startDate:      now.toISOString(),
-        endDate:        trialEnd.toISOString(),
-        endDateMs:      trialEnd.getTime(),
-        trialEndDate:   trialEnd.toISOString(),
-        trialEndDateMs: trialEnd.getTime(),
-        paymentMethod:  'trial',
-        createdAt:      now.toISOString(),
-        updatedAt:      admin.firestore.FieldValue.serverTimestamp(),
-      });
+      tx.set(subRef, buildTrialSubscription(userId, trialWindow, admin.firestore.FieldValue.serverTimestamp()));
       tx.set(userRef, { trialUsed: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
       return null;
     });

@@ -12,30 +12,12 @@ import { FaSearch, FaCheck, FaCalendarDay } from 'react-icons/fa';
 import { db } from '../firebase';
 import WeekSummary from './WeekSummary';
 import { useWeekTasks } from '../hooks/useWeekTasks';
+import { PRIORITY_COLORS } from '../lib/dayTask';
+import type { DayTask } from '../lib/dayTask';
 import { getBudgetAmount } from '../utils/budgetAmount';
 import './Day.css';
 
 // ── Shared types & constants ──────────────────────────────────────────────────
-
-export interface DayTask {
-  id: string;
-  userId: string;
-  title: string;
-  description?: string;
-  date: string;       // 'YYYY-MM-DD'
-  time?: string | null; // 'HH:MM', null = no time
-  priority: 'high' | 'medium' | 'low';
-  completed: boolean;
-  createdAt?: unknown;
-  updatedAt?: unknown;
-}
-
-/** Priority indicator colours — CSS hex, used in list and editor (no emoji) */
-export const PRIORITY_COLORS: Record<DayTask['priority'], string> = {
-  high:   '#ff4757',
-  medium: '#ffc107',
-  low:    '#2ecc71',
-};
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
