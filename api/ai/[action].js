@@ -8,6 +8,7 @@ const { FxUnavailableError } = require('../_lib/fx');
 const { checkAndIncrementAiUsage, AI_LIMITS } = require('../_lib/aiUsage');
 const { exportFinancePdf } = require('../_lib/pdf/exportFinancePdf');
 const { rateLimit, getClientIp } = require('../_lib/rateLimit');
+const { resolveReminderSchedule } = require('../_lib/reminders/schedule');
 const {
   verifyTelegramLoginWidget, issuePartnerSession, verifyPartnerSession, bearerToken,
 } = require('../_lib/referral/partnerAuth');
@@ -101,30 +102,11 @@ async function requireAuth(req, res) {
 // createEntity.js's FREE_ENTITY_CONFIG comment). Now imported from the one
 // real implementation instead of redefined here.
 
-// Converts a local date+time string in a given IANA timezone to a UTC Date.
-// Same algorithm as tools.js localToUtc — kept inline to avoid coupling.
-function localToUtcForReminder(dateStr, timeStr, timezone) {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const [h, min]  = timeStr.split(':').map(Number);
-  const pseudo    = new Date(Date.UTC(y, m - 1, d, h, min));
-  const parts     = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    year: 'numeric', month: 'numeric', day: 'numeric',
-    hour: 'numeric', minute: 'numeric', hour12: false,
-  }).formatToParts(pseudo);
-  const p = {};
-  for (const { type, value } of parts) {
-    if (type !== 'literal') p[type] = parseInt(value, 10);
-  }
-  const tzAsUtcMs = Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute);
-  return new Date(pseudo.getTime() - (tzAsUtcMs - pseudo.getTime()));
-}
-
 async function handleEntityCreate(req, res) {
   const verifiedUid = await requireAuth(req, res);
   if (!verifiedUid) return;
 
-  const { entityType, data, docId } = req.body ?? {};
+  const { entityType, data, docId, timeZone: clientTimeZone } = req.body ?? {};
   // userId from body is deliberately ignored — verifiedUid from token is used
   const userId = verifiedUid;
 
@@ -197,37 +179,55 @@ async function handleEntityCreate(req, res) {
     const entityId = created.id;
 
     // Create a reminder in Firestore when a task has a specific time set.
-    // The cron (api/telegram/cron.js or Firebase sendDueReminders) will pick it up.
+    // The scheduler (api/telegram/cron.js or Firebase sendDueReminders) delivers it.
+    // The time zone is the one the user typed the time in (sent by the client) or
+    // the one stored on the user — it is never guessed. The document id is
+    // derived from the task so a repeated request cannot create a second reminder.
+    let reminder = 'not_requested';
     if (entityType === 'task' && data.time && data.date) {
       try {
         const userSnap = await db.collection('users').doc(userId).get();
         const ud       = userSnap.exists ? userSnap.data() : {};
         const chatId   = ud.chatId || ud.telegramId;
-        if (chatId) {
-          const tz          = (ud.timezone && ud.timezone.includes('/')) ? ud.timezone : 'Europe/Moscow';
-          const scheduledAt = localToUtcForReminder(data.date, data.time, tz);
-          if (scheduledAt > new Date()) {
-            await db.collection('reminders').doc().set({
-              userId,
-              chatId,
-              title:        data.title || '',
-              scheduledAt:  admin.firestore.Timestamp.fromDate(scheduledAt),
-              status:       'pending',
-              telegramText: `Задача: ${data.title || ''}`,
-              taskId:       entityId,
-              source:       'web-app',
-              createdAt:    admin.firestore.FieldValue.serverTimestamp(),
-              updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
-            });
-            console.log('[entityCreate] reminder created for task', entityId, 'at', scheduledAt.toISOString());
+        if (!chatId) {
+          reminder = 'no_telegram_link';
+        } else {
+          const schedule = resolveReminderSchedule({
+            date: data.date, time: data.time, clientTimeZone, userTimeZone: ud.timezone,
+          });
+          if (!schedule.ok) {
+            reminder = schedule.reason;
+          } else {
+            try {
+              await db.collection('reminders').doc(`task-${entityId}`).create({
+                userId,
+                chatId,
+                title:        data.title || '',
+                scheduledAt:  admin.firestore.Timestamp.fromDate(schedule.scheduledAt),
+                timezone:     schedule.timeZone,
+                status:       'pending',
+                retryCount:   0,
+                telegramText: `Задача: ${data.title || ''}`,
+                taskId:       entityId,
+                source:       'web-app',
+                createdAt:    admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
+              });
+              reminder = 'scheduled';
+            } catch (createErr) {
+              if (createErr && (createErr.code === 6 || /already exists/i.test(createErr.message || ''))) reminder = 'already_scheduled';
+              else throw createErr;
+            }
           }
         }
+        console.log(JSON.stringify({ event: 'entityCreate_reminder', taskId: entityId, result: reminder }));
       } catch (reminderErr) {
+        reminder = 'error';
         console.error('[entityCreate] reminder creation failed:', reminderErr.message);
       }
     }
 
-    return res.status(200).json({ ok: true, id: entityId });
+    return res.status(200).json({ ok: true, id: entityId, reminder });
   } catch (err) {
     console.error('[ai/entityCreate] error:', err.message);
     return res.status(500).json({ error: 'Failed to create entity' });

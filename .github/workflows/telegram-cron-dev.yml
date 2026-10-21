@@ -1,0 +1,57 @@
+name: Telegram reminder cron (DEV)
+
+# Calls the protected DEV endpoint that delivers due Telegram reminders.
+# DEV ONLY: the endpoint is pinned below, and the only secrets read are the two
+# DEV ones from the "DEV" environment. No Telegram, Firebase or production
+# credentials are used here. Do not point this at production.
+#
+# Stage 1 (now): manual runs only (Actions -> "Telegram reminder cron (DEV)" -> Run workflow).
+# Stage 2 (after a successful manual test on ONE allowed DEV chat AND the owner's
+# approval): uncomment the schedule block below. GitHub does not guarantee the
+# interval; 5 minutes is the smallest it accepts and runs may be delayed.
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "*/5 * * * *"
+
+permissions: {}
+
+concurrency:
+  group: telegram-cron-dev
+  cancel-in-progress: false
+
+jobs:
+  deliver-dev-reminders:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    environment: DEV
+    steps:
+      - name: Call the DEV reminder endpoint
+        env:
+          CRON_ENDPOINT: ${{ secrets.CRON_ENDPOINT_DEV }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET_DEV }}
+        run: |
+          set -euo pipefail
+          EXPECTED="https://enma-l4lh.vercel.app/api/telegram/cron"
+          if [ "${CRON_ENDPOINT:-}" != "${EXPECTED}" ]; then
+            echo "::error::CRON_ENDPOINT_DEV is not the DEV endpoint; refusing to call it"
+            exit 1
+          fi
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET_DEV is not set"
+            exit 1
+          fi
+          code=$(curl --silent --show-error --connect-timeout 10 --max-time 45 \
+            --output response.json --write-out '%{http_code}' \
+            --request POST --header "Authorization: Bearer ${CRON_SECRET}" \
+            "${CRON_ENDPOINT}" || echo "000")
+          echo "HTTP status: ${code}"
+          case "${code}" in
+            2??) ;;
+            *) echo "::error::the DEV endpoint answered HTTP ${code} (401/403 = secret or protection, 429 = rate limit, 5xx = server)"; exit 1 ;;
+          esac
+          if ! jq -e '.ok == true' response.json >/dev/null 2>&1; then
+            echo "::error::the answer is not a successful JSON result (a protection/challenge page?)"
+            exit 1
+          fi
+          jq -c '{ok, reminders: (.reminders // {})}' response.json

@@ -127,6 +127,11 @@ function createMockDb(seed = {}) {
       set: async (data, options) => {
         applySet(path, data, options);
       },
+      // Admin SDK create(): fails (code 6) when the document already exists.
+      create: async (data) => {
+        if (store.has(path)) throw Object.assign(new Error('6 ALREADY_EXISTS: Document already exists'), { code: 6 });
+        applySet(path, data);
+      },
       update: async (patch) => {
         const ex = store.get(path) || {};
         store.set(path, { ...ex, ...resolveData(path, patch) });

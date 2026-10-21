@@ -4,6 +4,9 @@ const { admin, db }          = require('../_lib/firebaseAdmin');
 const { rateLimit, getClientIp } = require('../_lib/rateLimit');
 const { calculateNextRun, getUserTimezone } = require('../_lib/tools');
 const { isHabitDueToday } = require('../_lib/habits/habitSchedule');
+const { processDueReminders } = require('../_lib/reminders/deliver');
+const { getEnvName, isChatAllowed } = require('../_lib/envIsolation');
+const crypto = require('crypto');
 
 const TELEGRAM_API = 'https://api.telegram.org';
 
@@ -11,7 +14,8 @@ const sendTelegramMessage = async (token, chatId, text) => {
   const response = await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text })
+    body: JSON.stringify({ chat_id: chatId, text }),
+    signal: AbortSignal.timeout(10_000),
   });
   const payload = await response.json().catch(() => ({}));
   return { ok: response.ok && payload.ok !== false, status: response.status, payload };
@@ -33,6 +37,11 @@ module.exports = async (req, res) => {
 
   // --- Cron authentication ---
   const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret && getEnvName() === 'dev') {
+    // DEV fails closed: an unset secret must never leave this endpoint open.
+    res.status(503).json({ ok: false, description: 'CRON_SECRET_NOT_CONFIGURED' });
+    return;
+  }
   if (cronSecret) {
     const header = req.headers?.authorization ?? '';
     const bearer = header.startsWith('Bearer ') ? header.slice(7) : '';
@@ -47,13 +56,14 @@ module.exports = async (req, res) => {
       querySecret = req.query?.secret || '';
     }
 
-    const isVercelCron = req.headers['user-agent'] === 'vercel-cron/1.0';
-
-    console.log('[cron] auth — bearer:', bearer ? 'set' : 'empty',
-      '| querySecret:', querySecret ? 'set' : 'empty',
-      '| isVercelCron:', isVercelCron);
-
-    if (!isVercelCron && bearer !== cronSecret && querySecret !== cronSecret) {
+    // Constant-time comparison. A request is NOT trusted because of its
+    // User-Agent (that header is client-controlled); Vercel's own cron sends
+    // the same Bearer secret.
+    const same = (a, b) => {
+      const x = Buffer.from(String(a)); const y = Buffer.from(String(b));
+      return x.length === y.length && crypto.timingSafeEqual(x, y);
+    };
+    if (!same(bearer, cronSecret) && !same(querySecret, cronSecret)) {
       console.warn('[cron] Unauthorized cron attempt');
       res.status(401).json({ ok: false, description: 'Unauthorized' });
       return;
@@ -69,70 +79,20 @@ module.exports = async (req, res) => {
   try {
     const nowMs = Date.now();
 
-    // Single equality filter only — no composite index needed.
-    // scheduledAt comparison is done in-memory to handle both Firestore
-    // Timestamps and ISO string values (created by older code).
-    const snapshot = await db
-      .collection('reminders')
-      .where('status', '==', 'pending')
-      .limit(200)
-      .get();
-
-    console.log('[cron] pending reminders in collection:', snapshot.size);
-
-    const dueDocs = snapshot.docs.filter(d => {
-      const s = d.data().scheduledAt;
-      if (!s) return false;
-      const ts = s.toDate ? s.toDate() : new Date(s);
-      return !isNaN(ts.getTime()) && ts.getTime() <= nowMs;
-    });
-
-    console.log('[cron] due now:', dueDocs.length,
-      '| skipped (future):', snapshot.size - dueDocs.length);
-
-    const results = [];
-    for (const docSnap of dueDocs) {
-      const docRef = docSnap.ref;
-      const data   = docSnap.data();
-
-      console.log('[cron] processing reminder:', docRef.id,
-        '| title:', data.title,
-        '| chatId:', data.chatId,
-        '| scheduledAt:', data.scheduledAt?.toDate?.()?.toISOString?.() ?? data.scheduledAt);
-
-      const claimed = await db.runTransaction(async tx => {
-        const latest = await tx.get(docRef);
-        if (!latest.exists) return null;
-        if (latest.data().status !== 'pending') return null;
-        tx.update(docRef, {
-          status:    'sending',
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        return latest.data();
-      });
-
-      if (!claimed) {
-        console.log('[cron] reminder', docRef.id, 'skipped — already claimed');
-        continue;
-      }
-
-      if (!claimed.chatId) {
-        console.error('[cron] reminder', docRef.id, 'has no chatId — skipping');
-        await docRef.update({ status: 'failed', lastError: 'missing chatId',
-          updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-        results.push({ id: docRef.id, ok: false, error: 'missing chatId' });
-        continue;
-      }
-
-      // Last-moment re-validation for habit reminders: this endpoint and
-      // Firebase's sendDueReminders both poll the SAME `reminders` collection
-      // independently (confirmed live via .github/workflows/telegram-cron.yml,
-      // every 5 min) and race for the same claim, so a habit archived,
-      // deleted, disabled, or rescheduled after materialization must be
-      // caught here too — not only in the Firebase path — or whichever
-      // scheduler happens to win the claim decides whether the stale-send
-      // protection applies. See PHASE 2, scenario E of the pre-deploy review.
-      if (claimed.type === 'habit_reminder' && claimed.habitId) {
+    // ── [1] Reminders ──────────────────────────────────────────────────────
+    // See api/_lib/reminders/deliver.js for the lifecycle and the delivery
+    // guarantees (at-least-once, bounded attempts, leases, expiry instead of
+    // deletion, recipient checked against the owning user).
+    const reminderStats = await processDueReminders({
+      db,
+      serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp(),
+      fromMillis: ms => admin.firestore.Timestamp.fromMillis(ms),
+      send: (chatId, text) => sendTelegramMessage(token, chatId, text),
+      isRecipientAllowed: chatId => isChatAllowed(chatId),
+      // Last-moment re-validation of habit reminders: a habit archived, deleted,
+      // disabled or rescheduled after materialization must not get a stale send.
+      shouldSkip: async claimed => {
+        if (claimed.type !== 'habit_reminder' || !claimed.habitId) return null;
         let stillDue = true;
         try {
           const habitSnap = await db.collection('habits').doc(claimed.habitId).get();
@@ -140,54 +100,13 @@ module.exports = async (req, res) => {
           const tz = await getUserTimezone(claimed.userId);
           stillDue = isHabitDueToday(habit, tz);
         } catch (err) {
-          // Can't confirm either way — fail open and send rather than
-          // silently losing a real reminder over a transient read error.
-          console.warn('[cron] isHabitDueToday check failed — sending anyway:', err.message);
+          // Cannot confirm either way — fail open and send rather than lose a real reminder.
           stillDue = true;
         }
-        if (!stillDue) {
-          console.log('[cron] reminder', docRef.id, 'habit no longer due today — cancelling instead of sending');
-          await docRef.update({
-            status:    'cancelled',
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            lastError: 'habit no longer due today (archived, disabled, or rescheduled) at send time',
-          });
-          results.push({ id: docRef.id, ok: false, cancelled: true });
-          continue;
-        }
-      }
-
-      let text;
-      if (claimed.telegramText) {
-        text = claimed.telegramText;
-      } else if (claimed.type === 'task_deadline') {
-        text = `⏰ Напоминание: «${claimed.title}» через ${claimed.notifyBefore ?? 15} мин`;
-      } else if (claimed.type === 'habit_reminder') {
-        text = `🌱 Привычка: «${claimed.title}» — не забудь отметить сегодня!`;
-      } else {
-        text = `⏰ Напоминание: ${claimed.title}`;
-      }
-
-      const sendResult = await sendTelegramMessage(token, claimed.chatId, text);
-      console.log('[cron] sendMessage to', claimed.chatId, '→ ok:', sendResult.ok,
-        '| status:', sendResult.status,
-        '| payload:', JSON.stringify(sendResult.payload).slice(0, 120));
-
-      if (sendResult.ok) {
-        await docRef.update({
-          status:     'sent',
-          notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt:  admin.firestore.FieldValue.serverTimestamp(),
-        });
-      } else {
-        await docRef.update({
-          status:    'pending',
-          lastError: sendResult.payload?.description ?? 'Telegram send failed',
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      }
-      results.push({ id: docRef.id, ok: sendResult.ok, httpStatus: sendResult.status });
-    }
+        return stillDue ? null : { status: 'cancelled', reason: 'habit_no_longer_due' };
+      },
+      log: (event, fields) => console.log(JSON.stringify({ event, ...fields })),
+    });
 
     // ── [2] Automations ──────────────────────────────────────────────────────
     const autoSnap = await db
@@ -210,7 +129,7 @@ module.exports = async (req, res) => {
       const a      = docSnap.data();
       const docRef = docSnap.ref;
 
-      console.log('[cron] automation', docRef.id, '| name:', a.name, '| chatId:', a.chatId);
+      console.log('[cron] automation', docRef.id);
 
       try {
         const sendResult = await sendTelegramMessage(token, a.chatId, `⏰ ${a.name}\n\n${a.messageText}`);
@@ -238,28 +157,12 @@ module.exports = async (req, res) => {
       }
     }
 
-    // ── [3] Cleanup stale pending reminders ─────────────────────────────────
-    const cutoff    = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const staleSnap = await db
-      .collection('reminders')
-      .where('status', '==', 'pending')
-      .where('scheduledAt', '<', cutoff)
-      .limit(50)
-      .get();
-
-    const staleCount = staleSnap.docs.length;
-    if (staleCount > 0) {
-      const batch = db.batch();
-      for (const doc of staleSnap.docs) batch.delete(doc.ref);
-      await batch.commit();
-      console.log(`[cron] Cleaned ${staleCount} stale reminders`);
-    }
-
+    // Unsent reminders are never deleted here: those that missed their window
+    // are marked `expired` by processDueReminders and stay inspectable.
     res.status(200).json({
       ok: true,
-      reminders: { processed: results.length, results },
+      reminders: reminderStats,
       automations: { processed: autoResults.length, results: autoResults },
-      staleRemindersDeleted: staleCount,
     });
   } catch (error) {
     console.error('[cron] ❌ execution error:', error.message, error.stack?.slice(0, 300));

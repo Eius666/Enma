@@ -49,7 +49,7 @@ test('a habit_reminder for a still-active, still-due habit is sent normally', as
       status: 'pending', scheduledAt: pastDue,
     },
     'habits/h1': { userId: 'u1', title: 'Water', repeatType: 'daily', reminderTime: '09:00', archived: false },
-    'users/u1': { timezone: 'Europe/Moscow' },
+    'users/u1': { timezone: 'Europe/Moscow', chatId: 555 }, // owner's chat id: the recipient must match it
   });
 
   const originalFetch = global.fetch;
@@ -76,7 +76,7 @@ test('a habit_reminder for an ARCHIVED habit is cancelled instead of sent', asyn
       title: 'Water', telegramText: 'x', status: 'pending', scheduledAt: pastDue,
     },
     'habits/h1': { userId: 'u1', title: 'Water', repeatType: 'daily', reminderTime: '09:00', archived: true },
-    'users/u1': { timezone: 'Europe/Moscow' },
+    'users/u1': { timezone: 'Europe/Moscow', chatId: 555 }, // owner's chat id: the recipient must match it
   });
 
   const originalFetch = global.fetch;
@@ -101,7 +101,7 @@ test('a habit_reminder for a DELETED habit is cancelled instead of sent', async 
       type: 'habit_reminder', habitId: 'h-deleted', userId: 'u1', chatId: 555,
       title: 'Water', telegramText: 'x', status: 'pending', scheduledAt: pastDue,
     },
-    'users/u1': { timezone: 'Europe/Moscow' },
+    'users/u1': { timezone: 'Europe/Moscow', chatId: 555 }, // owner's chat id: the recipient must match it
     // no habits/h-deleted doc at all
   });
 
@@ -127,6 +127,7 @@ test('a non-habit reminder (task/manual) is unaffected by the habit staleness ch
       userId: 'u1', chatId: 555, title: 'Pay rent',
       telegramText: '⏰ Напоминание: Pay rent', status: 'pending', scheduledAt: pastDue,
     },
+    'users/u1': { chatId: 555 }, // owner's chat id: the recipient must match it
   });
 
   const originalFetch = global.fetch;

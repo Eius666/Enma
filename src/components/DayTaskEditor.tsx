@@ -163,6 +163,8 @@ const DayTaskEditor: React.FC<DayTaskEditorProps> = ({
             userId:     user.uid,
             entityType: 'task',
             docId:      id,
+            // The zone the time was typed in: the server turns date+time into a UTC instant.
+            timeZone:   Intl.DateTimeFormat().resolvedOptions().timeZone,
             data: {
               id,
               title:       title.trim(),
