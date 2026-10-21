@@ -2,6 +2,7 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import reportWebVitals from './reportWebVitals';
 import { checkBuildFreshness, unregisterStaleServiceWorkers } from './buildFreshness';
+import ErrorBoundary, { ErrorFallback } from './components/ErrorBoundary';
 
 // Runs before anything else — a stale cached bundle (Telegram WebView / a
 // long-lived browser tab) needs to catch itself as early as possible.
@@ -12,10 +13,24 @@ const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
 
+// The app bundle (or a lazy chunk) failed to load or evaluate: show the
+// fallback instead of a blank page, and leave a diagnostic for developers.
+const showBootFailure = (error: unknown) => {
+  const name = error instanceof Error ? error.name : 'Error';
+  console.error(`[bootstrap] failed to start (${name})`);
+  root.render(<ErrorFallback />);
+};
+
 if (window.location.pathname.startsWith('/admin')) {
-  import('./admin/App').then(({ default: AdminApp }) => {
-    root.render(<AdminApp />);
-  });
+  import('./admin/App')
+    .then(({ default: AdminApp }) => {
+      root.render(
+        <ErrorBoundary>
+          <AdminApp />
+        </ErrorBoundary>
+      );
+    })
+    .catch(showBootFailure);
 } else {
   Promise.all([
     import('./App'),
@@ -27,11 +42,13 @@ if (window.location.pathname.startsWith('/admin')) {
       process.env.REACT_APP_TONCONNECT_MANIFEST ||
       `${window.location.origin}/tonconnect-manifest.json`;
     root.render(
-      <TonConnectUIProvider manifestUrl={TONCONNECT_MANIFEST_URL}>
-        <App />
-      </TonConnectUIProvider>
+      <ErrorBoundary>
+        <TonConnectUIProvider manifestUrl={TONCONNECT_MANIFEST_URL}>
+          <App />
+        </TonConnectUIProvider>
+      </ErrorBoundary>
     );
-  });
+  }).catch(showBootFailure);
 }
 
 reportWebVitals();

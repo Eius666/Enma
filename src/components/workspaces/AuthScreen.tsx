@@ -9,11 +9,12 @@ import { auth } from '../../firebase';
 import { env } from '../../config/env';
 import { createT } from '../../i18n/createT';
 import type { Language, Theme } from './types';
+import { safeGetItem, safeSetItem, safeRemoveItem, safeWriteJson } from '../../lib/safeStorage';
 
 const AGREED_KEY = 'enma.agreedToTerms';
 
 const saveProfile = (uid: string, data: { displayName: string }) => {
-  localStorage.setItem(`enma.${uid}.profile`, JSON.stringify(data));
+  safeWriteJson(`enma.${uid}.profile`, data);
 };
 
 const openLink = (url: string) => {
@@ -46,7 +47,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState<boolean>(
-    () => localStorage.getItem(AGREED_KEY) === 'true'
+    () => safeGetItem(AGREED_KEY) === 'true'
   );
 
   useEffect(() => {
@@ -167,9 +168,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                     const checked = e.target.checked;
                     setAgreedToTerms(checked);
                     if (checked) {
-                      localStorage.setItem(AGREED_KEY, 'true');
+                      safeSetItem(AGREED_KEY, 'true');
                     } else {
-                      localStorage.removeItem(AGREED_KEY);
+                      safeRemoveItem(AGREED_KEY);
                     }
                   }}
                 />

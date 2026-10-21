@@ -43,6 +43,10 @@ jobs:
         run: npm run typecheck
       - name: Unit tests
         run: npm run test:unit
+      - name: UI tests (jsdom)
+        env:
+          CI: "true"
+        run: npm run test:ui
       - name: Firestore rules (emulator)
         run: npx --yes firebase-tools@${FIREBASE_TOOLS_VERSION} emulators:exec --only firestore --project enma-rules-test "node --test --test-concurrency=1 firestore-tests/rules.test.js firestore-tests/rules.users.test.js"
       - name: Integration tests (emulator)

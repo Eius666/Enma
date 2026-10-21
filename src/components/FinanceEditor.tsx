@@ -14,6 +14,7 @@ import { hasLockedRub, rateKind } from '../utils/budgetAmount';
 import type { Subscription } from '../subscription';
 import { getActivePlan, FREE_LIMITS } from '../subscription';
 import { subscribeFreeUsage } from '../lib/usageCounters';
+import { safeGetItem } from '../lib/safeStorage';
 import Paywall, { LimitBanner } from './Paywall';
 import './Finance.css';
 
@@ -228,7 +229,7 @@ const FinanceEditor: React.FC<FinanceEditorProps> = ({
   const [date, setDate] = useState(todayStr());
   const [selectedCatId, setSelectedCatId] = useState<string>('');
   const [selectedBank, setSelectedBank] = useState<string>(
-    () => (transactionId ? '' : (localStorage.getItem(LAST_BANK_KEY) ?? ''))
+    () => (transactionId ? '' : (safeGetItem(LAST_BANK_KEY) ?? ''))
   );
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(!transactionId || !!initialTransaction);

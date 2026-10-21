@@ -26,6 +26,7 @@ import { Timestamp, doc, getDoc, serverTimestamp, setDoc, collection, query, whe
 import './App.v2.css';
 import { auth, db } from './firebase';
 import { authedJsonHeaders } from './lib/authHeaders';
+import { safeGetItem, safeSetItem, safeWriteJson } from './lib/safeStorage';
 import { useTelegramWebApp } from './hooks/useTelegramWebApp';
 import { decideBootstrap, AuthStatus } from './lib/authBootstrap';
 
@@ -188,7 +189,7 @@ const loadProfile = (uid: string): UserProfile | null => {
 };
 
 const saveProfile = (uid: string, data: UserProfile) => {
-  localStorage.setItem(getProfileStorageKey(uid), JSON.stringify(data));
+  safeWriteJson(getProfileStorageKey(uid), data);
 };
 
 
@@ -629,19 +630,19 @@ const App: React.FC = () => {
 
   const readStoredTheme = (): Theme | null => {
     if (typeof window === 'undefined') return null;
-    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    const stored = safeGetItem(THEME_STORAGE_KEY);
     return stored === 'dark' || stored === 'light' ? stored : null;
   };
 
   const readStoredLanguage = (): Language | null => {
     if (typeof window === 'undefined') return null;
-    const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    const stored = safeGetItem(LANGUAGE_STORAGE_KEY);
     return stored === 'ru' || stored === 'en' ? stored : null;
   };
 
   const readStoredCurrency = (): Currency | null => {
     if (typeof window === 'undefined') return null;
-    const stored = window.localStorage.getItem(CURRENCY_STORAGE_KEY);
+    const stored = safeGetItem(CURRENCY_STORAGE_KEY);
     return SUPPORTED_CURRENCIES.includes(stored as Currency) ? (stored as Currency) : null;
   };
 
@@ -991,49 +992,37 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!user) return;
-    localStorage.setItem(storageKey(user.uid, STORAGE_KEYS.tasks), JSON.stringify(tasks));
+    safeWriteJson(storageKey(user.uid, STORAGE_KEYS.tasks), tasks);
   }, [user, tasks]);
 
   useEffect(() => {
     if (!user) return;
-    localStorage.setItem(storageKey(user.uid, STORAGE_KEYS.notes), JSON.stringify(notes));
+    safeWriteJson(storageKey(user.uid, STORAGE_KEYS.notes), notes);
   }, [user, notes]);
 
   useEffect(() => {
     if (!user) return;
-    localStorage.setItem(
-      storageKey(user.uid, STORAGE_KEYS.noteProjects),
-      JSON.stringify(noteProjects)
-    );
+    safeWriteJson(storageKey(user.uid, STORAGE_KEYS.noteProjects), noteProjects);
   }, [user, noteProjects]);
 
   useEffect(() => {
     if (!user) return;
-    localStorage.setItem(storageKey(user.uid, STORAGE_KEYS.categories), JSON.stringify(categories));
+    safeWriteJson(storageKey(user.uid, STORAGE_KEYS.categories), categories);
   }, [user, categories]);
 
   useEffect(() => {
     if (!user) return;
-    localStorage.setItem(
-      storageKey(user.uid, STORAGE_KEYS.transactions),
-      JSON.stringify(transactions)
-    );
+    safeWriteJson(storageKey(user.uid, STORAGE_KEYS.transactions), transactions);
   }, [user, transactions]);
 
   useEffect(() => {
     if (!user) return;
-    localStorage.setItem(
-      storageKey(user.uid, STORAGE_KEYS.habits),
-      JSON.stringify(habits)
-    );
+    safeWriteJson(storageKey(user.uid, STORAGE_KEYS.habits), habits);
   }, [user, habits]);
 
   useEffect(() => {
     if (!user) return;
-    localStorage.setItem(
-      storageKey(user.uid, STORAGE_KEYS.reminders),
-      JSON.stringify(reminders)
-    );
+    safeWriteJson(storageKey(user.uid, STORAGE_KEYS.reminders), reminders);
   }, [user, reminders]);
 
   useEffect(() => {
@@ -1342,7 +1331,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!user || notes.length === 0) return;
     const markerKey = `enma.${user.uid}.notesLsMigrated`;
-    if (localStorage.getItem(markerKey) === '1') return;
+    if (safeGetItem(markerKey) === '1') return;
     if (notesLsMigrationRef.current) return;
     notesLsMigrationRef.current = true;
 
@@ -1373,7 +1362,7 @@ const App: React.FC = () => {
           // Free limit exceeded or permissions error — skip note
         }
       }
-      localStorage.setItem(markerKey, '1');
+      safeSetItem(markerKey, '1');
     };
 
     migrate().catch(() => { /* silent */ });
