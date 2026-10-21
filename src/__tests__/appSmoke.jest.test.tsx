@@ -16,6 +16,10 @@ Object.assign(process.env, {
   REACT_APP_FIREBASE_APP_ID: 'test-app',
 });
 
+// The first test also pays for loading and transforming the whole app: on a small CI runner
+// that takes well over jest's default 5 s.
+jest.setTimeout(60_000);
+
 const mockAuth: { callback: ((u: unknown) => void) | null } = { callback: null };
 const mockSnapshotUnsubs: jest.Mock[] = [];
 const mockListenedPaths: string[] = [];
