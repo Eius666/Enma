@@ -15,6 +15,7 @@ import type { Subscription } from '../subscription';
 import { getActivePlan, FREE_LIMITS } from '../subscription';
 import { subscribeFreeUsage } from '../lib/usageCounters';
 import Paywall, { LimitBanner } from './Paywall';
+import { TimeField } from './ui/TimeField';
 import './Day.css';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -49,6 +50,8 @@ const T = {
     descPlaceholder: 'Description (optional)',
     dateLabel: 'DATE',
     timeLabel: 'TIME',
+    timeNone: 'No time',
+    timeClear: 'Remove the time',
     priorityLabel: 'PRIORITY',
     high: 'High',
     medium: 'Medium',
@@ -64,6 +67,8 @@ const T = {
     descPlaceholder: 'Описание (необязательно)',
     dateLabel: 'ДАТА',
     timeLabel: 'ВРЕМЯ',
+    timeNone: 'Без времени',
+    timeClear: 'Убрать время',
     priorityLabel: 'ПРИОРИТЕТ',
     high: 'Высокий',
     medium: 'Средний',
@@ -303,15 +308,13 @@ const DayTaskEditor: React.FC<DayTaskEditorProps> = ({
       </div>
 
       {/* ── Time (optional) ── */}
-      <div className="day-editor__field-wrap">
-        <span className="day-editor__field-label">{t.timeLabel}</span>
-        <input
-          className="day-editor__time-input"
-          type="time"
-          value={time}
-          onChange={e => setTime(e.target.value)}
-        />
-      </div>
+      <TimeField
+        label={t.timeLabel}
+        value={time}
+        onChange={setTime}
+        emptyText={t.timeNone}
+        clearLabel={t.timeClear}
+      />
 
       {/* ── Priority chips — colored dots, no emoji ── */}
       <div className="day-editor__section-label">{t.priorityLabel}</div>

@@ -174,6 +174,26 @@ test('a new Telegram user is offered the onboarding after sign-in', async () => 
   expect(screen.getByRole('heading', { name: 'AI Analysis Preview' })).toBeTruthy();
 });
 
+test('the onboarding is a modal: one tap on the backdrop closes it and it does not come back', async () => {
+  installTelegram();
+  authAnswer = async () => ({ ok: true, status: 200, json: async () => ({ token: 'custom-token', isNewUser: true }) });
+  const App = await loadApp();
+  render(<App />);
+  await waitFor(() => expect(mockAuth.callback).not.toBeNull());
+  await act(async () => { mockAuth.callback!(null); });
+  await waitFor(() => expect(mockAuth.customTokens).toHaveLength(1));
+  await act(async () => { mockAuth.callback!(tgUser); });
+  expect(await screen.findByRole('dialog', { name: 'AI Analysis Preview' })).toBeTruthy();
+  fireEvent.click(screen.getByTestId('modal-backdrop'));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  const nav = screen.getByRole('navigation', { name: /primary navigation/i });
+  fireEvent.click(within(nav).getByRole('button', { name: 'Notes' }));
+  await screen.findByRole('button', { name: 'New note' });
+  fireEvent.click(within(nav).getByRole('button', { name: 'Day' }));
+  await act(async () => { await new Promise(r => setTimeout(r, 20)); }); // the Day tab's feed settles
+  expect(screen.queryByRole('dialog')).toBeNull();
+});
+
 async function renderFailedTelegramSignIn(answer: typeof authAnswer) {
   installTelegram();
   authAnswer = answer;

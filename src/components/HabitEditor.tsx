@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { format, subDays } from 'date-fns';
 import {
   doc,
+  getDoc,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -15,7 +16,9 @@ import type { Subscription } from '../subscription';
 import { getActivePlan, FREE_LIMITS } from '../subscription';
 import { subscribeFreeUsage } from '../lib/usageCounters';
 import { cancelTodayHabitReminder } from '../lib/habitReminders';
+import { deviceTimeZone } from '../lib/timeZone';
 import Paywall, { LimitBanner } from './Paywall';
+import { TimeField } from './ui/TimeField';
 import './Habits.css';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -96,6 +99,12 @@ const T = {
     custom: 'Custom days',
     colorLabel: 'COLOR',
     reminderLabel: 'REMINDER',
+    reminderOff: 'Off',
+    reminderClear: 'Remove reminder time',
+    timeZoneHint: (tz: string) => `Time in the ${tz} time zone`,
+    timeZoneDiffers: (tz: string, device: string) => `Time in the ${tz} time zone (this device: ${device})`,
+    useDeviceZone: (device: string) => `Use ${device}`,
+    pickDays: 'Choose at least one day',
     statsLabel: 'STATISTICS',
     streakLabel: 'Streak',
     bestLabel: 'Best',
@@ -118,6 +127,12 @@ const T = {
     custom: 'Выбрать дни',
     colorLabel: 'ЦВЕТ',
     reminderLabel: 'НАПОМИНАНИЕ',
+    reminderOff: 'Не задано',
+    reminderClear: 'Убрать время напоминания',
+    timeZoneHint: (tz: string) => `Время по часовому поясу ${tz}`,
+    timeZoneDiffers: (tz: string, device: string) => `Время по часовому поясу ${tz} (на устройстве — ${device})`,
+    useDeviceZone: (device: string) => `Использовать ${device}`,
+    pickDays: 'Выберите хотя бы один день',
     statsLabel: 'СТАТИСТИКА',
     streakLabel: 'Подряд',
     bestLabel: 'Рекорд',
@@ -157,6 +172,11 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
   const [menuOpen,       setMenuOpen]       = useState(false);
   const [showPaywall,    setShowPaywall]    = useState(false);
   const [usedHabits,     setUsedHabits]     = useState<number | null>(null);
+  // users/{uid}.timezone — the zone the server reads reminderTime in (it falls
+  // back to its own default when the field is missing). undefined = not read
+  // (yet, or the read failed): then nothing is shown or written about it.
+  const [storedZone,     setStoredZone]     = useState<string | null | undefined>(undefined);
+  const deviceZone = useMemo(() => deviceTimeZone(), []);
 
   const plan   = getActivePlan(subscription ?? null);
   const isFree = plan === 'free';
@@ -167,6 +187,37 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
     if (!user || !isFree) return;
     return subscribeFreeUsage(user.uid, d => setUsedHabits(d.habitCount));
   }, [user, isFree]);
+
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    getDoc(doc(db, 'users', user.uid))
+      .then(snap => {
+        const tz = snap.exists() ? snap.data()?.timezone : null;
+        if (alive) setStoredZone(typeof tz === 'string' && tz ? tz : null);
+      })
+      .catch(() => { /* offline or denied: leave the zone unknown */ });
+    return () => { alive = false; };
+  }, [user]);
+
+  // The server reads a habit's reminder time in users/{uid}.timezone. A user
+  // who never set one gets this device's zone — written only when the field
+  // is known to be missing, never over a zone that is already set.
+  const saveDeviceZoneIfMissing = async () => {
+    if (!user || storedZone !== null || !deviceZone) return;
+    await setDoc(doc(db, 'users', user.uid), { timezone: deviceZone, updatedAt: serverTimestamp() }, { merge: true });
+    setStoredZone(deviceZone);
+  };
+
+  const switchToDeviceZone = async () => {
+    if (!user || !deviceZone) return;
+    try {
+      await setDoc(doc(db, 'users', user.uid), { timezone: deviceZone, updatedAt: serverTimestamp() }, { merge: true });
+      setStoredZone(deviceZone);
+    } catch (err) {
+      console.warn('HabitEditor time zone update error', err);
+    }
+  };
 
   const menuRef  = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -226,8 +277,18 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
 
   // ── Save ────────────────────────────────────────────────────────────────────
 
+  // A habit on chosen days with no day chosen is never due (and never reminds).
+  const daysMissing = repeatType === 'custom' && repeatDays.length === 0;
+  const canSave = !saving && !!title.trim() && !daysMissing;
+
+  // Non-fatal: the habit itself is already saved.
+  const afterSaved = async () => {
+    if (!reminderTime) return;
+    try { await saveDeviceZoneIfMissing(); } catch (err) { console.warn('HabitEditor time zone save error', err); }
+  };
+
   const handleSave = async () => {
-    if (!user || !title.trim()) return;
+    if (!user || !title.trim() || daysMissing) return;
     setSaving(true);
 
     const id = habitId ?? makeId();
@@ -267,6 +328,7 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
           setSaving(false);
           return;
         }
+        await afterSaved();
         onBack();
       } catch (err) {
         console.error('HabitEditor create error', err);
@@ -296,6 +358,7 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
       if (!reminderTime) {
         await cancelTodayHabitReminder(id, format(new Date(), 'yyyy-MM-dd'));
       }
+      await afterSaved();
       onBack();
     } catch (err) {
       console.error('HabitEditor save error', err);
@@ -500,16 +563,26 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
         </div>
       </div>
 
+      {daysMissing && <div className="hab-editor__hint">{t.pickDays}</div>}
+
       {/* ── Reminder time ── */}
-      <div className="hab-editor__field-wrap hab-editor__field-wrap--row">
-        <span className="hab-editor__field-label">{t.reminderLabel}</span>
-        <input
-          className="hab-editor__time-input"
-          type="time"
-          value={reminderTime}
-          onChange={e => setReminderTime(e.target.value)}
-        />
-      </div>
+      <TimeField
+        label={t.reminderLabel}
+        value={reminderTime}
+        onChange={setReminderTime}
+        emptyText={t.reminderOff}
+        clearLabel={t.reminderClear}
+        hint={reminderTime && storedZone !== undefined && deviceZone ? (
+          storedZone && storedZone !== deviceZone ? (
+            <>
+              {t.timeZoneDiffers(storedZone, deviceZone)}{' '}
+              <button type="button" className="hab-editor__zone-btn" onClick={switchToDeviceZone}>
+                {t.useDeviceZone(deviceZone)}
+              </button>
+            </>
+          ) : t.timeZoneHint(storedZone ?? deviceZone)
+        ) : undefined}
+      />
 
       {/* ── Statistics + heatmap (existing habits only) ── */}
       {!isNew && (
@@ -552,7 +625,7 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
       <button
         className="hab-editor__save-btn"
         onClick={handleSave}
-        disabled={saving || !title.trim()}
+        disabled={!canSave}
         type="button"
       >
         {saving ? t.saving : t.save}

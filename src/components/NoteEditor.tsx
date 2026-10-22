@@ -775,6 +775,10 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
                   {defaultCats.map(c => (
                     <option key={c} value={c}>{c}</option>
                   ))}
+                  {/* A folder of the user's own is not among the defaults: still show it. */}
+                  {category && !defaultCats.includes(category) && (
+                    <option value={category}>{category}</option>
+                  )}
                 </select>
               </div>
               <div className="note-editor__dropdown-separator" />

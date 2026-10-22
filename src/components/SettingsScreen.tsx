@@ -20,6 +20,7 @@ import type { FreeUsageSnapshot } from '../lib/usageCounters';
 import WalletConnect from './WalletConnect';
 import SubscriptionPanel from './SubscriptionPanel';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout';
+import { StartupDiagnostics } from './StartupDiagnostics';
 import './Settings.css';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -751,6 +752,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       </div>
 
       <p className="sett-legal-note">{t.legalNote}</p>
+
+      <StartupDiagnostics language={language} />
 
     </div>
   );

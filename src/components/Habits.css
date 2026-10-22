@@ -534,59 +534,23 @@ body.theme-light .hab-editor__color-btn--selected::after {
   border-color: rgba(0, 0, 0, 0.3);
 }
 
-/* — Reminder / field wrapper — */
-.hab-editor__field-wrap {
-  background: var(--notes-card-bg);
-  border: 1px solid var(--notes-card-border);
-  border-radius: 14px;
-  padding: 14px 16px;
-  margin-bottom: 22px;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+/* — Hints under the repeat and reminder fields — */
+.hab-editor__hint {
+  margin: -12px 0 18px;
+  padding: 0 4px;
+  font-size: 12px;
+  color: #ff8a8a;
 }
 
-/* Row variant: label left, control right */
-.hab-editor__field-wrap--row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.hab-editor__field-wrap--row .hab-editor__field-label {
-  margin-bottom: 0;
-  flex-shrink: 0;
-}
-
-.hab-editor__field-wrap--row .hab-editor__time-input {
-  width: auto;
-  text-align: right;
-}
-
-.hab-editor__field-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--notes-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 6px;
-  display: block;
-}
-
-.hab-editor__time-input {
-  width: 100%;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: var(--notes-text);
-  font-size: 15px;
-  font-family: inherit;
-  box-sizing: border-box;
-  color-scheme: dark;
-}
-
-body.theme-light .hab-editor__time-input {
-  color-scheme: light;
+.hab-editor__zone-btn {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #a29bfe;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 /* — Stats row — */

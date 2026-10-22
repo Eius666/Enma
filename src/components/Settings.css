@@ -675,3 +675,31 @@ body.theme-light .sett-referral-link-row__text {
 .theme-light .sett-row__hint {
   color: rgba(0, 0, 0, 0.5);
 }
+
+/* ── Startup diagnostics (DEV builds only) ─────── */
+
+.sett-diag__hint {
+  margin: 0;
+  padding: 0 16px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--notes-text-muted);
+}
+
+.sett-diag__run {
+  margin: 0 12px 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--notes-text);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.theme-light .sett-diag__run {
+  background: rgba(0, 0, 0, 0.04);
+}

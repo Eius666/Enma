@@ -1,0 +1,93 @@
+/* Time row with a full-row native time input (see TimeField.tsx). Colours
+   follow the editor cards it sits in (Habits.css / Day.css tokens). */
+
+.time-field {
+  margin-bottom: 22px;
+}
+
+.time-field__row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  background: var(--notes-card-bg);
+  border: 1px solid var(--notes-card-border);
+  border-radius: 14px;
+}
+
+.time-field__main {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 16px;
+  cursor: pointer;
+  border-radius: 14px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.time-field__main:focus-within {
+  box-shadow: 0 0 0 2px rgba(123, 104, 238, 0.55);
+}
+
+.time-field__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--notes-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.time-field__value {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: var(--notes-text);
+}
+
+.time-field__value--empty {
+  color: var(--notes-text-muted);
+}
+
+/* The real control: covers the whole row, invisible, receives every tap. */
+.time-field__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0.011;
+  font-size: 16px; /* no iOS zoom-on-focus */
+  color: transparent;
+  background: transparent;
+  cursor: pointer;
+  z-index: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  touch-action: manipulation;
+}
+
+.time-field__clear {
+  flex-shrink: 0;
+  width: 44px;
+  border: 0;
+  border-left: 1px solid var(--notes-card-border);
+  background: transparent;
+  color: var(--notes-text-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 0 14px 14px 0;
+  touch-action: manipulation;
+}
+
+.time-field__hint {
+  margin-top: 6px;
+  padding: 0 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--notes-text-muted);
+}

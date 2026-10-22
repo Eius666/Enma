@@ -133,6 +133,14 @@ test('email account: first-time chatId write from the client is rejected', async
 test('email account may still change currency/banks', async () => {
   await assertSucceeds(setDoc(doc(email1(), 'users/email1'), { currency: 'EUR', updatedAt: serverTimestamp() }, { merge: true }));
 });
+test('habit reminder time zone: the owner may set it (also on a document without one); nobody else may', async () => {
+  // The habit editor writes { timezone, updatedAt } when the user has none yet,
+  // or when they choose this device's zone explicitly (BUG-05).
+  await assertSucceeds(setDoc(doc(email1(), 'users/email1'), { timezone: 'Europe/Moscow', updatedAt: serverTimestamp() }, { merge: true }));
+  await assertSucceeds(setDoc(doc(owner(), 'users/tg_42'), { timezone: 'Asia/Almaty', updatedAt: serverTimestamp() }, { merge: true }));
+  await assertSucceeds(setDoc(doc(mallory(), 'users/mallory'), { timezone: 'Europe/Moscow', updatedAt: serverTimestamp() }, { merge: true }));
+  await assertFails(setDoc(doc(mallory(), 'users/email1'), { timezone: 'UTC', updatedAt: serverTimestamp() }, { merge: true }));
+});
 
 // ── read / delete / other users ──────────────────────────────────────────────
 test('owner can read their own document', async () => {

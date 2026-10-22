@@ -153,6 +153,13 @@ export const getActivePlan = (sub: Subscription | null): PlanType => {
   return sub.plan;
 };
 
+// Whether the "start the free trial" offer may be shown. POST /api/payment/trial
+// refuses whenever a subscriptions/{uid} document exists (an active or past
+// trial, a paid plan), so the offer is shown only once that document is known
+// to be absent — never while it is still loading.
+export const canOfferTrial = (sub: Subscription | null, subscriptionLoaded: boolean): boolean =>
+  subscriptionLoaded && sub === null;
+
 export const trialDaysRemaining = (sub: Subscription): number => {
   if (!sub.trialEndDate) return 0;
   const ms = new Date(sub.trialEndDate).getTime() - Date.now();

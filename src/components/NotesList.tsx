@@ -51,6 +51,15 @@ interface NotesListProps {
   onOpenEditor: (noteId: string | null) => void;
   /** Opens NoteEditor on a recovered, never-synced new note's local id. */
   onRecoverDraft: (draftId: string) => void;
+  /**
+   * The open folder (a note category), or null for all notes. Kept by the
+   * Notes tab so it survives opening the editor; a new note is created in it.
+   */
+  folder: string | null;
+  onFolderChange: (folder: string | null) => void;
+  /** Folders added in this session that no note uses yet. */
+  extraFolders: string[];
+  onAddFolder: (name: string) => void;
 }
 
 const DEFAULT_CATEGORIES_EN = ['All', 'General', 'Work', 'Personal', 'Ideas'];
@@ -146,12 +155,17 @@ function notePreview(note: FireNote): string {
   return note.content?.slice(0, 120) ?? '';
 }
 
-const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor, onRecoverDraft }) => {
+const NotesList: React.FC<NotesListProps> = ({
+  user, language, onOpenEditor, onRecoverDraft, folder, onFolderChange, extraFolders, onAddFolder,
+}) => {
   const t = T[language];
   const defaultCats = language === 'ru' ? DEFAULT_CATEGORIES_RU : DEFAULT_CATEGORIES_EN;
   const allLabel = defaultCats[0];
 
   const [notes, setNotes] = useState<FireNote[]>([]);
+  // The first snapshot has arrived: only then can a folder be told to have
+  // no notes left (before it, `notes` is just empty).
+  const [notesLoaded, setNotesLoaded] = useState(false);
   // ENMA notes-durability audit — incident: a FAILED_PRECONDITION (missing
   // composite index) from onSnapshot was only console.warn'ed, leaving
   // `notes` at its initial empty array forever — indistinguishable in the
@@ -163,8 +177,11 @@ const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor, onR
   const [retryTick, setRetryTick] = useState(0);
   const [orphanDrafts, setOrphanDrafts] = useState<NoteDraft[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState(allLabel);
-  const [extraCategories, setExtraCategories] = useState<string[]>([]);
+  const activeCategory = folder ?? allLabel;
+  const setActiveCategory = useCallback(
+    (cat: string) => onFolderChange(cat === allLabel ? null : cat),
+    [onFolderChange, allLabel]
+  );
   const [contextNoteId, setContextNoteId] = useState<string | null>(null);
   const [showCatModal, setShowCatModal] = useState(false);
   const [catDraft, setCatDraft] = useState('');
@@ -175,7 +192,7 @@ const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor, onR
 
   useEffect(() => {
     const uid = user?.uid ?? null;
-    if (!uid) { setNotes([]); setLoadError(null); return; }
+    if (!uid) { setNotes([]); setNotesLoaded(false); setLoadError(null); return; }
 
     let mounted = true;
     let unsub: (() => void) | null = null;
@@ -200,6 +217,7 @@ const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor, onR
             return a.pinned ? -1 : 1;
           });
           setNotes(data);
+          setNotesLoaded(true);
         },
         err => {
           if (!mounted) return;
@@ -266,18 +284,19 @@ const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor, onR
     for (const c of fromNotes) {
       if (!merged.includes(c)) merged.push(c);
     }
-    for (const c of extraCategories) {
+    for (const c of extraFolders) {
       if (!merged.includes(c)) merged.push(c);
     }
     return merged;
-  }, [notes, extraCategories, defaultCats]);
+  }, [notes, extraFolders, defaultCats]);
 
-  // If active category was removed, reset to all
+  // If the open folder no longer exists (its last note was deleted), show all.
   useEffect(() => {
+    if (!notesLoaded) return;
     if (!categories.includes(activeCategory)) {
       setActiveCategory(allLabel);
     }
-  }, [categories, activeCategory, allLabel]);
+  }, [notesLoaded, categories, activeCategory, allLabel, setActiveCategory]);
 
   const filtered = useMemo(() => {
     let result = notes;
@@ -361,11 +380,11 @@ const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor, onR
   const handleAddCategory = useCallback(() => {
     const name = catDraft.trim();
     if (!name || categories.includes(name)) { setShowCatModal(false); setCatDraft(''); return; }
-    setExtraCategories(prev => [...prev, name]);
+    onAddFolder(name);
     setActiveCategory(name);
     setShowCatModal(false);
     setCatDraft('');
-  }, [catDraft, categories]);
+  }, [catDraft, categories, onAddFolder, setActiveCategory]);
 
   const renderNoteRow = (note: FireNote) => (
     <button

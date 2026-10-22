@@ -100,7 +100,7 @@ const App: React.FC = () => {
   const {
     notes, categories, transactions, setTransactions, profile, setProfile,
   } = useUserLocalData<Transaction>(user, language, reminders, setReminders);
-  const [subscription, setSubscription] = useSubscription(user);
+  const [subscription, setSubscription, subscriptionLoaded] = useSubscription(user);
   const [banks, setBanks] = useState<string[]>([]);
 
   // True when a trial existed, has now expired, and the user hasn't paid
@@ -111,6 +111,9 @@ const App: React.FC = () => {
 
   const t = (key: TranslationKey, params?: Record<string, string | number>) =>
     translate(language, key, params);
+
+  // The first frame of the app is on screen (startup timing, DEV only).
+  useEffect(() => { perfMark('first-render'); }, []);
 
   // A different (or no) account always starts on the Day tab.
   useEffect(() => {
@@ -268,7 +271,9 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!shellVisible) return;
     perfMark('shell-rendered');
-    const timer = window.setTimeout(() => { void preloadTabs(); }, TAB_PRELOAD_DELAY_MS);
+    const timer = window.setTimeout(() => {
+      void preloadTabs().then(() => perfMark('tabs-preloaded'));
+    }, TAB_PRELOAD_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [shellVisible]);
 
@@ -361,6 +366,7 @@ const App: React.FC = () => {
             transactions={transactions}
             tasks={dayTasks}
             subscription={subscription}
+            subscriptionLoaded={subscriptionLoaded}
             showOnboarding={showOnboarding}
             trialActivating={trialActivating}
             onStartTrial={handleStartTrial}

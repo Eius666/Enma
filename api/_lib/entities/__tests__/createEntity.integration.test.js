@@ -174,3 +174,35 @@ test('every live note-write path in this codebase sets updatedAt, so the exclusi
   const ordered = await db.collection('notes').where('userId', '==', 'u1').orderBy('updatedAt', 'desc').get();
   assert.equal(ordered.size, 1, 'and therefore is not excluded by the real list query');
 });
+
+// ── Note folders (BUG-06): a note's folder is its `category` ─────────────
+
+test('a note created in a folder is stored in it, survives an editor save and is listed under it', async () => {
+  // NoteEditor creates a new note through entityCreate with the open folder.
+  const created = await createEntityInFirestore('u1', 'note', {
+    id: 'n-folder', title: 'Мысли', content: '', type: 'text', checklistItems: [], category: 'Личное', pinned: false,
+  }, 'n-folder', deps);
+  assert.equal(created.ok, true);
+  assert.equal((await db.collection('notes').doc('n-folder').get()).data().category, 'Личное');
+
+  // A later edit writes the same fields the editor sends (its loaded category
+  // included), merged — the folder does not change without the user choosing.
+  await db.collection('notes').doc('n-folder').set({
+    title: 'Мысли 2', content: 'текст', type: 'text', checklistItems: [], category: 'Личное', pinned: false,
+    userId: 'u1', updatedAt: admin.firestore.Timestamp.now(), rev: 1,
+  }, { merge: true });
+
+  // The list query the app uses, then the folder filter it applies.
+  const listed = await db.collection('notes').where('userId', '==', 'u1').orderBy('updatedAt', 'desc').get();
+  const inFolder = listed.docs.map(d => d.data()).filter(n => n.category === 'Личное');
+  assert.deepEqual(inFolder.map(n => n.title), ['Мысли 2']);
+});
+
+test('a note created at the top level is not placed in any user folder', async () => {
+  const created = await createEntityInFirestore('u1', 'note', {
+    id: 'n-root', title: 'Корень', content: '', type: 'text', checklistItems: [], category: 'Все', pinned: false,
+  }, 'n-root', deps);
+  assert.equal(created.ok, true);
+  const listed = await db.collection('notes').where('userId', '==', 'u1').get();
+  assert.deepEqual(listed.docs.filter(d => !['Все', 'All', ''].includes(d.data().category)).map(d => d.id), []);
+});

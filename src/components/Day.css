@@ -429,8 +429,7 @@
   display: block;
 }
 
-.day-editor__date-input,
-.day-editor__time-input {
+.day-editor__date-input {
   width: 100%;
   background: transparent;
   border: none;
@@ -442,8 +441,7 @@
   color-scheme: dark;
 }
 
-body.theme-light .day-editor__date-input,
-body.theme-light .day-editor__time-input {
+body.theme-light .day-editor__date-input {
   color-scheme: light;
 }
 

@@ -4,6 +4,10 @@ import reportWebVitals from './reportWebVitals';
 import { checkBuildFreshness, unregisterStaleServiceWorkers } from './buildFreshness';
 import ErrorBoundary, { ErrorFallback } from './components/ErrorBoundary';
 
+// When the main bundle started running — read by the startup diagnostics
+// (src/lib/perfMarks.ts). A native call, no import: main.js stays as small.
+try { performance.mark('enma:index'); } catch { /* unsupported */ }
+
 // Runs before anything else — a stale cached bundle (Telegram WebView / a
 // long-lived browser tab) needs to catch itself as early as possible.
 unregisterStaleServiceWorkers();

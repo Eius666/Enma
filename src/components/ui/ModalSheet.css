@@ -1,0 +1,123 @@
+/* Bottom sheet over a dimmed backdrop (see ModalSheet.tsx). Same look as the
+   paywall sheet (Paywall.css): dark navy / light lavender, 24px top corners. */
+
+.modal-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 1000; /* above the bottom navigation (300) */
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-top: calc(var(--tg-safe-area-top, env(safe-area-inset-top, 0px)) + 12px);
+}
+
+.modal-sheet__backdrop {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  animation: modal-sheet-fade 0.18s ease;
+}
+
+.modal-sheet__dialog {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 480px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #16162a;
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
+  outline: none;
+  animation: modal-sheet-up 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body.theme-light .modal-sheet__dialog {
+  background: #f4f4fb;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-bottom: none;
+  box-shadow: 0 -8px 32px rgba(143, 150, 220, 0.2);
+}
+
+.modal-sheet__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 8px 4px 20px;
+  flex-shrink: 0;
+}
+
+.modal-sheet__icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.modal-sheet__title {
+  flex: 1;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+
+body.theme-light .modal-sheet__title {
+  color: #1b1d3a;
+}
+
+.modal-sheet__close {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+body.theme-light .modal-sheet__close {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-sheet__close:focus-visible {
+  outline: 2px solid #a29bfe;
+  outline-offset: 2px;
+}
+
+/* Long content scrolls here, not the page behind. */
+.modal-sheet__body {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 4px 20px calc(20px + var(--tg-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
+}
+
+@keyframes modal-sheet-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes modal-sheet-up {
+  from { transform: translateY(100%); opacity: 0.6; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-sheet__backdrop,
+  .modal-sheet__dialog {
+    animation: none;
+  }
+}

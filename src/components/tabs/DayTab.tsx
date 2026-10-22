@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import React, { Suspense, useState } from 'react';
 import type { User } from 'firebase/auth';
 import DayList from '../DayList';
 import DayTaskEditor from '../DayTaskEditor';
-import OnboardingDemo from '../OnboardingDemo';
 import InsightsFeed from '../InsightsFeed';
 import type { InsightAction } from '../InsightsFeed';
 import type { DayTask } from '../../lib/dayTask';
@@ -10,6 +9,10 @@ import type { Subscription } from '../../subscription';
 import type { Language } from '../../types/app';
 
 type DayListProps = React.ComponentProps<typeof DayList>;
+
+// Shown once, to a new user only: not part of the startup bundle. A new user
+// has just signed in over the network, so the chunk is fetched right then.
+const OnboardingDemo = React.lazy(() => import('../OnboardingDemo'));
 
 interface Props {
   language: Language;
@@ -20,6 +23,8 @@ interface Props {
   transactions: DayListProps['transactions'];
   tasks: DayTask[];
   subscription: Subscription | null;
+  /** Whether `subscription` has been read for this user (see useSubscription). */
+  subscriptionLoaded: boolean;
   showOnboarding: boolean;
   trialActivating: boolean;
   onStartTrial: () => void;
@@ -30,7 +35,7 @@ interface Props {
 // "Day" tab: onboarding (new users), insights, today's list and the task
 // editor. The list/editor state is local, so it resets whenever the tab is left.
 export function DayTab({
-  language, user, currency, rates, firestoreHabits, transactions, tasks, subscription,
+  language, user, currency, rates, firestoreHabits, transactions, tasks, subscription, subscriptionLoaded,
   showOnboarding, trialActivating, onStartTrial, onDismissOnboarding, onInsightCta,
 }: Props): React.ReactElement {
   const [view, setView] = useState<'list' | 'editor'>('list');
@@ -39,12 +44,16 @@ export function DayTab({
   return (
     <>
       {view === 'list' && showOnboarding && (
-        <OnboardingDemo
-          language={language}
-          onStartTrial={onStartTrial}
-          onDismiss={onDismissOnboarding}
-          trialLoading={trialActivating}
-        />
+        <Suspense fallback={null}>
+          <OnboardingDemo
+            language={language}
+            subscription={subscription}
+            subscriptionLoaded={subscriptionLoaded}
+            onStartTrial={onStartTrial}
+            onDismiss={onDismissOnboarding}
+            trialLoading={trialActivating}
+          />
+        </Suspense>
       )}
       {view === 'list' && (
         <InsightsFeed
