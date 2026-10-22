@@ -23,6 +23,7 @@ import {
 import { db } from '../firebase';
 import { getNoteDraftStore } from '../lib/noteDrafts';
 import type { NoteDraft } from '../lib/noteDrafts';
+import { perfMark } from '../lib/perfMarks';
 import './Notes.css';
 
 export interface FireNote {
@@ -190,6 +191,7 @@ const NotesList: React.FC<NotesListProps> = ({ user, language, onOpenEditor, onR
         q,
         snap => {
           if (!mounted) return;
+          perfMark('first-snapshot:notes');
           setLoadError(null);
           const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as FireNote));
           // Sort client-side: pinned first, then by updatedAt desc (already ordered by query)

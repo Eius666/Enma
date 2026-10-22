@@ -7,6 +7,7 @@ import { CURRENCY_STORAGE_KEY, SUPPORTED_CURRENCIES } from '../constants';
 import { safeSetItem } from '../lib/safeStorage';
 import type { Currency } from '../types/app';
 import type { TelegramWebApp } from '../telegram';
+import { perfMark } from '../lib/perfMarks';
 
 // Two effects that used to sit in App.tsx, unchanged:
 //  1. link the Telegram chat id to users/{uid} (Firestore Rules only accept an
@@ -34,6 +35,7 @@ export function useUserDocSync(
     const unsubscribe = onSnapshot(
       doc(db, 'users', uid),
       snap => {
+        perfMark('first-snapshot:user-doc');
         const data = snap.data();
         if (data?.currency && SUPPORTED_CURRENCIES.includes(data.currency as Currency)) {
           const firestoreCurrency = data.currency as Currency;

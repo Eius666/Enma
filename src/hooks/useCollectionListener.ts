@@ -3,6 +3,8 @@ import type { Dispatch, SetStateAction } from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import type { ChangesSnapshot } from '../lib/snapshotReducers';
+import { perfMark } from '../lib/perfMarks';
+import type { PerfPhase } from '../lib/perfMarks';
 
 // Live listener on `<collectionName> where userId == uid`, folded into React
 // state by `reduce`. This is the lifecycle that used to be copy-pasted four
@@ -42,6 +44,7 @@ export function useCollectionListener<T>(
             if (!mounted) return;
             const isFirst = !receivedFirstSnapshot;
             receivedFirstSnapshot = true;
+            if (isFirst) perfMark(`first-snapshot:${collectionName}` as PerfPhase);
             setState(prev => reduce(prev, snapshot as unknown as ChangesSnapshot, isFirst));
           },
           error => {

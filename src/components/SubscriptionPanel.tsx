@@ -8,6 +8,7 @@ import {
   priceToUsdtUnits,
   calcEndDate,
   isSubscriptionActive,
+  getSubscriptionEndMs,
   isInTrial,
   getActivePlan,
   Subscription,
@@ -770,7 +771,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
             <span className="subscription-panel__active-text">
               {t.activeSub.replace(
                 '{date}',
-                new Date(subscription.endDate).toLocaleDateString(
+                new Date(getSubscriptionEndMs(subscription)).toLocaleDateString(
                   language === 'ru' ? 'ru-RU' : 'en-US',
                   { day: 'numeric', month: 'long', year: 'numeric' }
                 )

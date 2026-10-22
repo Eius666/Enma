@@ -1,0 +1,5847 @@
+{
+ "router: GET is 405": {
+  "steps": [
+   {
+    "status": 405,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Method not allowed"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "router: unknown action is 404": {
+  "steps": [
+   {
+    "status": 404,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Unknown AI action: chat"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "router: missing action is 404": {
+  "steps": [
+   {
+    "status": 404,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Unknown AI action: undefined"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "router: a repeated action parameter is 404": {
+  "steps": [
+   {
+    "status": 404,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Unknown AI action: adminStats"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "router: prototype names are 404": {
+  "steps": [
+   {
+    "status": 404,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Unknown AI action: constructor"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 404,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Unknown AI action: __proto__"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 404,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Unknown AI action: toString"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "router: an admin handler failure answers 500 with the message": {
+  "steps": [
+   {
+    "status": 500,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "payments backend down"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": [
+     "error: [ai/adminPayments] unhandled error: payments backend down Error: payments backend down"
+    ]
+   }
+  ]
+ },
+ "router: a user handler failure answers 500 without details": {
+  "steps": [
+   {
+    "status": 500,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Internal server error"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": [
+     "error: [ai/referralInfo] unhandled error: users backend down Error: users backend down"
+    ]
+   }
+  ]
+ },
+ "router: an upstream 503 is passed on as 503": {
+  "steps": [
+   {
+    "status": 503,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "AI перегружен, повторите через минуту"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": [
+     "error: [ai/adminAiUsage] unhandled error: overloaded Error: overloaded"
+    ]
+   }
+  ]
+ },
+ "router: admin actions are refused when no admin key is configured": {
+  "steps": [
+   {
+    "status": 403,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "forbidden"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 403,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "forbidden"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 403,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "forbidden"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "router: an invalid ID token is 401": {
+  "steps": [
+   {
+    "status": 401,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Unauthorized"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": [
+     "warn: [AI_AUTH] Invalid Firebase token: auth/argument-error"
+    ]
+   }
+  ]
+ },
+ "router: a non-Bearer authorization header is 401": {
+  "steps": [
+   {
+    "status": 401,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Unauthorized"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": [
+     "warn: [AI_AUTH] Missing authorization token"
+    ]
+   }
+  ]
+ },
+ "entityCreate: missing data is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Missing entityType or data"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "entityCreate: data must be an object": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Missing entityType or data"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "entityCreate: unknown entity type is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Unknown entityType: spaceship"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "entityCreate: a note is created for a free user": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "id": "n1",
+      "ok": true,
+      "reminder": "not_requested"
+     }
+    },
+    "writes": {
+     "notes/n1": {
+      "content": "c",
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "title": "N",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "users/u1/freeUsage/counters": {
+      "noteCount": 1,
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "entityCreate: a note without docId gets a generated id": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "id": "mock-1",
+      "ok": true,
+      "reminder": "not_requested"
+     }
+    },
+    "writes": {
+     "notes/mock-1": {
+      "content": "c",
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "title": "N",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "users/u1/freeUsage/counters": {
+      "noteCount": 1,
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "entityCreate: the free note limit is enforced": {
+  "steps": [
+   {
+    "status": 429,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "free_limit",
+      "current": 10,
+      "error": "Limit exceeded",
+      "limit": 10
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "entityCreate: premium users are not limited": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "id": "n10",
+      "ok": true,
+      "reminder": "not_requested"
+     }
+    },
+    "writes": {
+     "notes/n10": {
+      "content": "",
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "title": "eleventh",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "entityCreate: a habit is created": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "id": "h1",
+      "ok": true,
+      "reminder": "not_requested"
+     }
+    },
+    "writes": {
+     "habits/h1": {
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "reminderTime": "07:00",
+      "repeatType": "daily",
+      "title": "Run",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "users/u1/freeUsage/counters": {
+      "habitCount": 1,
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "entityCreate: a task with a time schedules a reminder in the client zone": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "id": "t1",
+      "ok": true,
+      "reminder": "scheduled"
+     }
+    },
+    "writes": {
+     "reminders/task-t1": {
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "retryCount": 0,
+      "scheduledAt": {
+       "$ts": "2026-10-16T15:00:00.000Z"
+      },
+      "source": "web-app",
+      "status": "pending",
+      "taskId": "t1",
+      "telegramText": "Задача: Call",
+      "timezone": "Asia/Almaty",
+      "title": "Call",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "tasks/t1": {
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "date": "2026-10-16",
+      "id": "t1",
+      "time": "20:00",
+      "title": "Call",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "users/u1/freeUsage/counters": {
+      "dailyTaskCount": 1,
+      "date": "2026-10-15",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": [
+     "log: {\"event\":\"entityCreate_reminder\",\"taskId\":\"t1\",\"result\":\"scheduled\"}"
+    ]
+   }
+  ]
+ },
+ "entityCreate: a task falls back to the stored zone": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "id": "t1",
+      "ok": true,
+      "reminder": "scheduled"
+     }
+    },
+    "writes": {
+     "reminders/task-t1": {
+      "chatId": 556,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "retryCount": 0,
+      "scheduledAt": {
+       "$ts": "2026-10-16T17:00:00.000Z"
+      },
+      "source": "web-app",
+      "status": "pending",
+      "taskId": "t1",
+      "telegramText": "Задача: Call",
+      "timezone": "Europe/Moscow",
+      "title": "Call",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "tasks/t1": {
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "date": "2026-10-16",
+      "id": "t1",
+      "time": "20:00",
+      "title": "Call",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "users/u1/freeUsage/counters": {
+      "dailyTaskCount": 1,
+      "date": "2026-10-15",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": [
+     "log: {\"event\":\"entityCreate_reminder\",\"taskId\":\"t1\",\"result\":\"scheduled\"}"
+    ]
+   }
+  ]
+ },
+ "entityCreate: a task without any zone gets no reminder": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "id": "t1",
+      "ok": true,
+      "reminder": "timezone_unknown"
+     }
+    },
+    "writes": {
+     "tasks/t1": {
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "date": "2026-10-16",
+      "id": "t1",
+      "time": "20:00",
+      "title": "Call",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "users/u1/freeUsage/counters": {
+      "dailyTaskCount": 1,
+      "date": "2026-10-15",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": [
+     "log: {\"event\":\"entityCreate_reminder\",\"taskId\":\"t1\",\"result\":\"timezone_unknown\"}"
+    ]
+   }
+  ]
+ },
+ "entityCreate: a task in the past gets no reminder": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "id": "t1",
+      "ok": true,
+      "reminder": "in_the_past"
+     }
+    },
+    "writes": {
+     "tasks/t1": {
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "date": "2026-10-14",
+      "id": "t1",
+      "time": "08:00",
+      "title": "Old",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "users/u1/freeUsage/counters": {
+      "dailyTaskCount": 1,
+      "date": "2026-10-15",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": [
+     "log: {\"event\":\"entityCreate_reminder\",\"taskId\":\"t1\",\"result\":\"in_the_past\"}"
+    ]
+   }
+  ]
+ },
+ "entityCreate: an existing reminder for the task is not duplicated": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "id": "t1",
+      "ok": true,
+      "reminder": "already_scheduled"
+     }
+    },
+    "writes": {
+     "tasks/t1": {
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "date": "2026-10-16",
+      "id": "t1",
+      "time": "08:00",
+      "title": "Again",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "users/u1/freeUsage/counters": {
+      "dailyTaskCount": 1,
+      "date": "2026-10-15",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": [
+     "log: {\"event\":\"entityCreate_reminder\",\"taskId\":\"t1\",\"result\":\"already_scheduled\"}"
+    ]
+   }
+  ]
+ },
+ "entityCreate: a task without Telegram link gets no reminder": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "id": "t1",
+      "ok": true,
+      "reminder": "no_telegram_link"
+     }
+    },
+    "writes": {
+     "tasks/t1": {
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "date": "2026-10-16",
+      "id": "t1",
+      "time": "20:00",
+      "title": "Call",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "users/u1/freeUsage/counters": {
+      "dailyTaskCount": 1,
+      "date": "2026-10-15",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": [
+     "log: {\"event\":\"entityCreate_reminder\",\"taskId\":\"t1\",\"result\":\"no_telegram_link\"}"
+    ]
+   }
+  ]
+ },
+ "entityCreate: a task without time is created without reminder": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "id": "t2",
+      "ok": true,
+      "reminder": "not_requested"
+     }
+    },
+    "writes": {
+     "tasks/t2": {
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "date": "2026-10-16",
+      "id": "t2",
+      "title": "Someday",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "users/u1/freeUsage/counters": {
+      "dailyTaskCount": 1,
+      "date": "2026-10-15",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "entityCreate: the free daily task limit is enforced": {
+  "steps": [
+   {
+    "status": 429,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "free_limit",
+      "current": 5,
+      "error": "Limit exceeded",
+      "limit": 5
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "entityCreate: a RUB expense is created with server-side money fields": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "id": "tx1",
+      "ok": true,
+      "transaction": {
+       "amount": 500,
+       "currency": "RUB",
+       "fx": null,
+       "rubAmount": 500,
+       "schemaVersion": 2
+      }
+     }
+    },
+    "writes": {
+     "transactions/tx1": {
+      "amount": 500,
+      "category": "food",
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "currency": "RUB",
+      "date": "2026-10-15",
+      "description": "Coffee",
+      "fx": null,
+      "rubAmount": 500,
+      "schemaVersion": 2,
+      "source": "web-app",
+      "type": "expense",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "users/u1/freeUsage/counters": {
+      "month": "2026-10",
+      "transactionCount": 1,
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "entityCreate: an invalid transaction is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "VALIDATION_ERROR",
+      "error": "amount must be a positive number"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "entityCreate: a wrong transaction type is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "VALIDATION_ERROR",
+      "error": "type must be \"income\" or \"expense\""
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "entityCreate: the free monthly transaction limit is enforced": {
+  "steps": [
+   {
+    "status": 429,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "free_limit",
+      "current": 30,
+      "error": "Limit exceeded",
+      "limit": 30
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "entityCreate: a foreign-currency transaction without rates is 503": {
+  "steps": [
+   {
+    "status": 503,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "fx_unavailable",
+      "currency": "USD",
+      "error": "FX unavailable"
+     }
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://www.banki.ru/products/currency/cash/usd/moskva/",
+      "method": "GET",
+      "body": "$none"
+     },
+     {
+      "url": "https://api.tbank.ru/v1/currency_rates?from=USD&to=RUB",
+      "method": "GET",
+      "body": "$none"
+     },
+     {
+      "url": "https://www.cbr-xml-daily.ru/daily_json.js",
+      "method": "GET",
+      "body": "$none"
+     },
+     {
+      "url": "https://api.exchangerate-api.com/v4/latest/RUB",
+      "method": "GET",
+      "body": "$none"
+     }
+    ],
+    "logs": [
+     "log: [FX] metric=fx_provider_failure provider=banki currency=USD reason=network_error detail=\"fetch failed (no scripted route)\"",
+     "log: [FX] metric=fx_provider_failure provider=tbank currency=USD reason=network_error",
+     "log: [FX] metric=fx_provider_failure provider=cbr currency=USD reason=network_error",
+     "error: [FX_RATES] fetch failed reason=%s fetch failed (no scripted route)",
+     "log: [FX] metric=fx_provider_failure provider=exchangerate-api currency=USD reason=unsupported_currency",
+     "warn: [FX][ALERT] metric=fx_unavailable currency=USD side=bank_sells attempts=banki:network_error|tbank:network_error|cbr:network_error|exchangerate-api:unsupported_currency"
+    ]
+   }
+  ]
+ },
+ "entityCreate: a storage failure is 500": {
+  "steps": [
+   {
+    "status": 500,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Failed to create entity"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": [
+     "error: [ai/entityCreate] error: notes backend down"
+    ]
+   }
+  ]
+ },
+ "transactionUpdate: missing id is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Missing id or patch"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "transactionUpdate: patch must be an object": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Missing id or patch"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "transactionUpdate: unknown transaction is 404": {
+  "steps": [
+   {
+    "status": 404,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Transaction not found"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "transactionUpdate: another user's transaction is 404": {
+  "steps": [
+   {
+    "status": 404,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Transaction not found"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "transactionUpdate: description edit": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "id": "tx1",
+      "ok": true,
+      "transaction": {
+       "amount": 500,
+       "currency": "RUB",
+       "fx": null,
+       "rubAmount": 500,
+       "schemaVersion": 2
+      }
+     }
+    },
+    "writes": {
+     "transactions/tx1": {
+      "amount": 500,
+      "category": "food",
+      "currency": "RUB",
+      "date": "2026-10-10",
+      "description": "b",
+      "rubAmount": 500,
+      "schemaVersion": 2,
+      "type": "expense",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "transactionUpdate: amount edit recomputes money fields": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "id": "tx1",
+      "ok": true,
+      "transaction": {
+       "amount": 750,
+       "currency": "RUB",
+       "fx": null,
+       "rubAmount": 750,
+       "schemaVersion": 2
+      }
+     }
+    },
+    "writes": {
+     "transactions/tx1": {
+      "amount": 750,
+      "category": "food",
+      "currency": "RUB",
+      "date": "2026-10-10",
+      "description": "a",
+      "fx": null,
+      "rubAmount": 750,
+      "schemaVersion": 2,
+      "type": "expense",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "transactionUpdate: invalid amount is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "VALIDATION_ERROR",
+      "error": "amount must be a positive number"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "transactionUpdate: an empty patch changes nothing": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "id": "tx1",
+      "ok": true,
+      "transaction": {
+       "amount": 500,
+       "currency": "RUB",
+       "fx": null,
+       "rubAmount": 500,
+       "schemaVersion": 2
+      }
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "exportFinancePdf: free plan is 429": {
+  "steps": [
+   {
+    "status": 429,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "pdf_limit",
+      "error": "PDF-отчёты доступны на тарифе Premium.",
+      "limit": 0,
+      "plan": "free",
+      "used": 0
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "exportFinancePdf: pro plan is 429": {
+  "steps": [
+   {
+    "status": 429,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "pdf_limit",
+      "error": "PDF-отчёты доступны на тарифе Premium.",
+      "limit": 0,
+      "plan": "pro",
+      "used": 0
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "exportFinancePdf: monthly allowance used up is 429": {
+  "steps": [
+   {
+    "status": 429,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "pdf_limit",
+      "error": "Лимит PDF-отчётов на этот месяц исчерпан.",
+      "limit": 10,
+      "plan": "premium",
+      "used": 10
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "exportFinancePdf: invalid period is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "INVALID_PERIOD",
+      "error": "Неизвестный период: \"decade\". Используй today/week/month/quarter/year/all/custom."
+     }
+    },
+    "writes": {
+     "aiUsage/u1": {
+      "imageRequests": 0,
+      "month": "2026-10",
+      "pdfReports": 1,
+      "textRequests": 0,
+      "userId": ""
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "exportFinancePdf: invalid custom range is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "INVALID_DATE_RANGE",
+      "error": "dateFrom не может быть позже dateTo."
+     }
+    },
+    "writes": {
+     "aiUsage/u1": {
+      "imageRequests": 0,
+      "month": "2026-10",
+      "pdfReports": 1,
+      "textRequests": 0,
+      "userId": ""
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "exportFinancePdf: premium gets a PDF": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {
+     "content-type": "application/pdf",
+     "content-disposition": "attachment; filename=\"ENMA-finance-report-month-2026-10-15.pdf\"",
+     "content-length": "36090",
+     "cache-control": "no-store"
+    },
+    "body": {
+     "send": {
+      "$buffer": {
+       "bytes": 36090,
+       "sha256": "6afa756909c4b2c66178bc0b787c1738468480a8be43207a7ccac30d7d0ec004",
+       "head": "%PDF-"
+      }
+     }
+    },
+    "writes": {
+     "aiUsage/u1": {
+      "imageRequests": 0,
+      "month": "2026-10",
+      "pdfReports": 1,
+      "textRequests": 0,
+      "userId": ""
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "goalCreate: empty title is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "VALIDATION_ERROR",
+      "error": "Invalid title"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "goalCreate: long title is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "VALIDATION_ERROR",
+      "error": "Invalid title"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "goalCreate: non-positive amount is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "VALIDATION_ERROR",
+      "error": "Invalid targetAmount"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "goalCreate: too large amount is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "VALIDATION_ERROR",
+      "error": "Invalid targetAmount"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "goalCreate: malformed deadline is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "VALIDATION_ERROR",
+      "error": "Invalid deadline"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "goalCreate: a goal is created": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "id": "mock-1",
+      "ok": true
+     }
+    },
+    "writes": {
+     "goals/mock-1": {
+      "category": null,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "currency": "RUB",
+      "currentAmount": 0,
+      "currentAmountRub": 0,
+      "deadline": "2027-01-01",
+      "source": "web-app",
+      "targetAmount": 1234.57,
+      "title": "Car",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "goalCreate: an empty deadline is stored as null": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "id": "mock-1",
+      "ok": true
+     }
+    },
+    "writes": {
+     "goals/mock-1": {
+      "category": null,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "currency": "RUB",
+      "currentAmount": 0,
+      "currentAmountRub": 0,
+      "deadline": null,
+      "source": "web-app",
+      "targetAmount": 10,
+      "title": "Car",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "goalAdjust: invalid direction is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "VALIDATION_ERROR",
+      "error": "Invalid request"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "goalAdjust: missing operationId is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "VALIDATION_ERROR",
+      "error": "Missing operationId"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "goalAdjust: unknown goal is 404": {
+  "steps": [
+   {
+    "status": 404,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Goal not found"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "goalAdjust: deposit, then the same operation again is a duplicate": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "currentAmount": 150,
+      "duplicate": false,
+      "id": "g1",
+      "ok": true
+     }
+    },
+    "writes": {
+     "goals/g1": {
+      "currency": "RUB",
+      "currentAmount": 150,
+      "currentAmountRub": 150,
+      "targetAmount": 1000,
+      "title": "Laptop",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "transactions/goalxfer-op1": {
+      "amount": 50,
+      "amountInGoalCurrency": 50,
+      "budgetImpact": false,
+      "categoryId": "cat-goal",
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "currency": "RUB",
+      "date": "2026-10-15T09:30:00.000Z",
+      "description": "Накопления: Laptop",
+      "fx": null,
+      "goalBalanceAfter": 150,
+      "goalCurrency": "RUB",
+      "goalId": "g1",
+      "goalTitleSnapshot": "Laptop",
+      "operationId": "op1",
+      "rubAmount": 50,
+      "schemaVersion": 2,
+      "source": "web-app",
+      "type": "goal_deposit",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "currentAmount": 150,
+      "duplicate": true,
+      "id": "g1",
+      "ok": true
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "goalAdjust: withdrawing more than the goal holds is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "INSUFFICIENT",
+      "error": "Insufficient goal balance: have 100, requested 500"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "goalAdjust: withdrawal": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "currentAmount": 60,
+      "duplicate": false,
+      "id": "g1",
+      "ok": true
+     }
+    },
+    "writes": {
+     "goals/g1": {
+      "currency": "RUB",
+      "currentAmount": 60,
+      "currentAmountRub": 60,
+      "targetAmount": 1000,
+      "title": "Laptop",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "transactions/goalxfer-op3": {
+      "amount": 40,
+      "amountInGoalCurrency": 40,
+      "budgetImpact": false,
+      "categoryId": "cat-goal",
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "currency": "RUB",
+      "date": "2026-10-15T09:30:00.000Z",
+      "description": "Снятие из накоплений: Laptop",
+      "fx": null,
+      "goalBalanceAfter": 60,
+      "goalCurrency": "RUB",
+      "goalId": "g1",
+      "goalTitleSnapshot": "Laptop",
+      "operationId": "op3",
+      "rubAmount": 40,
+      "schemaVersion": 2,
+      "source": "web-app",
+      "type": "goal_withdraw",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "goalAdjust: another user's goal is 404": {
+  "steps": [
+   {
+    "status": 404,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Goal not found"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "goalDelete: missing id is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "VALIDATION_ERROR",
+      "error": "Invalid request"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "goalDelete: missing operationId is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "VALIDATION_ERROR",
+      "error": "Missing operationId"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "goalDelete: unknown goal is 404": {
+  "steps": [
+   {
+    "status": 404,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Goal not found"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "goalDelete: the remaining balance is returned and the goal closed": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "duplicate": false,
+      "hadBalance": true,
+      "id": "g1",
+      "ok": true,
+      "returnedRubAmount": 100
+     }
+    },
+    "writes": {
+     "goals/g1": "$deleted",
+     "transactions/goalxfer-del1": {
+      "amount": 100,
+      "amountInGoalCurrency": 100,
+      "budgetImpact": false,
+      "categoryId": "cat-goal",
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "currency": "RUB",
+      "date": "2026-10-15T09:30:00.000Z",
+      "description": "Закрытие цели: возврат остатка — Laptop",
+      "fx": null,
+      "goalBalanceAfter": 0,
+      "goalClosed": true,
+      "goalCurrency": "RUB",
+      "goalId": "g1",
+      "goalTitleSnapshot": "Laptop",
+      "operationId": "del1",
+      "rubAmount": 100,
+      "schemaVersion": 2,
+      "source": "web-app",
+      "type": "goal_withdraw",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "goalDelete: an empty goal is closed": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "duplicate": false,
+      "hadBalance": false,
+      "id": "g1",
+      "ok": true,
+      "returnedRubAmount": 0
+     }
+    },
+    "writes": {
+     "goals/g1": "$deleted"
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "partnerLogin: a bad signature is 401": {
+  "steps": [
+   {
+    "status": 401,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "bad_signature",
+      "error": "invalid_telegram_signature"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "partnerLogin: a stale login is 401": {
+  "steps": [
+   {
+    "status": 401,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "expired",
+      "error": "invalid_telegram_signature"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "partnerLogin: an unsigned body is 401": {
+  "steps": [
+   {
+    "status": 401,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "missing_hash",
+      "error": "invalid_telegram_signature"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "partnerLogin: a new partner signs in, sees the dashboard and creates links": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "partner": {
+       "code": "VQ5XFS",
+       "name": "Pat Ner",
+       "status": "active"
+      },
+      "token": "eyJjb2RlIjoiVlE1WEZTIiwiZXhwIjoxNzk0NjQ4NjAwMDAwfQ.HjGgMve9Q0SgSLVNeoEhSVMZe7PWD84S-50IGQ8yi0Y"
+     }
+    },
+    "writes": {
+     "referrers/VQ5XFS": {
+      "clicks": 0,
+      "code": "VQ5XFS",
+      "commissionPercent": 30,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "discountPercent": 10,
+      "name": "Pat Ner",
+      "paidOut": 0,
+      "pendingPayout": 0,
+      "registrations": 0,
+      "source": "self_service",
+      "status": "active",
+      "telegramId": 777,
+      "telegramUsername": "patner",
+      "totalEarned": 0
+     }
+    },
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "partner": {
+       "clicks": 0,
+       "code": "VQ5XFS",
+       "commissionPercent": 30,
+       "defaultLink": "https://t.me/YourArc_bot?start=ref_VQ5XFS",
+       "discountPercent": 10,
+       "links": [],
+       "name": "Pat Ner",
+       "paidOut": 0,
+       "payments": 0,
+       "pendingPayout": 0,
+       "recentEarnings": [],
+       "registrations": 0,
+       "status": "active",
+       "totalEarned": 0
+      }
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "platform": "yt",
+      "url": "https://t.me/YourArc_bot?start=ref_VQ5XFS_yt"
+     }
+    },
+    "writes": {
+     "referrers/VQ5XFS/links/yt": {
+      "clicks": 0,
+      "commission": 0,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "payments": 0,
+      "platform": "yt",
+      "registrations": 0
+     }
+    },
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "platform": "direct",
+      "url": "https://t.me/YourArc_bot?start=ref_VQ5XFS"
+     }
+    },
+    "writes": {
+     "referrers/VQ5XFS/links/direct": {
+      "clicks": 0,
+      "commission": 0,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "payments": 0,
+      "platform": "direct",
+      "registrations": 0
+     }
+    },
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "partner": {
+       "clicks": 0,
+       "code": "VQ5XFS",
+       "commissionPercent": 30,
+       "defaultLink": "https://t.me/YourArc_bot?start=ref_VQ5XFS",
+       "discountPercent": 10,
+       "links": [
+        {
+         "clicks": 0,
+         "commission": 0,
+         "createdAt": {
+          "$ts": "2026-10-15T09:30:00.000Z"
+         },
+         "id": "yt",
+         "payments": 0,
+         "platform": "yt",
+         "registrations": 0,
+         "url": "https://t.me/YourArc_bot?start=ref_VQ5XFS_yt"
+        },
+        {
+         "clicks": 0,
+         "commission": 0,
+         "createdAt": {
+          "$ts": "2026-10-15T09:30:00.000Z"
+         },
+         "id": "direct",
+         "payments": 0,
+         "platform": "direct",
+         "registrations": 0,
+         "url": "https://t.me/YourArc_bot?start=ref_VQ5XFS"
+        }
+       ],
+       "name": "Pat Ner",
+       "paidOut": 0,
+       "payments": 0,
+       "pendingPayout": 0,
+       "recentEarnings": [],
+       "registrations": 0,
+       "status": "active",
+       "totalEarned": 0
+      }
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "partnerLogin: an existing partner gets the same code": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "partner": {
+       "code": "ABC123",
+       "name": "Old Name",
+       "status": "paused"
+      },
+      "token": "eyJjb2RlIjoiQUJDMTIzIiwiZXhwIjoxNzk0NjQ4NjAwMDAwfQ.znqqmmKjKy8PAcR1lJIlYBIIJBB-OAjs5wodGcfldto"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "partnerLogin: more than 10 attempts a minute from one address are throttled": {
+  "steps": [
+   {
+    "status": 401,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "missing_auth_date",
+      "error": "invalid_telegram_signature"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 401,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "missing_auth_date",
+      "error": "invalid_telegram_signature"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 401,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "missing_auth_date",
+      "error": "invalid_telegram_signature"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 401,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "missing_auth_date",
+      "error": "invalid_telegram_signature"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 401,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "missing_auth_date",
+      "error": "invalid_telegram_signature"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 401,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "missing_auth_date",
+      "error": "invalid_telegram_signature"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 401,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "missing_auth_date",
+      "error": "invalid_telegram_signature"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 401,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "missing_auth_date",
+      "error": "invalid_telegram_signature"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 401,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "missing_auth_date",
+      "error": "invalid_telegram_signature"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 401,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "missing_auth_date",
+      "error": "invalid_telegram_signature"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 429,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Too many requests"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "partnerLogin: a missing session secret is a 500": {
+  "steps": [
+   {
+    "status": 500,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Failed to sign in"
+     }
+    },
+    "writes": {
+     "referrers/VQ5XFS": {
+      "clicks": 0,
+      "code": "VQ5XFS",
+      "commissionPercent": 30,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "discountPercent": 10,
+      "name": "Pat Ner",
+      "paidOut": 0,
+      "pendingPayout": 0,
+      "registrations": 0,
+      "source": "self_service",
+      "status": "active",
+      "telegramId": 777,
+      "telegramUsername": "patner",
+      "totalEarned": 0
+     }
+    },
+    "fetch": [],
+    "logs": [
+     "error: [ai/partnerLogin] error: PARTNER_SESSION_SECRET is not set"
+    ]
+   }
+  ]
+ },
+ "partnerMe: a session for an unknown partner is 404": {
+  "steps": [
+   {
+    "status": 404,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "partner_not_found"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "partnerMe: an expired session is 401": {
+  "steps": [
+   {
+    "status": 401,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "expired",
+      "error": "unauthorized"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "partnerMe: a tampered session is 401": {
+  "steps": [
+   {
+    "status": 401,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "bad_signature",
+      "error": "unauthorized"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "partnerMe: summary with links and earnings": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "partner": {
+       "clicks": 5,
+       "code": "ABC123",
+       "commissionPercent": 25,
+       "defaultLink": "https://t.me/YourArc_bot?start=ref_ABC123",
+       "discountPercent": 10,
+       "links": [
+        {
+         "clicks": 3,
+         "id": "yt",
+         "platform": "yt",
+         "url": "https://t.me/YourArc_bot?start=ref_ABC123_yt"
+        }
+       ],
+       "name": "P",
+       "paidOut": 200,
+       "payments": 1,
+       "pendingPayout": 100,
+       "recentEarnings": [
+        {
+         "amount": 1000,
+         "commission": 250,
+         "createdAt": "2026-10-01T10:00:00.000Z",
+         "id": "e1",
+         "platform": "yt",
+         "status": "pending"
+        },
+        {
+         "amount": 200,
+         "commission": 50,
+         "createdAt": "2026-10-02T10:00:00.000Z",
+         "id": "e2",
+         "platform": "direct",
+         "status": "cancelled"
+        }
+       ],
+       "registrations": 2,
+       "status": "active",
+       "totalEarned": 300
+      }
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "partnerLink: no session is 401": {
+  "steps": [
+   {
+    "status": 401,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "malformed",
+      "error": "unauthorized"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "partnerBotInfo: without a bot token the configured name is used": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {
+     "cache-control": "public, max-age=300"
+    },
+    "body": {
+     "json": {
+      "botUsername": "YourArc_bot",
+      "configBotUsername": "YourArc_bot",
+      "configMatchesLive": true,
+      "ok": true
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "partnerBotInfo: the live name is fetched once and cached": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {
+     "cache-control": "public, max-age=300"
+    },
+    "body": {
+     "json": {
+      "botUsername": "LiveBot",
+      "configBotUsername": "ConfiguredBot",
+      "configMatchesLive": false,
+      "ok": true
+     }
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/getMe",
+      "method": "GET",
+      "body": "$none"
+     }
+    ],
+    "logs": []
+   },
+   {
+    "status": 200,
+    "headers": {
+     "cache-control": "public, max-age=300"
+    },
+    "body": {
+     "json": {
+      "botUsername": "LiveBot",
+      "configBotUsername": "ConfiguredBot",
+      "configMatchesLive": false,
+      "ok": true
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "partnerBotInfo: the cache expires after five minutes": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {
+     "cache-control": "public, max-age=300"
+    },
+    "body": {
+     "json": {
+      "botUsername": "LiveBot",
+      "configBotUsername": "YourArc_bot",
+      "configMatchesLive": false,
+      "ok": true
+     }
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/getMe",
+      "method": "GET",
+      "body": "$none"
+     }
+    ],
+    "logs": []
+   },
+   {
+    "status": 200,
+    "headers": {
+     "cache-control": "public, max-age=300"
+    },
+    "body": {
+     "json": {
+      "botUsername": "LiveBot",
+      "configBotUsername": "YourArc_bot",
+      "configMatchesLive": false,
+      "ok": true
+     }
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/getMe",
+      "method": "GET",
+      "body": "$none"
+     }
+    ],
+    "logs": []
+   }
+  ]
+ },
+ "partnerBotInfo: a Telegram failure falls back to the configured name": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {
+     "cache-control": "public, max-age=300"
+    },
+    "body": {
+     "json": {
+      "botUsername": "YourArc_bot",
+      "configBotUsername": "YourArc_bot",
+      "configMatchesLive": true,
+      "ok": true
+     }
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/getMe",
+      "method": "GET",
+      "body": "$none"
+     }
+    ],
+    "logs": [
+     "error: [ai/partnerBotInfo] getMe failed: getaddrinfo ENOTFOUND"
+    ]
+   }
+  ]
+ },
+ "partnerBotInfo: an unexpected Telegram answer falls back": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {
+     "cache-control": "public, max-age=300"
+    },
+    "body": {
+     "json": {
+      "botUsername": "YourArc_bot",
+      "configBotUsername": "YourArc_bot",
+      "configMatchesLive": true,
+      "ok": true
+     }
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/getMe",
+      "method": "GET",
+      "body": "$none"
+     }
+    ],
+    "logs": []
+   }
+  ]
+ },
+ "referralValidate: missing code is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "missing_code",
+      "valid": false
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "referralValidate: an active partner code is accepted": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "BLOGGER",
+      "commissionPercent": 25,
+      "discountPercent": 15,
+      "referrerName": "Blogger",
+      "valid": true
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "referralValidate: partner code defaults": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "BLOGGER",
+      "commissionPercent": 30,
+      "discountPercent": 10,
+      "referrerName": "",
+      "valid": true
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "referralValidate: an inactive partner code falls through to user codes": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "code_not_found",
+      "valid": false
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "referralValidate: a user already attributed to another partner falls through": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "code_not_found",
+      "valid": false
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "referralValidate: a user referral code is accepted": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "discountPercent": 0,
+      "type": "user",
+      "valid": true
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "referralValidate: own code is refused": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "self_referral",
+      "valid": false
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "referralValidate: an already referred user is refused": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "already_referred",
+      "valid": false
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "referralInfo: a referral code is generated on first use": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "referralBalance": 0,
+      "referralCode": "kazpKeRm",
+      "referralLink": "https://t.me/YourArc_bot?start=ref_kazpKeRm",
+      "referredBy": null,
+      "totalReferralEarnedRub": 0,
+      "totalReferred": 1
+     }
+    },
+    "writes": {
+     "users/u1": {
+      "chatId": 555,
+      "pendingPayoutUsd": 0,
+      "referralCode": "kazpKeRm",
+      "referralLink": "https://t.me/YourArc_bot?start=ref_kazpKeRm",
+      "referralLinkClaimedAt": null,
+      "referredBy": null,
+      "tonWalletAddress": null,
+      "totalEarningsUsd": 0,
+      "totalPaidUsd": 0
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "referralInfo: an existing code and balances are returned": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "referralBalance": 150,
+      "referralCode": "KEEP0001",
+      "referralLink": "https://t.me/SomeBot?start=ref_KEEP0001",
+      "referredBy": "u7",
+      "totalReferralEarnedRub": 300,
+      "totalReferred": 0
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "referralInfo: a user without a profile document": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "referralBalance": 0,
+      "referralCode": null,
+      "referralLink": null,
+      "referredBy": null,
+      "totalReferralEarnedRub": 0,
+      "totalReferred": 0
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "referralInfo: an empty stored code is regenerated": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "referralBalance": 0,
+      "referralCode": "kazpKeRm",
+      "referralLink": "https://t.me/YourArc_bot?start=ref_kazpKeRm",
+      "referredBy": null,
+      "totalReferralEarnedRub": 0,
+      "totalReferred": 0
+     }
+    },
+    "writes": {
+     "users/u1": {
+      "pendingPayoutUsd": 0,
+      "referralCode": "kazpKeRm",
+      "referralLink": "https://t.me/YourArc_bot?start=ref_kazpKeRm",
+      "referralLinkClaimedAt": null,
+      "referredBy": null,
+      "tonWalletAddress": null,
+      "totalEarningsUsd": 0,
+      "totalPaidUsd": 0
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "referralPayout: a wrong admin key is 403": {
+  "steps": [
+   {
+    "status": 403,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "forbidden"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "referralPayout: list referrers with pending payouts": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "referrers": [
+       {
+        "code": "ABC123",
+        "id": "ABC123",
+        "paidOut": 0,
+        "pendingPayout": 300
+       }
+      ]
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "referralPayout: missing fields are 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "referrerId and amount are required"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "referralPayout: unknown referrer is 404": {
+  "steps": [
+   {
+    "status": 404,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "referrer_not_found"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "referralPayout: nothing pending is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "nothing_to_pay"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "referralPayout: pays earnings oldest first up to the amount": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "paidAmount": 200,
+      "paidEarningsCount": 1
+     }
+    },
+    "writes": {
+     "referralEarnings/e1": {
+      "commission": 100,
+      "createdAt": {
+       "$ts": "2026-10-01T00:00:00.000Z"
+      },
+      "paidAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "referrerId": "ABC123",
+      "status": "paid"
+     },
+     "referrers/ABC123": {
+      "code": "ABC123",
+      "paidOut": 200,
+      "pendingPayout": 100
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "referralPayout: the amount is capped at the pending balance": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "paidAmount": 300,
+      "paidEarningsCount": 1
+     }
+    },
+    "writes": {
+     "referralEarnings/e1": {
+      "commission": 100,
+      "createdAt": {
+       "$ts": "2026-10-01T00:00:00.000Z"
+      },
+      "paidAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "referrerId": "ABC123",
+      "status": "paid"
+     },
+     "referrers/ABC123": {
+      "code": "ABC123",
+      "paidOut": 300,
+      "pendingPayout": 0
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "referralPayout: an amount covering several earnings pays them all": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "paidAmount": 349.9995,
+      "paidEarningsCount": 2
+     }
+    },
+    "writes": {
+     "referralEarnings/e1": {
+      "commission": 100,
+      "createdAt": {
+       "$ts": "2026-10-01T00:00:00.000Z"
+      },
+      "paidAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "referrerId": "ABC123",
+      "status": "paid"
+     },
+     "referralEarnings/e2": {
+      "commission": 250,
+      "createdAt": {
+       "$ts": "2026-10-02T00:00:00.000Z"
+      },
+      "paidAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "referrerId": "ABC123",
+      "status": "paid"
+     },
+     "referrers/ABC123": {
+      "code": "ABC123",
+      "paidOut": 359.9995,
+      "pendingPayout": 50.00049999999999
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminVerifyOtp: without a configured secret no OTP is required": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "required": false
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminVerifyOtp: a token is required when configured": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "token_required",
+      "ok": false,
+      "required": true
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminVerifyOtp: the current code is accepted": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": null,
+      "ok": true,
+      "required": true
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminVerifyOtp: the previous and next codes are accepted (clock skew)": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": null,
+      "ok": true,
+      "required": true
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": null,
+      "ok": true,
+      "required": true
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminVerifyOtp: an older code is refused": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "invalid_token",
+      "ok": false,
+      "required": true
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminVerifyOtp: a code with spaces is accepted": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": null,
+      "ok": true,
+      "required": true
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminVerifyOtp: a numeric token is accepted": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": null,
+      "ok": true,
+      "required": true
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminSetupOtp: a new secret is proposed when none is configured": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "alreadyConfigured": false,
+      "ok": true,
+      "secret": "TFZNVKZMQZCZ7XLYH7Q34TRSQCXZYADY",
+      "uri": "otpauth://totp/Enma%20Admin?secret=TFZNVKZMQZCZ7XLYH7Q34TRSQCXZYADY&issuer=Enma&algorithm=SHA1&digits=6&period=30"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminSetupOtp: the configured secret is shown": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "alreadyConfigured": true,
+      "ok": true,
+      "secret": "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
+      "uri": "otpauth://totp/Enma%20Admin?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=Enma&algorithm=SHA1&digits=6&period=30"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminSetupOtp: a test code is checked against the candidate secret": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": null,
+      "ok": true
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "invalid_token",
+      "ok": false
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminSetupOtp: a test code without any secret is refused": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "invalid_token",
+      "ok": false
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminSetupOtp: a test code falls back to the configured secret": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": null,
+      "ok": true
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminStats: dashboard aggregates": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "aiRequestsMonth": 5,
+      "newMonth": 2,
+      "newToday": 1,
+      "newWeek": 2,
+      "payingUsers": 2,
+      "pendingPayouts": 53,
+      "planDist": {
+       "free": 3,
+       "premium": 1,
+       "pro": 1
+      },
+      "recentPayments": [
+       {
+        "amount": 299,
+        "createdAt": "2026-10-14T09:30:00.000Z",
+        "id": "p1",
+        "method": "sbp",
+        "plan": "pro",
+        "promoCode": "",
+        "userId": "a"
+       },
+       {
+        "amount": 599,
+        "createdAt": "2026-09-05T09:30:00.000Z",
+        "id": "p2",
+        "method": "ton",
+        "plan": "",
+        "promoCode": "",
+        "userId": "b"
+       },
+       {
+        "amount": 100,
+        "createdAt": "2026-10-13T09:30:00.000Z",
+        "id": "p4",
+        "method": "stars",
+        "plan": "",
+        "promoCode": "X",
+        "userId": "d"
+       }
+      ],
+      "recentUsers": [
+       {
+        "createdAt": "2026-10-15T08:30:00.000Z",
+        "displayName": "Alice",
+        "uid": "a",
+        "username": "alice"
+       },
+       {
+        "createdAt": "2026-10-12T09:30:00.000Z",
+        "displayName": "Bob",
+        "uid": "b",
+        "username": ""
+       },
+       {
+        "createdAt": "2026-09-25T09:30:00.000Z",
+        "displayName": "",
+        "uid": "c",
+        "username": ""
+       },
+       {
+        "createdAt": "2026-08-31T09:30:00.000Z",
+        "displayName": "",
+        "uid": "d",
+        "username": ""
+       },
+       {
+        "createdAt": "",
+        "displayName": "",
+        "uid": "e",
+        "username": ""
+       }
+      ],
+      "regsByDay": {
+       "2026-09-25": 1,
+       "2026-10-12": 1,
+       "2026-10-15": 1
+      },
+      "revByDay": {
+       "2026-10-13": 100,
+       "2026-10-14": 299
+      },
+      "revenueMonth": 399,
+      "topReferrers": [
+       {
+        "id": "R2",
+        "pendingPayout": 30,
+        "totalEarned": 500
+       },
+       {
+        "id": "R6",
+        "totalEarned": 90
+       },
+       {
+        "id": "R4",
+        "pendingPayout": 1,
+        "totalEarned": 70
+       },
+       {
+        "id": "R1",
+        "pendingPayout": 20,
+        "totalEarned": 50
+       },
+       {
+        "id": "R3",
+        "totalEarned": 10
+       }
+      ],
+      "totalUsers": 5
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminUsers: debug sample": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "collectionSize": 1,
+      "ok": true,
+      "sample": [
+       {
+        "data": {
+         "createdAt": {
+          "$ts": "2026-10-01T00:00:00.000Z"
+         },
+         "n": 1,
+         "subscription": {
+          "plan": "pro"
+         },
+         "tags": [
+          "x"
+         ]
+        },
+        "id": "a"
+       }
+      ]
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminUsers: actions need a userId": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "userId required"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminUsers: grant a subscription to a new subscriber": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true
+     }
+    },
+    "writes": {
+     "subscriptions/u1": {
+      "endDateMs": 1794735000000,
+      "expiresAt": {
+       "$ts": "2026-11-15T09:30:00.000Z"
+      },
+      "grantedByAdmin": true,
+      "plan": "pro",
+      "status": "active",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "users/u1": {
+      "isPro": true,
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      }
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminUsers: grant extends a later expiry": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true
+     }
+    },
+    "writes": {
+     "subscriptions/u1": {
+      "endDateMs": 1800869400000,
+      "expiresAt": {
+       "$ts": "2027-01-25T09:30:00.000Z"
+      },
+      "grantedByAdmin": true,
+      "plan": "premium",
+      "status": "active",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "users/u1": {
+      "isPro": true,
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      }
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminUsers: grant uses endDateMs when there is no expiresAt": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true
+     }
+    },
+    "writes": {
+     "subscriptions/u1": {
+      "endDateMs": 1798104600000,
+      "expiresAt": {
+       "$ts": "2026-12-24T09:30:00.000Z"
+      },
+      "grantedByAdmin": true,
+      "plan": "pro",
+      "status": "active",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "users/u1": {
+      "isPro": true,
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      }
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminUsers: grant ignores a past expiry": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true
+     }
+    },
+    "writes": {
+     "subscriptions/u1": {
+      "endDateMs": 1823592600000,
+      "expiresAt": {
+       "$ts": "2027-10-15T09:30:00.000Z"
+      },
+      "grantedByAdmin": true,
+      "plan": "pro",
+      "status": "active",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "users/u1": {
+      "isPro": true,
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      }
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminUsers: send_message needs text": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "text required"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminUsers: send_message to an unknown user is 404": {
+  "steps": [
+   {
+    "status": 404,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "user_not_found"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminUsers: send_message without Telegram link is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "no_telegram_id"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminUsers: send_message is delivered": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "$undefined",
+      "ok": true
+     }
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/sendMessage",
+      "method": "POST",
+      "body": {
+       "chat_id": 555,
+       "parse_mode": "HTML",
+       "text": "<b>hi</b>"
+      }
+     }
+    ],
+    "logs": []
+   }
+  ]
+ },
+ "adminUsers: send_message reports a Telegram refusal": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Forbidden: bot was blocked by the user",
+      "ok": false
+     }
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/sendMessage",
+      "method": "POST",
+      "body": {
+       "chat_id": 556,
+       "parse_mode": "HTML",
+       "text": "hi"
+      }
+     }
+    ],
+    "logs": []
+   }
+  ]
+ },
+ "adminUsers: block and unblock": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true
+     }
+    },
+    "writes": {
+     "users/u1": {
+      "name": "x",
+      "status": "blocked",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      }
+     }
+    },
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true
+     }
+    },
+    "writes": {
+     "users/u1": {
+      "name": "x",
+      "status": "active",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      }
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminUsers: unknown action is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "Unknown action: delete_everything"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminUsers: list joins subscriptions and fills missing names from Telegram": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "hasMore": false,
+      "ok": true,
+      "total": 6,
+      "users": [
+       {
+        "createdAt": "2026-10-14T09:30:00.000Z",
+        "displayName": "Alice",
+        "email": "alice@example.test",
+        "isPro": false,
+        "plan": "pro",
+        "referralCode": "",
+        "status": "active",
+        "subExpiresAt": "2026-10-18T09:30:00.000Z",
+        "telegramId": "101",
+        "uid": "a",
+        "username": "alice"
+       },
+       {
+        "createdAt": "2026-10-13T09:30:00.000Z",
+        "displayName": "Bea",
+        "email": "",
+        "isPro": false,
+        "plan": "free",
+        "referralCode": "",
+        "status": "active",
+        "subExpiresAt": "2026-10-14T09:30:00.000Z",
+        "telegramId": "102",
+        "uid": "b",
+        "username": "bea"
+       },
+       {
+        "createdAt": "2026-10-12T09:30:00.000Z",
+        "displayName": "Dan",
+        "email": "",
+        "isPro": false,
+        "plan": "premium",
+        "referralCode": "",
+        "status": "blocked",
+        "subExpiresAt": "2026-10-24T09:30:00.000Z",
+        "telegramId": "",
+        "uid": "d",
+        "username": ""
+       },
+       {
+        "createdAt": "2026-10-11T09:30:00.000Z",
+        "displayName": "",
+        "email": "",
+        "isPro": false,
+        "plan": "pro",
+        "referralCode": "",
+        "status": "active",
+        "subExpiresAt": "",
+        "telegramId": "105",
+        "uid": "e",
+        "username": ""
+       },
+       {
+        "createdAt": "2026-10-10T09:30:00.000Z",
+        "displayName": "",
+        "email": "",
+        "isPro": false,
+        "plan": "premium",
+        "referralCode": "",
+        "status": "active",
+        "subExpiresAt": "2026-10-16T09:30:00.000Z",
+        "telegramId": "",
+        "uid": "f",
+        "username": "fay"
+       },
+       {
+        "createdAt": "",
+        "displayName": "Carol",
+        "email": "",
+        "isPro": true,
+        "plan": "pro",
+        "referralCode": "BLOG",
+        "status": "active",
+        "subExpiresAt": "",
+        "telegramId": "103",
+        "uid": "c",
+        "username": ""
+       }
+      ]
+     }
+    },
+    "writes": {
+     "users/b": {
+      "chatId": 102,
+      "createdAt": {
+       "$ts": "2026-10-13T09:30:00.000Z"
+      },
+      "firstName": "Bea",
+      "lastName": "B",
+      "username": "bea"
+     }
+    },
+    "fetch": [
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/getChat?chat_id=102",
+      "method": "GET",
+      "body": "$none"
+     },
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/getChat?chat_id=105",
+      "method": "GET",
+      "body": "$none"
+     }
+    ],
+    "logs": []
+   }
+  ]
+ },
+ "adminUsers: list search and limit": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "hasMore": false,
+      "ok": true,
+      "total": 1,
+      "users": [
+       {
+        "createdAt": "2026-10-14T09:30:00.000Z",
+        "displayName": "Alice",
+        "email": "alice@example.test",
+        "isPro": false,
+        "plan": "pro",
+        "referralCode": "",
+        "status": "active",
+        "subExpiresAt": "2026-10-18T09:30:00.000Z",
+        "telegramId": "101",
+        "uid": "a",
+        "username": "alice"
+       }
+      ]
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "hasMore": true,
+      "ok": true,
+      "total": 2,
+      "users": [
+       {
+        "createdAt": "2026-10-14T09:30:00.000Z",
+        "displayName": "Alice",
+        "email": "alice@example.test",
+        "isPro": false,
+        "plan": "pro",
+        "referralCode": "",
+        "status": "active",
+        "subExpiresAt": "2026-10-18T09:30:00.000Z",
+        "telegramId": "101",
+        "uid": "a",
+        "username": "alice"
+       },
+       {
+        "createdAt": "2026-10-13T09:30:00.000Z",
+        "displayName": "",
+        "email": "",
+        "isPro": false,
+        "plan": "free",
+        "referralCode": "",
+        "status": "active",
+        "subExpiresAt": "2026-10-14T09:30:00.000Z",
+        "telegramId": "102",
+        "uid": "b",
+        "username": ""
+       }
+      ]
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "hasMore": false,
+      "ok": true,
+      "total": 4,
+      "users": [
+       {
+        "createdAt": "2026-10-14T09:30:00.000Z",
+        "displayName": "Alice",
+        "email": "alice@example.test",
+        "isPro": false,
+        "plan": "pro",
+        "referralCode": "",
+        "status": "active",
+        "subExpiresAt": "2026-10-18T09:30:00.000Z",
+        "telegramId": "101",
+        "uid": "a",
+        "username": "alice"
+       },
+       {
+        "createdAt": "2026-10-13T09:30:00.000Z",
+        "displayName": "",
+        "email": "",
+        "isPro": false,
+        "plan": "free",
+        "referralCode": "",
+        "status": "active",
+        "subExpiresAt": "2026-10-14T09:30:00.000Z",
+        "telegramId": "102",
+        "uid": "b",
+        "username": ""
+       },
+       {
+        "createdAt": "2026-10-11T09:30:00.000Z",
+        "displayName": "",
+        "email": "",
+        "isPro": false,
+        "plan": "pro",
+        "referralCode": "",
+        "status": "active",
+        "subExpiresAt": "",
+        "telegramId": "105",
+        "uid": "e",
+        "username": ""
+       },
+       {
+        "createdAt": "",
+        "displayName": "Carol",
+        "email": "",
+        "isPro": true,
+        "plan": "pro",
+        "referralCode": "BLOG",
+        "status": "active",
+        "subExpiresAt": "",
+        "telegramId": "103",
+        "uid": "c",
+        "username": ""
+       }
+      ]
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminUsers: list survives a failing subscriptions read": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "hasMore": false,
+      "ok": true,
+      "total": 6,
+      "users": [
+       {
+        "createdAt": "2026-10-14T09:30:00.000Z",
+        "displayName": "Alice",
+        "email": "alice@example.test",
+        "isPro": false,
+        "plan": "free",
+        "referralCode": "",
+        "status": "active",
+        "subExpiresAt": "",
+        "telegramId": "101",
+        "uid": "a",
+        "username": "alice"
+       },
+       {
+        "createdAt": "2026-10-13T09:30:00.000Z",
+        "displayName": "",
+        "email": "",
+        "isPro": false,
+        "plan": "free",
+        "referralCode": "",
+        "status": "active",
+        "subExpiresAt": "",
+        "telegramId": "102",
+        "uid": "b",
+        "username": ""
+       },
+       {
+        "createdAt": "2026-10-12T09:30:00.000Z",
+        "displayName": "Dan",
+        "email": "",
+        "isPro": false,
+        "plan": "premium",
+        "referralCode": "",
+        "status": "blocked",
+        "subExpiresAt": "2026-10-24T09:30:00.000Z",
+        "telegramId": "",
+        "uid": "d",
+        "username": ""
+       },
+       {
+        "createdAt": "2026-10-11T09:30:00.000Z",
+        "displayName": "",
+        "email": "",
+        "isPro": false,
+        "plan": "free",
+        "referralCode": "",
+        "status": "active",
+        "subExpiresAt": "",
+        "telegramId": "105",
+        "uid": "e",
+        "username": ""
+       },
+       {
+        "createdAt": "2026-10-10T09:30:00.000Z",
+        "displayName": "",
+        "email": "",
+        "isPro": false,
+        "plan": "free",
+        "referralCode": "",
+        "status": "active",
+        "subExpiresAt": "",
+        "telegramId": "",
+        "uid": "f",
+        "username": "fay"
+       },
+       {
+        "createdAt": "",
+        "displayName": "Carol",
+        "email": "",
+        "isPro": true,
+        "plan": "pro",
+        "referralCode": "BLOG",
+        "status": "active",
+        "subExpiresAt": "",
+        "telegramId": "103",
+        "uid": "c",
+        "username": ""
+       }
+      ]
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminSubscriptions: update needs a userId": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "userId required"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminSubscriptions: cancel": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true
+     }
+    },
+    "writes": {
+     "subscriptions/u1": {
+      "plan": "pro",
+      "status": "cancelled",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      }
+     },
+     "users/u1": {
+      "isPro": false,
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      }
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminSubscriptions: extend from a later expiry and change plan": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true
+     }
+    },
+    "writes": {
+     "subscriptions/u1": {
+      "endDateMs": 1795599000000,
+      "expiresAt": {
+       "$ts": "2026-11-25T09:30:00.000Z"
+      },
+      "plan": "premium",
+      "status": "active",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      }
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminSubscriptions: extend a missing subscription from now": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true
+     }
+    },
+    "writes": {
+     "subscriptions/u1": {
+      "endDateMs": 1797327000000,
+      "expiresAt": {
+       "$ts": "2026-12-15T09:30:00.000Z"
+      },
+      "status": "active",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      }
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminSubscriptions: list": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "subscriptions": [
+       {
+        "endDate": "2026-11-01",
+        "endDateMs": 1,
+        "grantedByAdmin": false,
+        "paymentMethod": "sbp",
+        "period": "month",
+        "plan": "pro",
+        "promoCode": "P",
+        "referralCode": "",
+        "status": "active",
+        "updatedAt": "2026-10-01T00:00:00.000Z",
+        "userId": "a"
+       },
+       {
+        "endDate": "2026-12-01T00:00:00.000Z",
+        "endDateMs": "$undefined",
+        "grantedByAdmin": true,
+        "paymentMethod": "stars",
+        "period": "$undefined",
+        "plan": "premium",
+        "promoCode": "",
+        "referralCode": "",
+        "status": "active",
+        "updatedAt": "",
+        "userId": "b"
+       }
+      ]
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "subscriptions": [
+       {
+        "endDate": "2026-11-01",
+        "endDateMs": 1,
+        "grantedByAdmin": false,
+        "paymentMethod": "sbp",
+        "period": "month",
+        "plan": "pro",
+        "promoCode": "P",
+        "referralCode": "",
+        "status": "active",
+        "updatedAt": "2026-10-01T00:00:00.000Z",
+        "userId": "a"
+       }
+      ]
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminPayments: list, filters and revenue": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "payments": [
+       {
+        "amount": 299,
+        "createdAt": "2026-10-01T00:00:00.000Z",
+        "id": "p1",
+        "method": "sbp",
+        "period": "month",
+        "plan": "pro",
+        "promoCode": "",
+        "referralCode": "",
+        "status": "CONFIRMED",
+        "transactionId": "t1",
+        "userId": "a"
+       },
+       {
+        "amount": 599,
+        "createdAt": "",
+        "id": "p2",
+        "method": "ton",
+        "period": "",
+        "plan": "",
+        "promoCode": "",
+        "referralCode": "",
+        "status": "confirmed",
+        "transactionId": "",
+        "userId": "b"
+       },
+       {
+        "amount": 10,
+        "createdAt": "",
+        "id": "p3",
+        "method": "usdt",
+        "period": "",
+        "plan": "",
+        "promoCode": "",
+        "referralCode": "",
+        "status": "pending",
+        "transactionId": "",
+        "userId": "c"
+       },
+       {
+        "amount": 50,
+        "createdAt": "",
+        "id": "p4",
+        "method": "stars",
+        "period": "",
+        "plan": "",
+        "promoCode": "X",
+        "referralCode": "R",
+        "status": "confirmed",
+        "transactionId": "",
+        "userId": "d"
+       },
+       {
+        "amount": 0,
+        "createdAt": "",
+        "id": "p5",
+        "method": "unknown",
+        "period": "",
+        "plan": "",
+        "promoCode": "",
+        "referralCode": "",
+        "status": "failed",
+        "transactionId": "",
+        "userId": "e"
+       }
+      ],
+      "totalRevenue": 948
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "payments": [
+       {
+        "amount": 599,
+        "createdAt": "",
+        "id": "p2",
+        "method": "ton",
+        "period": "",
+        "plan": "",
+        "promoCode": "",
+        "referralCode": "",
+        "status": "confirmed",
+        "transactionId": "",
+        "userId": "b"
+       },
+       {
+        "amount": 50,
+        "createdAt": "",
+        "id": "p4",
+        "method": "stars",
+        "period": "",
+        "plan": "",
+        "promoCode": "X",
+        "referralCode": "R",
+        "status": "confirmed",
+        "transactionId": "",
+        "userId": "d"
+       }
+      ],
+      "totalRevenue": 649
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "payments": [
+       {
+        "amount": 599,
+        "createdAt": "",
+        "id": "p2",
+        "method": "ton",
+        "period": "",
+        "plan": "",
+        "promoCode": "",
+        "referralCode": "",
+        "status": "confirmed",
+        "transactionId": "",
+        "userId": "b"
+       }
+      ],
+      "totalRevenue": 599
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminReferrals: create needs code and name": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "code and name required"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminReferrals: create": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "BLOG",
+      "ok": true
+     }
+    },
+    "writes": {
+     "referrers/BLOG": {
+      "code": "BLOG",
+      "commissionPercent": 20,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "discountPercent": 10,
+      "name": "Blog",
+      "paidOut": 0,
+      "pendingPayout": 0,
+      "status": "active",
+      "totalEarned": 0
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminReferrals: update needs a referrerId": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "referrerId required"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminReferrals: update": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true
+     }
+    },
+    "writes": {
+     "referrers/BLOG": {
+      "code": "BLOG",
+      "commissionPercent": 0,
+      "discountPercent": 5,
+      "paymentDetails": {
+       "card": "****"
+      },
+      "status": "paused",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      }
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminReferrals: payout needs fields": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "referrerId and amount required"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminReferrals: payout to an unknown referrer is 404": {
+  "steps": [
+   {
+    "status": 404,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "referrer_not_found"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminReferrals: payout with nothing pending is 400": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "nothing_to_pay"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminReferrals: payout": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "paidAmount": 120
+     }
+    },
+    "writes": {
+     "referralEarnings/e1": {
+      "commission": 100,
+      "createdAt": {
+       "$ts": "2026-10-01T00:00:00.000Z"
+      },
+      "paidAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "referrerId": "ABC123",
+      "status": "paid"
+     },
+     "referrers/ABC123": {
+      "code": "ABC123",
+      "paidOut": 120,
+      "pendingPayout": 180
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminReferrals: a payout covering several earnings": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true,
+      "paidAmount": 349.9995
+     }
+    },
+    "writes": {
+     "referralEarnings/e1": {
+      "commission": 100,
+      "createdAt": {
+       "$ts": "2026-10-01T00:00:00.000Z"
+      },
+      "paidAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "referrerId": "ABC123",
+      "status": "paid"
+     },
+     "referralEarnings/e2": {
+      "commission": 250,
+      "createdAt": {
+       "$ts": "2026-10-02T00:00:00.000Z"
+      },
+      "paidAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "referrerId": "ABC123",
+      "status": "paid"
+     },
+     "referrers/ABC123": {
+      "code": "ABC123",
+      "paidOut": 359.9995,
+      "pendingPayout": 50.00049999999999
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminReferrals: list": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "earnings": [
+       {
+        "commission": 100,
+        "createdAt": "2026-10-01T00:00:00.000Z",
+        "id": "e1",
+        "referrerId": "ABC123",
+        "status": "pending"
+       },
+       {
+        "commission": 250,
+        "createdAt": "2026-10-02T00:00:00.000Z",
+        "id": "e2",
+        "referrerId": "ABC123",
+        "status": "pending"
+       },
+       {
+        "commission": 50,
+        "createdAt": "2026-09-02T00:00:00.000Z",
+        "id": "e3",
+        "referrerId": "ABC123",
+        "status": "paid"
+       }
+      ],
+      "ok": true,
+      "referrers": [
+       {
+        "code": "ABC123",
+        "id": "ABC123",
+        "paidOut": 0,
+        "pendingPayout": 300
+       },
+       {
+        "code": "Z",
+        "id": "Z"
+       }
+      ]
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminPromoCodes: create needs all fields": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "code, discountPercent, maxUses required"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminPromoCodes: create": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "SPRING",
+      "ok": true
+     }
+    },
+    "writes": {
+     "promoCodes/SPRING": {
+      "active": true,
+      "code": "SPRING",
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "discountPercent": 15,
+      "maxUses": 100,
+      "usedCount": 0
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminPromoCodes: create with zero discount": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "code": "ZERO",
+      "ok": true
+     }
+    },
+    "writes": {
+     "promoCodes/ZERO": {
+      "active": true,
+      "code": "ZERO",
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "discountPercent": 0,
+      "maxUses": 1,
+      "usedCount": 0
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminPromoCodes: toggle needs a code": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "code required"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminPromoCodes: toggle": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "ok": true
+     }
+    },
+    "writes": {
+     "promoCodes/SPRING": {
+      "active": false,
+      "code": "SPRING"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminPromoCodes: list seeds the built-in codes first": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "codes": [
+       {
+        "active": true,
+        "code": "CUSTOM",
+        "id": "CUSTOM",
+        "usedCount": 2
+       },
+       {
+        "active": true,
+        "code": "ENMATECH20",
+        "createdAt": {
+         "$ts": "2026-10-15T09:30:00.000Z"
+        },
+        "discountPercent": 20,
+        "id": "ENMATECH20",
+        "maxUses": 30,
+        "usedCount": 0
+       },
+       {
+        "active": true,
+        "code": "ENMATECH50",
+        "createdAt": {
+         "$ts": "2026-10-15T09:30:00.000Z"
+        },
+        "discountPercent": 50,
+        "id": "ENMATECH50",
+        "maxUses": 30,
+        "usedCount": 0
+       },
+       {
+        "active": true,
+        "code": "ENMATECH90",
+        "createdAt": {
+         "$ts": "2026-10-15T09:30:00.000Z"
+        },
+        "discountPercent": 90,
+        "id": "ENMATECH90",
+        "maxUses": 10,
+        "usedCount": 0
+       }
+      ],
+      "ok": true
+     }
+    },
+    "writes": {
+     "promoCodes/ENMATECH20": {
+      "active": true,
+      "code": "ENMATECH20",
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "discountPercent": 20,
+      "maxUses": 30,
+      "usedCount": 0
+     },
+     "promoCodes/ENMATECH50": {
+      "active": true,
+      "code": "ENMATECH50",
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "discountPercent": 50,
+      "maxUses": 30,
+      "usedCount": 0
+     },
+     "promoCodes/ENMATECH90": {
+      "active": true,
+      "code": "ENMATECH90",
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "discountPercent": 90,
+      "maxUses": 10,
+      "usedCount": 0
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminMessages: history": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "messages": [
+       {
+        "id": "m1",
+        "sentAt": "2026-10-01T00:00:00.000Z",
+        "text": "hello",
+        "total": 3
+       },
+       {
+        "id": "m2",
+        "sentAt": "",
+        "text": "no date"
+       }
+      ],
+      "ok": true
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminMessages: text is required": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "text required"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminMessages: a missing bot token is 500": {
+  "steps": [
+   {
+    "status": 500,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "TELEGRAM_BOT_TOKEN not set"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminMessages: broadcast to everyone, de-duplicated": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "failed": 2,
+      "ok": true,
+      "sent": 1,
+      "total": 3
+     }
+    },
+    "writes": {
+     "adminMessages/mock-1": {
+      "failed": 2,
+      "id": "mock-1",
+      "sent": 1,
+      "sentAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "target": "all",
+      "text": "News",
+      "total": 3
+     }
+    },
+    "fetch": [
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/sendMessage",
+      "method": "POST",
+      "body": {
+       "chat_id": "101",
+       "parse_mode": "HTML",
+       "text": "News"
+      }
+     },
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/sendMessage",
+      "method": "POST",
+      "body": {
+       "chat_id": "102",
+       "parse_mode": "HTML",
+       "text": "News"
+      }
+     },
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/sendMessage",
+      "method": "POST",
+      "body": {
+       "chat_id": "103",
+       "parse_mode": "HTML",
+       "text": "News"
+      }
+     }
+    ],
+    "logs": []
+   }
+  ]
+ },
+ "adminMessages: broadcast to pro": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "failed": 0,
+      "ok": true,
+      "sent": 1,
+      "total": 1
+     }
+    },
+    "writes": {
+     "adminMessages/mock-1": {
+      "failed": 0,
+      "id": "mock-1",
+      "sent": 1,
+      "sentAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "target": "pro",
+      "text": "Pro news",
+      "total": 1
+     }
+    },
+    "fetch": [
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/sendMessage",
+      "method": "POST",
+      "body": {
+       "chat_id": "101",
+       "parse_mode": "HTML",
+       "text": "Pro news"
+      }
+     }
+    ],
+    "logs": []
+   }
+  ]
+ },
+ "adminMessages: broadcast to premium": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "failed": 1,
+      "ok": true,
+      "sent": 0,
+      "total": 1
+     }
+    },
+    "writes": {
+     "adminMessages/mock-1": {
+      "failed": 1,
+      "id": "mock-1",
+      "sent": 0,
+      "sentAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "target": "premium",
+      "text": "Premium news",
+      "total": 1
+     }
+    },
+    "fetch": [
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/sendMessage",
+      "method": "POST",
+      "body": {
+       "chat_id": "102",
+       "parse_mode": "HTML",
+       "text": "Premium news"
+      }
+     }
+    ],
+    "logs": []
+   }
+  ]
+ },
+ "adminMessages: broadcast to free": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "failed": 1,
+      "ok": true,
+      "sent": 1,
+      "total": 2
+     }
+    },
+    "writes": {
+     "adminMessages/mock-1": {
+      "failed": 1,
+      "id": "mock-1",
+      "sent": 1,
+      "sentAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "target": "free",
+      "text": "Free news",
+      "total": 2
+     }
+    },
+    "fetch": [
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/sendMessage",
+      "method": "POST",
+      "body": {
+       "chat_id": "101",
+       "parse_mode": "HTML",
+       "text": "Free news"
+      }
+     },
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/sendMessage",
+      "method": "POST",
+      "body": {
+       "chat_id": "103",
+       "parse_mode": "HTML",
+       "text": "Free news"
+      }
+     }
+    ],
+    "logs": []
+   }
+  ]
+ },
+ "adminMessages: send to chosen users": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "failed": 1,
+      "ok": true,
+      "sent": 1,
+      "total": 2
+     }
+    },
+    "writes": {
+     "adminMessages/mock-1": {
+      "failed": 1,
+      "id": "mock-1",
+      "sent": 1,
+      "sentAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "target": "custom",
+      "text": "Hi",
+      "total": 2
+     }
+    },
+    "fetch": [
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/sendMessage",
+      "method": "POST",
+      "body": {
+       "chat_id": "101",
+       "parse_mode": "HTML",
+       "text": "Hi"
+      }
+     },
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/sendMessage",
+      "method": "POST",
+      "body": {
+       "chat_id": "103",
+       "parse_mode": "HTML",
+       "text": "Hi"
+      }
+     }
+    ],
+    "logs": []
+   }
+  ]
+ },
+ "adminAiUsage: current month by default, explicit month on request": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "month": "2026-10",
+      "ok": true,
+      "totals": {
+       "imageRequests": 1,
+       "pdfReports": 2,
+       "textRequests": 10
+      },
+      "usage": [
+       {
+        "imageRequests": 1,
+        "pdfReports": 2,
+        "textRequests": 3,
+        "updatedAt": "2026-10-10T00:00:00.000Z",
+        "userId": "a"
+       },
+       {
+        "imageRequests": 0,
+        "pdfReports": 0,
+        "textRequests": 7,
+        "updatedAt": "",
+        "userId": "b"
+       }
+      ]
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "month": "2026-09",
+      "ok": true,
+      "totals": {
+       "imageRequests": 0,
+       "pdfReports": 0,
+       "textRequests": 9
+      },
+      "usage": [
+       {
+        "imageRequests": 0,
+        "pdfReports": 0,
+        "textRequests": 9,
+        "updatedAt": "",
+        "userId": "c"
+       }
+      ]
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminStarsDiagnostics: nothing yet": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "canaryConfigured": false,
+      "canaryCount": 0,
+      "latestPayment": null,
+      "latestPaymentChargeIdMasked": null,
+      "latestPaymentStatus": null,
+      "latestSession": null,
+      "latestSessionStatus": null,
+      "latestSubscription": null,
+      "ok": true,
+      "starsMiniAppGlobalEnabled": false,
+      "telegramReconciliation": "not run automatically — call reconcileStarsTransactions() manually"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminStarsDiagnostics: latest payment, session and subscription": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "canaryConfigured": true,
+      "canaryCount": 2,
+      "latestPayment": {
+       "amount": 250,
+       "createdAt": "2026-10-14T00:00:00.000Z",
+       "currency": "XTR",
+       "docId": "sp1",
+       "isRecurring": false,
+       "period": "month",
+       "plan": "pro",
+       "status": "confirmed"
+      },
+      "latestPaymentChargeIdMasked": "stxA…MNOP",
+      "latestPaymentStatus": "confirmed",
+      "latestSession": {
+       "expiresAtMs": 1792056599000,
+       "period": "month",
+       "plan": "pro",
+       "starsAmount": 250,
+       "status": "paid"
+      },
+      "latestSessionStatus": "paid",
+      "latestSubscription": {
+       "endDate": "2026-11-14",
+       "endDateMs": 1794648600000,
+       "lastPaymentMethod": "stars",
+       "plan": "pro",
+       "status": "active"
+      },
+      "ok": true,
+      "starsMiniAppGlobalEnabled": true,
+      "telegramReconciliation": "not run automatically — call reconcileStarsTransactions() manually"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminStarsDiagnostics: short charge ids are fully masked": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "canaryConfigured": false,
+      "canaryCount": 0,
+      "latestPayment": {
+       "amount": "$undefined",
+       "createdAt": null,
+       "currency": "$undefined",
+       "docId": "sp1",
+       "isRecurring": true,
+       "period": "$undefined",
+       "plan": "$undefined",
+       "status": "pending"
+      },
+      "latestPaymentChargeIdMasked": "***",
+      "latestPaymentStatus": "pending",
+      "latestSession": null,
+      "latestSessionStatus": null,
+      "latestSubscription": null,
+      "ok": true,
+      "starsMiniAppGlobalEnabled": false,
+      "telegramReconciliation": "not run automatically — call reconcileStarsTransactions() manually"
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminStarsCanaryCheck: initData is required": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "missing_initData",
+      "ok": false
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminStarsCanaryCheck: a forged initData resolves no user": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "allEntriesNumeric": true,
+      "canaryMatched": false,
+      "entriesCountRaw": 1,
+      "entriesCountValid": 1,
+      "envPresent": true,
+      "globalEnabled": false,
+      "isStarsEnabledForUserResult": false,
+      "ok": true,
+      "starsPlansEquivalent": {
+       "starsEnabled": false,
+       "starsPrice": 620
+      },
+      "telegramUserId": null,
+      "telegramUserResolved": false
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminStarsCanaryCheck: a canary user": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "allEntriesNumeric": false,
+      "canaryMatched": true,
+      "entriesCountRaw": 2,
+      "entriesCountValid": 1,
+      "envPresent": true,
+      "globalEnabled": false,
+      "isStarsEnabledForUserResult": true,
+      "ok": true,
+      "starsPlansEquivalent": {
+       "starsEnabled": true,
+       "starsPrice": 620
+      },
+      "telegramUserId": 111,
+      "telegramUserResolved": true
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminStarsCanaryCheck: a user outside the canary with Stars on for everyone": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "allEntriesNumeric": false,
+      "canaryMatched": false,
+      "entriesCountRaw": 0,
+      "entriesCountValid": 0,
+      "envPresent": false,
+      "globalEnabled": true,
+      "isStarsEnabledForUserResult": true,
+      "ok": true,
+      "starsPlansEquivalent": {
+       "starsEnabled": true,
+       "starsPrice": 620
+      },
+      "telegramUserId": 999,
+      "telegramUserResolved": true
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminHabitSmokeTestCreate: default offset in the user zone": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "habitId": "enma-smoke-test-habit",
+      "minutesFromNow": 22,
+      "nowUtc": "2026-10-15T09:30:00.000Z",
+      "ok": true,
+      "reminderTimeLocal": "14:52",
+      "timezone": "Asia/Almaty"
+     }
+    },
+    "writes": {
+     "habits/enma-smoke-test-habit": {
+      "archived": false,
+      "color": "#7B68EE",
+      "completedDates": [],
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "description": "Temporary smoke-test habit for the habit-notification pre-deploy review.",
+      "id": "enma-smoke-test-habit",
+      "reminderTime": "14:52",
+      "repeatDays": [],
+      "repeatType": "daily",
+      "title": "ENMA smoke test — safe to delete",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "2MhVQ2hZD0cgDcYzxlHzhumml9l1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminHabitSmokeTestCreate: the offset is clamped to 15..30 minutes": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "habitId": "enma-smoke-test-habit",
+      "minutesFromNow": 15,
+      "nowUtc": "2026-10-15T09:30:00.000Z",
+      "ok": true,
+      "reminderTimeLocal": "11:45",
+      "timezone": "Europe/Warsaw"
+     }
+    },
+    "writes": {
+     "habits/enma-smoke-test-habit": {
+      "archived": false,
+      "color": "#7B68EE",
+      "completedDates": [],
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "description": "Temporary smoke-test habit for the habit-notification pre-deploy review.",
+      "id": "enma-smoke-test-habit",
+      "reminderTime": "11:45",
+      "repeatDays": [],
+      "repeatType": "daily",
+      "title": "ENMA smoke test — safe to delete",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "2MhVQ2hZD0cgDcYzxlHzhumml9l1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "habitId": "enma-smoke-test-habit",
+      "minutesFromNow": 30,
+      "nowUtc": "2026-10-15T09:30:00.000Z",
+      "ok": true,
+      "reminderTimeLocal": "12:00",
+      "timezone": "Europe/Warsaw"
+     }
+    },
+    "writes": {
+     "habits/enma-smoke-test-habit": {
+      "archived": false,
+      "color": "#7B68EE",
+      "completedDates": [],
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "description": "Temporary smoke-test habit for the habit-notification pre-deploy review.",
+      "id": "enma-smoke-test-habit",
+      "reminderTime": "12:00",
+      "repeatDays": [],
+      "repeatType": "daily",
+      "title": "ENMA smoke test — safe to delete",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "2MhVQ2hZD0cgDcYzxlHzhumml9l1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "habitId": "enma-smoke-test-habit",
+      "minutesFromNow": 22,
+      "nowUtc": "2026-10-15T09:30:00.000Z",
+      "ok": true,
+      "reminderTimeLocal": "11:52",
+      "timezone": "Europe/Warsaw"
+     }
+    },
+    "writes": {
+     "habits/enma-smoke-test-habit": {
+      "archived": false,
+      "color": "#7B68EE",
+      "completedDates": [],
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "description": "Temporary smoke-test habit for the habit-notification pre-deploy review.",
+      "id": "enma-smoke-test-habit",
+      "reminderTime": "11:52",
+      "repeatDays": [],
+      "repeatType": "daily",
+      "title": "ENMA smoke test — safe to delete",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "2MhVQ2hZD0cgDcYzxlHzhumml9l1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminHabitSmokeTestStatus: habit and its reminders": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "habitArchived": false,
+      "habitExists": true,
+      "habitReminderTime": "10:00",
+      "nowUtc": "2026-10-15T09:30:00.000Z",
+      "ok": true,
+      "reminders": [
+       {
+        "id": "habit-enma-smoke-test-habit-2026-10-15",
+        "lastError": null,
+        "retryCount": 0,
+        "scheduledAt": "2026-10-15T07:00:00.000Z",
+        "sentAt": "2026-10-15T07:01:00.000Z",
+        "source": "habit",
+        "status": "sent"
+       },
+       {
+        "id": "habit-enma-smoke-test-habit-2026-10-16",
+        "lastError": "x",
+        "retryCount": 0,
+        "scheduledAt": "2026-10-16T07:00:00.000Z",
+        "sentAt": null,
+        "source": null,
+        "status": "pending"
+       }
+      ]
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminHabitSmokeTestStatus: nothing exists": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "habitArchived": null,
+      "habitExists": false,
+      "habitReminderTime": null,
+      "nowUtc": "2026-10-15T09:30:00.000Z",
+      "ok": true,
+      "reminders": []
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminHabitSmokeTestDelete: confirmation is required": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "confirmation_required",
+      "ok": false
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminHabitSmokeTestDelete: removes the habit and only its reminders": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "deletedHabitId": "enma-smoke-test-habit",
+      "deletedReminders": 2,
+      "ok": true
+     }
+    },
+    "writes": {
+     "habits/enma-smoke-test-habit": "$deleted",
+     "reminders/r1": "$deleted",
+     "reminders/r2": "$deleted"
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminNotesDiagnostic: uid is required": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "uid_required",
+      "ok": false
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminNotesDiagnostic: compareUid must be a string": {
+  "steps": [
+   {
+    "status": 400,
+    "headers": {},
+    "body": {
+     "json": {
+      "error": "compareUid_must_be_string",
+      "ok": false
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminNotesDiagnostic: structural report without note contents": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "compare": {
+       "archivedCount": 0,
+       "byCategory": {
+        "(missing)": 1
+       },
+       "byType": {
+        "(missing)": 1
+       },
+       "deletedCount": 0,
+       "flaggedNoteIds": [],
+       "freeUsageCounterMismatch": false,
+       "freeUsageNoteCounter": null,
+       "legacySubcollectionMissingUserId": 0,
+       "legacySubcollectionNoteIds": [],
+       "linkedToTelegram": false,
+       "listQueryCount": 1,
+       "listQueryError": null,
+       "listQueryErrorCode": null,
+       "listQueryErrorMessage": null,
+       "listQueryExcludesDocs": false,
+       "missingRevCount": 0,
+       "missingUpdatedAtCount": 0,
+       "sameAccountAsPrimary": false,
+       "topLevelNoteCount": 1,
+       "uid": "u2"
+      },
+      "ok": true,
+      "primary": {
+       "archivedCount": 1,
+       "byCategory": {
+        "(missing)": 2,
+        "work": 1
+       },
+       "byType": {
+        "(missing)": 1,
+        "checklist": 1,
+        "text": 1
+       },
+       "deletedCount": 1,
+       "flaggedNoteIds": [
+        {
+         "id": "n2",
+         "issues": [
+          "archived",
+          "updatedAt_missing_or_wrong_type",
+          "rev_missing_legacy"
+         ]
+        },
+        {
+         "id": "n3",
+         "issues": [
+          "marked_deleted",
+          "title_missing_or_wrong_type",
+          "content_missing_or_wrong_type",
+          "updatedAt_missing_or_wrong_type",
+          "rev_missing_legacy"
+         ]
+        }
+       ],
+       "freeUsageCounterMismatch": true,
+       "freeUsageNoteCounter": 5,
+       "legacySubcollectionMissingUserId": 1,
+       "legacySubcollectionNoteIds": [
+        "legacy1",
+        "legacy2"
+       ],
+       "linkedToTelegram": true,
+       "listQueryCount": 3,
+       "listQueryError": null,
+       "listQueryErrorCode": null,
+       "listQueryErrorMessage": null,
+       "listQueryExcludesDocs": false,
+       "missingRevCount": 2,
+       "missingUpdatedAtCount": 2,
+       "topLevelNoteCount": 3,
+       "uid": "u1"
+      }
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "adminNotesDiagnostic: comparing an account with itself": {
+  "steps": [
+   {
+    "status": 200,
+    "headers": {},
+    "body": {
+     "json": {
+      "compare": {
+       "archivedCount": 0,
+       "byCategory": {},
+       "byType": {},
+       "deletedCount": 0,
+       "flaggedNoteIds": [],
+       "freeUsageCounterMismatch": false,
+       "freeUsageNoteCounter": null,
+       "legacySubcollectionMissingUserId": 0,
+       "legacySubcollectionNoteIds": [],
+       "linkedToTelegram": false,
+       "listQueryCount": 0,
+       "listQueryError": null,
+       "listQueryErrorCode": null,
+       "listQueryErrorMessage": null,
+       "listQueryExcludesDocs": false,
+       "missingRevCount": 0,
+       "missingUpdatedAtCount": 0,
+       "sameAccountAsPrimary": true,
+       "topLevelNoteCount": 0,
+       "uid": "u1"
+      },
+      "ok": true,
+      "primary": {
+       "archivedCount": 0,
+       "byCategory": {},
+       "byType": {},
+       "deletedCount": 0,
+       "flaggedNoteIds": [],
+       "freeUsageCounterMismatch": false,
+       "freeUsageNoteCounter": null,
+       "legacySubcollectionMissingUserId": 0,
+       "legacySubcollectionNoteIds": [],
+       "linkedToTelegram": false,
+       "listQueryCount": 0,
+       "listQueryError": null,
+       "listQueryErrorCode": null,
+       "listQueryErrorMessage": null,
+       "listQueryExcludesDocs": false,
+       "missingRevCount": 0,
+       "missingUpdatedAtCount": 0,
+       "topLevelNoteCount": 0,
+       "uid": "u1"
+      }
+     }
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ }
+}

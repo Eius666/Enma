@@ -87,4 +87,5 @@ test('the free-tier limits the server enforces match the client display (tasks/d
   assert.equal(limitOf('task'), client.FREE_LIMITS.dailyTasks);
   assert.equal(limitOf('habit'), client.FREE_LIMITS.habits);
   assert.equal(limitOf('note'), client.FREE_LIMITS.notes);
+  assert.equal(limitOf('transaction'), client.FREE_LIMITS.monthlyTransactions);
 });

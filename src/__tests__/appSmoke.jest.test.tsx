@@ -133,6 +133,8 @@ test('every primary tab can be opened without errors', async () => {
   const nav = await screen.findByRole('navigation', { name: /primary navigation/i });
   for (const label of ['Calendar', 'Notes', 'Finance', 'Habits', 'Day']) {
     fireEvent.click(within(nav).getByRole('button', { name: label }));
+    // All tabs but Day are loaded on first use: wait for the chunk.
+    await waitFor(() => expect(screen.queryByTestId('tab-loading')).toBeNull());
     expect(screen.queryByTestId('error-fallback')).toBeNull();
     expect(screen.getByRole('main').textContent?.length).toBeGreaterThan(0);
   }

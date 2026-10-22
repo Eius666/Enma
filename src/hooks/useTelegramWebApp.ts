@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { TelegramWebApp, getTelegramWebApp } from '../telegram';
+import { perfMark } from '../lib/perfMarks';
 
 export const useTelegramWebApp = (): TelegramWebApp | null => {
   const [webApp, setWebApp] = useState<TelegramWebApp | null>(null);
@@ -20,6 +21,7 @@ export const useTelegramWebApp = (): TelegramWebApp | null => {
     if (!tg) return;
     tg.ready();
     tg.expand();
+    perfMark('telegram-sdk-ready');
     setWebApp(tg);
 
     const updateViewportVars = () => {

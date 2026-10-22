@@ -85,6 +85,10 @@ export interface Subscription {
   status: SubscriptionStatus;
   startDate: string;
   endDate: string;
+  /** Paid-through time in ms; written by the server next to (or instead of) endDate. */
+  endDateMs?: number;
+  /** Paid-through time as a Firestore Timestamp (TON and admin-granted subscriptions). */
+  expiresAt?: { toMillis: () => number } | null;
   trialEndDate?: string;
   walletAddress?: string;
   paymentMethod: PaymentCurrency;
@@ -119,9 +123,22 @@ export const calcEndDate = (startDate: Date, period: SubscriptionPeriod): string
   return end.toISOString();
 };
 
+// When the paid period ends, read the way the server reads it
+// (api/_lib/subscription/plan.js: endDateMs, then expiresAt) and only then the
+// ISO endDate. Some server paths (TON, admin grants) write endDateMs/expiresAt
+// without — or without updating — endDate. NaN when the document has none.
+export const getSubscriptionEndMs = (subscription: Subscription): number => {
+  if (typeof subscription.endDateMs === 'number' && Number.isFinite(subscription.endDateMs) && subscription.endDateMs > 0) {
+    return subscription.endDateMs;
+  }
+  const expiresMs = subscription.expiresAt?.toMillis?.();
+  if (typeof expiresMs === 'number' && Number.isFinite(expiresMs) && expiresMs > 0) return expiresMs;
+  return subscription.endDate ? new Date(subscription.endDate).getTime() : NaN;
+};
+
 export const isSubscriptionActive = (subscription: Subscription): boolean => {
   if (subscription.status !== 'active') return false;
-  return new Date(subscription.endDate) > new Date();
+  return getSubscriptionEndMs(subscription) > Date.now();
 };
 
 export const isInTrial = (sub: Subscription): boolean => {
@@ -182,8 +199,8 @@ export const getEffectivePlan = getActivePlan;
 
 // Days remaining in the current billing window (trial takes precedence over endDate)
 export const getDaysRemaining = (sub: Subscription): number => {
-  const refDate = isInTrial(sub) ? (sub.trialEndDate ?? sub.endDate) : sub.endDate;
-  const ms = new Date(refDate).getTime() - Date.now();
+  const refMs = isInTrial(sub) ? new Date(sub.trialEndDate ?? sub.endDate).getTime() : getSubscriptionEndMs(sub);
+  const ms = refMs - Date.now();
   return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
 };
 
@@ -196,7 +213,7 @@ export const calculateProratedEndDate = (
   newPeriod: SubscriptionPeriod,
 ): string => {
   const now = new Date();
-  const remainingMs   = Math.max(0, new Date(currentSub.endDate).getTime() - now.getTime());
+  const remainingMs   = Math.max(0, getSubscriptionEndMs(currentSub) - now.getTime()) || 0;
   const remainingDays = remainingMs / (1000 * 60 * 60 * 24);
 
   let creditUsd = 0;

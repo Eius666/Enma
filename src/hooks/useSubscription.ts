@@ -3,6 +3,7 @@ import type { User } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import type { Subscription } from '../subscription';
+import { perfMark } from '../lib/perfMarks';
 
 // Live `subscriptions/{uid}` document (written only by the server). Direct doc
 // ref: no composite index, real-time (picks up a payment confirmation at once).
@@ -18,6 +19,7 @@ export function useSubscription(user: User | null) {
     const unsubscribe = onSnapshot(
       doc(db, 'subscriptions', user.uid),
       snapshot => {
+        perfMark('first-snapshot:subscription');
         if (snapshot.exists()) {
           setSubscription(snapshot.data() as Subscription);
         } else {

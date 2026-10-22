@@ -1,0 +1,2846 @@
+{
+ "create_reminder: relative minutes": {
+  "steps": [
+   {
+    "returned": {
+     "message": "✅ Напоминание создано: «Stretch» — 15 октября в 13:00 (GMT+3)",
+     "ok": true
+    },
+    "writes": {
+     "reminders/1792056600000-99e1ef7c": {
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "description": "",
+      "scheduledAt": {
+       "$ts": "2026-10-15T10:00:00.000Z"
+      },
+      "source": "telegram-bot",
+      "status": "pending",
+      "telegramText": "⏰ Напоминание: Stretch",
+      "title": "Stretch",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": [
+     "log: [create_reminder] raw args: {\"title\":\"Stretch\",\"relative_time\":\"через 30 минут\"}",
+     "log: [create_reminder] saved 1792056600000-99e1ef7c scheduledAt: 2026-10-15T10:00:00.000Z"
+    ]
+   }
+  ]
+ },
+ "create_reminder: tomorrow at a time, default zone": {
+  "steps": [
+   {
+    "returned": {
+     "message": "✅ Напоминание создано: «Call» — 16 октября в 10:00 (GMT+2)",
+     "ok": true
+    },
+    "writes": {
+     "reminders/1792056600000-99e1ef7c": {
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "description": "mom",
+      "scheduledAt": {
+       "$ts": "2026-10-16T08:00:00.000Z"
+      },
+      "source": "telegram-bot",
+      "status": "pending",
+      "telegramText": "⏰ Напоминание: Call",
+      "title": "Call",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": [
+     "log: [create_reminder] raw args: {\"title\":\"Call\",\"relative_time\":\"завтра в 10:00\",\"description\":\"mom\"}",
+     "log: [create_reminder] saved 1792056600000-99e1ef7c scheduledAt: 2026-10-16T08:00:00.000Z"
+    ]
+   }
+  ]
+ },
+ "create_reminder: unparseable time": {
+  "steps": [
+   {
+    "returned": {
+     "error": "Не удалось распознать время: «когда-нибудь». Попробуй написать иначе, например: «через 30 минут» или «завтра в 10 утра».",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": [
+     "log: [create_reminder] raw args: {\"title\":\"X\",\"relative_time\":\"когда-нибудь\"}",
+     "error: [create_reminder] unparseable relative_time: когда-нибудь"
+    ]
+   }
+  ]
+ },
+ "create_reminder: a time in the past": {
+  "steps": [
+   {
+    "returned": {
+     "error": "Время должно быть в будущем",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": [
+     "log: [create_reminder] raw args: {\"title\":\"X\",\"relative_time\":\"сегодня в 08:00\"}"
+    ]
+   }
+  ]
+ },
+ "create_reminder: hours and an explicit clock time": {
+  "steps": [
+   {
+    "returned": {
+     "message": "✅ Напоминание создано: «A» — 15 октября в 14:30 (GMT+3)",
+     "ok": true
+    },
+    "writes": {
+     "reminders/1792056600000-99e1ef7c": {
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "description": "",
+      "scheduledAt": {
+       "$ts": "2026-10-15T11:30:00.000Z"
+      },
+      "source": "telegram-bot",
+      "status": "pending",
+      "telegramText": "⏰ Напоминание: A",
+      "title": "A",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": [
+     "log: [create_reminder] raw args: {\"title\":\"A\",\"relative_time\":\"через 2 часа\"}",
+     "log: [create_reminder] saved 1792056600000-99e1ef7c scheduledAt: 2026-10-15T11:30:00.000Z"
+    ]
+   },
+   {
+    "returned": {
+     "message": "✅ Напоминание создано: «B» — 15 октября в 18:45 (GMT+5)",
+     "ok": true
+    },
+    "writes": {
+     "reminders/1792056600000-72c32b8a": {
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "description": "",
+      "scheduledAt": {
+       "$ts": "2026-10-15T13:45:00.000Z"
+      },
+      "source": "telegram-bot",
+      "status": "pending",
+      "telegramText": "⏰ Напоминание: B",
+      "title": "B",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": [
+     "log: [create_reminder] raw args: {\"title\":\"B\",\"relative_time\":\"в 18:45\"}",
+     "log: [create_reminder] saved 1792056600000-72c32b8a scheduledAt: 2026-10-15T13:45:00.000Z"
+    ]
+   }
+  ]
+ },
+ "create_task: explicit date and a time-only expression": {
+  "steps": [
+   {
+    "returned": {
+     "message": "✅ Задача создана: «Dentist» на 2026-10-20 в 14:00",
+     "ok": true
+    },
+    "writes": {
+     "reminders/1792056600000-72c32b8a": {
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "description": "",
+      "scheduledAt": {
+       "$ts": "2026-10-20T11:00:00.000Z"
+      },
+      "source": "telegram-bot",
+      "status": "pending",
+      "taskId": "1792056600000-99e1ef7c",
+      "telegramText": "📋 Задача: Dentist",
+      "title": "Dentist",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "tasks/1792056600000-99e1ef7c": {
+      "category": "health",
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "date": "2026-10-20",
+      "description": "",
+      "done": false,
+      "source": "telegram-bot",
+      "time": "14:00",
+      "title": "Dentist",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": [
+     "log: [create_task] raw args: {\"title\":\"Dentist\",\"date\":\"2026-10-20\",\"relative_time\":\"в 14:00\",\"category\":\"health\"}"
+    ]
+   }
+  ]
+ },
+ "create_task: tomorrow at a time": {
+  "steps": [
+   {
+    "returned": {
+     "message": "✅ Задача создана: «Gym» на 2026-10-16 в 09:30",
+     "ok": true
+    },
+    "writes": {
+     "reminders/1792056600000-72c32b8a": {
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "description": "",
+      "scheduledAt": {
+       "$ts": "2026-10-16T06:30:00.000Z"
+      },
+      "source": "telegram-bot",
+      "status": "pending",
+      "taskId": "1792056600000-99e1ef7c",
+      "telegramText": "📋 Задача: Gym",
+      "title": "Gym",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "tasks/1792056600000-99e1ef7c": {
+      "category": "other",
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "date": "2026-10-16",
+      "description": "",
+      "done": false,
+      "source": "telegram-bot",
+      "time": "09:30",
+      "title": "Gym",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": [
+     "log: [create_task] raw args: {\"title\":\"Gym\",\"relative_time\":\"завтра в 9:30\"}"
+    ]
+   }
+  ]
+ },
+ "create_task: date without a time": {
+  "steps": [
+   {
+    "returned": {
+     "message": "✅ Задача создана: «Report» на 2026-10-21",
+     "ok": true
+    },
+    "writes": {
+     "tasks/1792056600000-99e1ef7c": {
+      "category": "other",
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "date": "2026-10-21",
+      "description": "",
+      "done": false,
+      "source": "telegram-bot",
+      "time": null,
+      "title": "Report",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": [
+     "log: [create_task] raw args: {\"title\":\"Report\",\"date\":\"2026-10-21\"}"
+    ]
+   }
+  ]
+ },
+ "create_task: neither date nor time": {
+  "steps": [
+   {
+    "returned": {
+     "message": "✅ Задача создана: «Someday» на 2026-10-15",
+     "ok": true
+    },
+    "writes": {
+     "tasks/1792056600000-99e1ef7c": {
+      "category": "other",
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "date": "2026-10-15",
+      "description": "",
+      "done": false,
+      "source": "telegram-bot",
+      "time": null,
+      "title": "Someday",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": [
+     "log: [create_task] raw args: {\"title\":\"Someday\"}"
+    ]
+   }
+  ]
+ },
+ "create_task: a past time gets no reminder": {
+  "steps": [
+   {
+    "returned": {
+     "message": "✅ Задача создана: «Old» на 2026-10-10 в 08:00",
+     "ok": true
+    },
+    "writes": {
+     "tasks/1792056600000-99e1ef7c": {
+      "category": "other",
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "date": "2026-10-10",
+      "description": "",
+      "done": false,
+      "source": "telegram-bot",
+      "time": "08:00",
+      "title": "Old",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": [
+     "log: [create_task] raw args: {\"title\":\"Old\",\"date\":\"2026-10-10\",\"relative_time\":\"в 08:00\"}"
+    ]
+   }
+  ]
+ },
+ "query_reminders: none": {
+  "steps": [
+   {
+    "returned": {
+     "message": "Нет напоминаний.",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "query_reminders: by status and limit": {
+  "steps": [
+   {
+    "returned": {
+     "message": "📅 Напоминания:\n⏳ Five — 15 окт., 15:00 (GMT+3)\n⏳ One — 16 окт., 10:00 (GMT+3)",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "📅 Напоминания:\n✅ Two — 14 окт., 10:00 (GMT+3)",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "📅 Напоминания:\n⏳ Five — 15 окт., 15:00 (GMT+3)",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "📅 Напоминания:\n⏳ Five — 15 окт., 14:00 (GMT+2)\n⏳ One — 16 окт., 09:00 (GMT+2)",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "query_tasks: none": {
+  "steps": [
+   {
+    "returned": {
+     "message": "Нет задач.",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "query_tasks: date filter and limit": {
+  "steps": [
+   {
+    "returned": {
+     "message": "📋 Задачи:\n✅ C — 2026-10-16\n📋 B — 2026-10-15\n✅ A — 2026-10-14 в 10:00",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "📋 Задачи:\n📋 B — 2026-10-15",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "📋 Задачи:\n✅ C — 2026-10-16",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "create_transaction: an expense is categorised automatically": {
+  "steps": [
+   {
+    "returned": {
+     "message": "💸 Расход: Кофе с собой — 250 ₽ [food]",
+     "ok": true
+    },
+    "writes": {
+     "transactions/1792056600000-99e1ef7c": {
+      "amount": 250,
+      "categoryId": "cat-food",
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "currency": "RUB",
+      "date": "2026-10-15T09:30:00.000Z",
+      "description": "Кофе с собой",
+      "fx": null,
+      "rubAmount": 250,
+      "schemaVersion": 2,
+      "source": "telegram-bot",
+      "type": "expense",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "create_transaction: income to a bank account": {
+  "steps": [
+   {
+    "returned": {
+     "message": "💰 Доход: Зарплата — 50000 ₽ [salary] [Тинькофф]",
+     "ok": true
+    },
+    "writes": {
+     "transactions/1792056600000-99e1ef7c": {
+      "amount": 50000,
+      "bank": "Тинькофф",
+      "categoryId": "cat-salary",
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "currency": "RUB",
+      "date": "2026-10-15T09:30:00.000Z",
+      "description": "Зарплата",
+      "fx": null,
+      "rubAmount": 50000,
+      "schemaVersion": 2,
+      "source": "telegram-bot",
+      "type": "income",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "users/u1": {
+      "banks": [
+       "Сбер",
+       "Тинькофф"
+      ],
+      "currency": "RUB"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "create_transaction: linked to an own goal": {
+  "steps": [
+   {
+    "returned": {
+     "message": "💸 Расход: В копилку — 30 ₽ [other]",
+     "ok": true
+    },
+    "writes": {
+     "goals/g1": {
+      "createdAt": {
+       "$ts": "2026-10-01T00:00:00.000Z"
+      },
+      "currency": "RUB",
+      "currentAmount": 70,
+      "currentAmountRub": 100,
+      "targetAmount": 1000,
+      "title": "Laptop",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "transactions/1792056600000-99e1ef7c": {
+      "amount": 30,
+      "categoryId": "cat-other",
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "currency": "RUB",
+      "date": "2026-10-15T09:30:00.000Z",
+      "description": "В копилку",
+      "fx": null,
+      "goalId": "g1",
+      "rubAmount": 30,
+      "schemaVersion": 2,
+      "source": "telegram-bot",
+      "type": "expense",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "💰 Доход: Бонус — 500 ₽ [other]",
+     "ok": true
+    },
+    "writes": {
+     "goals/g1": {
+      "createdAt": {
+       "$ts": "2026-10-01T00:00:00.000Z"
+      },
+      "currency": "RUB",
+      "currentAmount": 570,
+      "currentAmountRub": 100,
+      "targetAmount": 1000,
+      "title": "Laptop",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "transactions/1792056600000-72c32b8a": {
+      "amount": 500,
+      "categoryId": "cat-other",
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "currency": "RUB",
+      "date": "2026-10-15T09:30:00.000Z",
+      "description": "Бонус",
+      "fx": null,
+      "goalId": "g1",
+      "rubAmount": 500,
+      "schemaVersion": 2,
+      "source": "telegram-bot",
+      "type": "income",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "create_transaction: another user's goal is not touched": {
+  "steps": [
+   {
+    "returned": {
+     "message": "💸 Расход: x — 30 ₽ [other]",
+     "ok": true
+    },
+    "writes": {
+     "transactions/1792056600000-99e1ef7c": {
+      "amount": 30,
+      "categoryId": "cat-other",
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "currency": "RUB",
+      "date": "2026-10-15T09:30:00.000Z",
+      "description": "x",
+      "fx": null,
+      "goalId": "g1",
+      "rubAmount": 30,
+      "schemaVersion": 2,
+      "source": "telegram-bot",
+      "type": "expense",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "create_transaction: invalid amount": {
+  "steps": [
+   {
+    "returned": {
+     "error": "amount must be a positive number",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "create_transaction: invalid type": {
+  "steps": [
+   {
+    "returned": {
+     "error": "type must be \"income\" or \"expense\"",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "create_transaction: a foreign currency without rates": {
+  "steps": [
+   {
+    "returned": {
+     "error": "Не удалось получить надёжный курс USD — операция не сохранена. Попробуйте позже или укажите сумму в рублях.",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://www.banki.ru/products/currency/cash/usd/moskva/",
+      "method": "GET",
+      "body": "$none"
+     },
+     {
+      "url": "https://api.tbank.ru/v1/currency_rates?from=USD&to=RUB",
+      "method": "GET",
+      "body": "$none"
+     },
+     {
+      "url": "https://www.cbr-xml-daily.ru/daily_json.js",
+      "method": "GET",
+      "body": "$none"
+     },
+     {
+      "url": "https://api.exchangerate-api.com/v4/latest/RUB",
+      "method": "GET",
+      "body": "$none"
+     }
+    ],
+    "logs": [
+     "log: [FX] metric=fx_provider_failure provider=banki currency=USD reason=network_error detail=\"fetch failed (no scripted route)\"",
+     "log: [FX] metric=fx_provider_failure provider=tbank currency=USD reason=network_error",
+     "log: [FX] metric=fx_provider_failure provider=cbr currency=USD reason=network_error",
+     "error: [FX_RATES] fetch failed reason=%s fetch failed (no scripted route)",
+     "log: [FX] metric=fx_provider_failure provider=exchangerate-api currency=USD reason=unsupported_currency",
+     "warn: [FX][ALERT] metric=fx_unavailable currency=USD side=bank_sells attempts=banki:network_error|tbank:network_error|cbr:network_error|exchangerate-api:unsupported_currency"
+    ]
+   }
+  ]
+ },
+ "create_transaction: the user input currency without rates": {
+  "steps": [
+   {
+    "returned": {
+     "error": "Не удалось получить надёжный курс EUR — операция не сохранена. Попробуйте позже или укажите сумму в рублях.",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://www.banki.ru/products/currency/cash/eur/moskva/",
+      "method": "GET",
+      "body": "$none"
+     },
+     {
+      "url": "https://api.tbank.ru/v1/currency_rates?from=EUR&to=RUB",
+      "method": "GET",
+      "body": "$none"
+     },
+     {
+      "url": "https://www.cbr-xml-daily.ru/daily_json.js",
+      "method": "GET",
+      "body": "$none"
+     },
+     {
+      "url": "https://api.exchangerate-api.com/v4/latest/RUB",
+      "method": "GET",
+      "body": "$none"
+     }
+    ],
+    "logs": [
+     "log: [FX] metric=fx_provider_failure provider=banki currency=EUR reason=network_error detail=\"fetch failed (no scripted route)\"",
+     "log: [FX] metric=fx_provider_failure provider=tbank currency=EUR reason=network_error",
+     "log: [FX] metric=fx_provider_failure provider=cbr currency=EUR reason=network_error",
+     "error: [FX_RATES] fetch failed reason=%s fetch failed (no scripted route)",
+     "log: [FX] metric=fx_provider_failure provider=exchangerate-api currency=EUR reason=unsupported_currency",
+     "warn: [FX][ALERT] metric=fx_unavailable currency=EUR side=bank_sells attempts=banki:network_error|tbank:network_error|cbr:network_error|exchangerate-api:unsupported_currency"
+    ]
+   }
+  ]
+ },
+ "query_transactions: none": {
+  "steps": [
+   {
+    "returned": {
+     "message": "Нет транзакций.",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "query_transactions: types, banks and currencies": {
+  "steps": [
+   {
+    "returned": {
+     "message": "💳 История:\n💸 Today snack — 99 ₽\n💸 Food — 300 ₽ [Сбер]\n🎯 Goal back — 20 ₽\n🎯 Goal — 50 ₽\n💰 Freelance — 100 $ (≈ 8 000 ₽) [Тинькофф]\n💰 Salary — 70000 ₽ [Сбер]\n💸 Legacy rent — 1200 ₽",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "💳 История:\n💰 Freelance — 100 $ (≈ 8 000 ₽) [Тинькофф]\n💰 Salary — 70000 ₽ [Сбер]",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "💳 История:\n💸 Food — 300 ₽ [Сбер]",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "💳 История:\n💸 Today snack — 99 ₽\n💸 Food — 300 ₽ [Сбер]\n💸 Legacy rent — 1200 ₽",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "get_finance_stats: an unresolvable legacy row blocks the totals": {
+  "steps": [
+   {
+    "returned": {
+     "error": "Часть операций в другой валюте, курс обмена сейчас недоступен — точный расчёт баланса невозможен.",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://api.exchangerate-api.com/v4/latest/RUB",
+      "method": "GET",
+      "body": "$none"
+     }
+    ],
+    "logs": []
+   }
+  ]
+ },
+ "get_finance_stats: periods in the budget currency": {
+  "steps": [
+   {
+    "returned": {
+     "message": "💳 Баланс: +77571.00 ₽\n\n📊 За месяц\n💸 Расходы: 399.00 ₽\n💰 Доходы:  78000.00 ₽\n✅ Результат за период: +77601.00 ₽\n\nПо категориям:\n  • food: 399.00 ₽\n\nПо банкам:\n  • Сбер: расходы 300.00 ₽, доходы 70000.00 ₽\n  • Тинькофф: доходы 8000.00 ₽",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "💳 Баланс: +77571.00 ₽\n\n📊 За неделю\n💸 Расходы: 399.00 ₽\n💰 Доходы:  8000.00 ₽\n✅ Результат за период: +7601.00 ₽\n\nПо категориям:\n  • food: 399.00 ₽\n\nПо банкам:\n  • Тинькофф: доходы 8000.00 ₽\n  • Сбер: расходы 300.00 ₽",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "💳 Баланс: +77571.00 ₽\n\n📊 Сегодня\n💸 Расходы: 99.00 ₽\n💰 Доходы:  0.00 ₽\n⚠️ Результат за период: -99.00 ₽\n\nПо категориям:\n  • food: 99.00 ₽",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "💳 Баланс: +77571.00 ₽\n\n📊 За всё время\n💸 Расходы: 399.00 ₽\n💰 Доходы:  78000.00 ₽\n✅ Результат за период: +77601.00 ₽\n\nПо категориям:\n  • food: 399.00 ₽\n\nПо банкам:\n  • Сбер: расходы 300.00 ₽, доходы 70000.00 ₽\n  • Тинькофф: доходы 8000.00 ₽",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "💳 Баланс: +77571.00 ₽\n\n📊 За всё время\n💸 Расходы: 399.00 ₽\n💰 Доходы:  78000.00 ₽\n✅ Результат за период: +77601.00 ₽\n\nПо категориям:\n  • food: 399.00 ₽\n\nПо банкам:\n  • Сбер: расходы 300.00 ₽, доходы 70000.00 ₽\n  • Тинькофф: доходы 8000.00 ₽",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "get_finance_stats: default period": {
+  "steps": [
+   {
+    "returned": {
+     "message": "💳 Баланс: +77571.00 ₽\n\n📊 За месяц\n💸 Расходы: 399.00 ₽\n💰 Доходы:  78000.00 ₽\n✅ Результат за период: +77601.00 ₽\n\nПо категориям:\n  • food: 399.00 ₽\n\nПо банкам:\n  • Сбер: расходы 300.00 ₽, доходы 70000.00 ₽\n  • Тинькофф: доходы 8000.00 ₽",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "get_finance_stats: locked ruble values need no rates": {
+  "steps": [
+   {
+    "returned": {
+     "message": "💳 Баланс: +77571.00 ₽\n\n📊 За месяц\n💸 Расходы: 399.00 ₽\n💰 Доходы:  78000.00 ₽\n✅ Результат за период: +77601.00 ₽\n\nПо категориям:\n  • food: 399.00 ₽\n\nПо банкам:\n  • Сбер: расходы 300.00 ₽, доходы 70000.00 ₽\n  • Тинькофф: доходы 8000.00 ₽",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "get_finance_stats: legacy foreign rows need rates": {
+  "steps": [
+   {
+    "returned": {
+     "message": "💳 Баланс: +200.00 ₽\n\n📊 За месяц\n💸 Расходы: 800.00 ₽\n💰 Доходы:  1000.00 ₽\n✅ Результат за период: +200.00 ₽\n\nПо категориям:\n  • other: 800.00 ₽",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://api.exchangerate-api.com/v4/latest/RUB",
+      "method": "GET",
+      "body": "$none"
+     }
+    ],
+    "logs": []
+   }
+  ]
+ },
+ "get_finance_stats: legacy foreign rows without rates": {
+  "steps": [
+   {
+    "returned": {
+     "error": "Часть операций в другой валюте, курс обмена сейчас недоступен — точный расчёт баланса невозможен.",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://api.exchangerate-api.com/v4/latest/RUB",
+      "method": "GET",
+      "body": "$none"
+     }
+    ],
+    "logs": [
+     "error: [FX_RATES] fetch failed reason=%s fetch failed (no scripted route)"
+    ]
+   }
+  ]
+ },
+ "get_finance_stats: a storage failure": {
+  "steps": [
+   {
+    "returned": {
+     "error": "Не удалось загрузить финансовые данные. Попробуй чуть позже.",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": [
+     "error: [DATA_REPOSITORY_ERROR] repository=transactions operation=getAllTransactions code=%s UNKNOWN",
+     "error: [AI_FINANCE_CONTEXT] balance=FAILED reason=%s DATA_UNAVAILABLE"
+    ]
+   }
+  ]
+ },
+ "getFinanceStats: direct call with another target currency": {
+  "steps": [
+   {
+    "returned": {
+     "message": "💳 Баланс: +969.64 $\n\n📊 За всё время\n💸 Расходы: 4.99 $\n💰 Доходы:  975.00 $\n✅ Результат за период: +970.01 $\n\nПо категориям:\n  • food: 4.99 $\n\nПо банкам:\n  • Сбер: расходы 3.75 $, доходы 875.00 $\n  • Тинькофф: доходы 100.00 $",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://api.exchangerate-api.com/v4/latest/RUB",
+      "method": "GET",
+      "body": "$none"
+     }
+    ],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "💳 Баланс: +77571.00 ₽\n\n📊 За месяц\n💸 Расходы: 399.00 ₽\n💰 Доходы:  78000.00 ₽\n✅ Результат за период: +77601.00 ₽\n\nПо категориям:\n  • food: 399.00 ₽\n\nПо банкам:\n  • Сбер: расходы 300.00 ₽, доходы 70000.00 ₽\n  • Тинькофф: доходы 8000.00 ₽",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "export_finance_pdf: free plan": {
+  "steps": [
+   {
+    "returned": {
+     "error": "PDF-отчёты доступны на тарифе Premium. Оформи подписку, чтобы выгружать полный финансовый отчёт в PDF.",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "export_finance_pdf: premium, sent as a document": {
+  "steps": [
+   {
+    "returned": {
+     "message": "📄 Финансовый отчёт готов и отправлен (2 операций, За месяц (2026-10)).",
+     "ok": true
+    },
+    "writes": {
+     "aiUsage/u1": {
+      "imageRequests": 0,
+      "month": "2026-10",
+      "pdfReports": 1,
+      "textRequests": 0,
+      "userId": ""
+     }
+    },
+    "fetch": [
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/sendDocument",
+      "method": "POST",
+      "body": {
+       "$formData": [
+        [
+         "chat_id",
+         "555"
+        ],
+        [
+         "caption",
+         "📄 Финансовый отчёт — За месяц (2026-10)"
+        ],
+        [
+         "document",
+         {
+          "$blob": {
+           "bytes": 39722,
+           "name": "ENMA-finance-report-month-2026-10-15.pdf",
+           "type": "application/pdf"
+          }
+         }
+        ]
+       ]
+      }
+     }
+    ],
+    "logs": []
+   }
+  ]
+ },
+ "export_finance_pdf: Telegram rejects the document": {
+  "steps": [
+   {
+    "returned": {
+     "error": "PDF сформирован, но Telegram не принял файл. Попробуй ещё раз.",
+     "ok": false
+    },
+    "writes": {
+     "aiUsage/u1": {
+      "imageRequests": 0,
+      "month": "2026-10",
+      "pdfReports": 1,
+      "textRequests": 0,
+      "userId": ""
+     }
+    },
+    "fetch": [
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/sendDocument",
+      "method": "POST",
+      "body": {
+       "$formData": [
+        [
+         "chat_id",
+         "555"
+        ],
+        [
+         "caption",
+         "📄 Финансовый отчёт — За месяц (2026-10)"
+        ],
+        [
+         "document",
+         {
+          "$blob": {
+           "bytes": 36645,
+           "name": "ENMA-finance-report-month-2026-10-15.pdf",
+           "type": "application/pdf"
+          }
+         }
+        ]
+       ]
+      }
+     }
+    ],
+    "logs": [
+     "error: [export_finance_pdf] Telegram rejected the document: 400 Bad Request: file is too big"
+    ]
+   }
+  ]
+ },
+ "export_finance_pdf: the upload fails": {
+  "steps": [
+   {
+    "returned": {
+     "error": "PDF сформирован, но не удалось отправить его в Telegram. Попробуй ещё раз.",
+     "ok": false
+    },
+    "writes": {
+     "aiUsage/u1": {
+      "imageRequests": 0,
+      "month": "2026-10",
+      "pdfReports": 1,
+      "textRequests": 0,
+      "userId": ""
+     }
+    },
+    "fetch": [
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/sendDocument",
+      "method": "POST",
+      "body": {
+       "$formData": [
+        [
+         "chat_id",
+         "555"
+        ],
+        [
+         "caption",
+         "📄 Финансовый отчёт — За неделю"
+        ],
+        [
+         "document",
+         {
+          "$blob": {
+           "bytes": 26255,
+           "name": "ENMA-finance-report-week-2026-10-15.pdf",
+           "type": "application/pdf"
+          }
+         }
+        ]
+       ]
+      }
+     }
+    ],
+    "logs": [
+     "error: [export_finance_pdf] Telegram upload failed: socket hang up"
+    ]
+   }
+  ]
+ },
+ "export_finance_pdf: an invalid period": {
+  "steps": [
+   {
+    "returned": {
+     "error": "Неизвестный период: \"decade\". Используй today/week/month/quarter/year/all/custom.",
+     "ok": false
+    },
+    "writes": {
+     "aiUsage/u1": {
+      "imageRequests": 0,
+      "month": "2026-10",
+      "pdfReports": 1,
+      "textRequests": 0,
+      "userId": ""
+     }
+    },
+    "fetch": [],
+    "logs": [
+     "error: [export_finance_pdf] generation failed: INVALID_PERIOD Неизвестный период: \"decade\". Используй today/week/month/quarter/year/all/custom."
+    ]
+   }
+  ]
+ },
+ "create_goal: an explicit currency and a deadline": {
+  "steps": [
+   {
+    "returned": {
+     "message": "🎯 Цель создана: <b>Trip</b>\nЦелевая сумма: 2000 $\n\nПри откладывании <b>286 $/мес</b> достигнешь цели за 7 мес.\nID: <code>1792056600000-99e1ef7c</code>",
+     "ok": true
+    },
+    "writes": {
+     "goals/1792056600000-99e1ef7c": {
+      "category": "travel",
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "currency": "USD",
+      "currentAmount": 0,
+      "currentAmountRub": 0,
+      "deadline": "2027-04-15",
+      "targetAmount": 2000,
+      "title": "Trip",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "create_goal: the user currency, no deadline": {
+  "steps": [
+   {
+    "returned": {
+     "message": "🎯 Цель создана: <b>Bike</b>\nЦелевая сумма: 30000 €\nID: <code>1792056600000-99e1ef7c</code>",
+     "ok": true
+    },
+    "writes": {
+     "goals/1792056600000-99e1ef7c": {
+      "category": null,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "currency": "EUR",
+      "currentAmount": 0,
+      "currentAmountRub": 0,
+      "deadline": null,
+      "targetAmount": 30000,
+      "title": "Bike",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "create_goal: a past deadline": {
+  "steps": [
+   {
+    "returned": {
+     "message": "🎯 Цель создана: <b>Late</b>\nЦелевая сумма: 10 ₽\nID: <code>1792056600000-99e1ef7c</code>",
+     "ok": true
+    },
+    "writes": {
+     "goals/1792056600000-99e1ef7c": {
+      "category": null,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "currency": "RUB",
+      "currentAmount": 0,
+      "currentAmountRub": 0,
+      "deadline": "2026-01-01",
+      "targetAmount": 10,
+      "title": "Late",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "deposit_to_goal: unknown goal": {
+  "steps": [
+   {
+    "returned": {
+     "error": "Цель не найдена",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "deposit_to_goal: a redelivered message is applied once": {
+  "steps": [
+   {
+    "returned": {
+     "message": "💰 Пополнение: +100 ₽\n🎯 <b>Laptop</b>\n▓▓░░░░░░░░ 20%\n200 / 1000 ₽",
+     "ok": true
+    },
+    "writes": {
+     "goals/g1": {
+      "createdAt": {
+       "$ts": "2026-10-01T00:00:00.000Z"
+      },
+      "currency": "RUB",
+      "currentAmount": 200,
+      "currentAmountRub": 200,
+      "targetAmount": 1000,
+      "title": "Laptop",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "transactions/goalxfer-tg-555-7-g1-contribution": {
+      "amount": 100,
+      "amountInGoalCurrency": 100,
+      "budgetImpact": false,
+      "categoryId": "cat-goal",
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "currency": "RUB",
+      "date": "2026-10-15T09:30:00.000Z",
+      "description": "Накопления: Laptop",
+      "fx": null,
+      "goalBalanceAfter": 200,
+      "goalCurrency": "RUB",
+      "goalId": "g1",
+      "goalTitleSnapshot": "Laptop",
+      "operationId": "tg-555-7-g1-contribution",
+      "rubAmount": 100,
+      "schemaVersion": 2,
+      "source": "telegram-bot",
+      "type": "goal_deposit",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "💰 Пополнение: +100 ₽\n🎯 <b>Laptop</b>\n▓▓░░░░░░░░ 20%\n200 / 1000 ₽",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "deposit_to_goal: reaching the target": {
+  "steps": [
+   {
+    "returned": {
+     "message": "💰 Пополнение: +900 ₽\n🎯 <b>Laptop</b>\n▓▓▓▓▓▓▓▓▓▓ 100%\n1000 / 1000 ₽\n\n🎉 Цель достигнута! Поздравляем!",
+     "ok": true
+    },
+    "writes": {
+     "goals/g1": {
+      "createdAt": {
+       "$ts": "2026-10-01T00:00:00.000Z"
+      },
+      "currency": "RUB",
+      "currentAmount": 1000,
+      "currentAmountRub": 1000,
+      "targetAmount": 1000,
+      "title": "Laptop",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "transactions/goalxfer-tg-555-8-g1-contribution": {
+      "amount": 900,
+      "amountInGoalCurrency": 900,
+      "budgetImpact": false,
+      "categoryId": "cat-goal",
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "currency": "RUB",
+      "date": "2026-10-15T09:30:00.000Z",
+      "description": "Накопления: Laptop",
+      "fx": null,
+      "goalBalanceAfter": 1000,
+      "goalCurrency": "RUB",
+      "goalId": "g1",
+      "goalTitleSnapshot": "Laptop",
+      "operationId": "tg-555-8-g1-contribution",
+      "rubAmount": 900,
+      "schemaVersion": 2,
+      "source": "telegram-bot",
+      "type": "goal_deposit",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "deposit_to_goal: going past the target": {
+  "steps": [
+   {
+    "returned": {
+     "message": "💰 Пополнение: +950 ₽\n🎯 <b>Laptop</b>\n▓▓▓▓▓▓▓▓▓▓ 100%\n1050 / 1000 ₽\n\n🎉 Цель достигнута! Поздравляем!",
+     "ok": true
+    },
+    "writes": {
+     "goals/g1": {
+      "createdAt": {
+       "$ts": "2026-10-01T00:00:00.000Z"
+      },
+      "currency": "RUB",
+      "currentAmount": 1050,
+      "currentAmountRub": 1050,
+      "targetAmount": 1000,
+      "title": "Laptop",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "transactions/goalxfer-tg-555-16-g1-contribution": {
+      "amount": 950,
+      "amountInGoalCurrency": 950,
+      "budgetImpact": false,
+      "categoryId": "cat-goal",
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "currency": "RUB",
+      "date": "2026-10-15T09:30:00.000Z",
+      "description": "Накопления: Laptop",
+      "fx": null,
+      "goalBalanceAfter": 1050,
+      "goalCurrency": "RUB",
+      "goalId": "g1",
+      "goalTitleSnapshot": "Laptop",
+      "operationId": "tg-555-16-g1-contribution",
+      "rubAmount": 950,
+      "schemaVersion": 2,
+      "source": "telegram-bot",
+      "type": "goal_deposit",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "deposit_to_goal: without a message id": {
+  "steps": [
+   {
+    "returned": {
+     "message": "💰 Пополнение: +5 ₽\n🎯 <b>Laptop</b>\n▓░░░░░░░░░ 11%\n105 / 1000 ₽",
+     "ok": true
+    },
+    "writes": {
+     "goals/g1": {
+      "createdAt": {
+       "$ts": "2026-10-01T00:00:00.000Z"
+      },
+      "currency": "RUB",
+      "currentAmount": 105,
+      "currentAmountRub": 105,
+      "targetAmount": 1000,
+      "title": "Laptop",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "transactions/goalxfer-tg-555-nomsg-1792056600000-99e1ef7c-g1-contribution": {
+      "amount": 5,
+      "amountInGoalCurrency": 5,
+      "budgetImpact": false,
+      "categoryId": "cat-goal",
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "currency": "RUB",
+      "date": "2026-10-15T09:30:00.000Z",
+      "description": "Накопления: Laptop",
+      "fx": null,
+      "goalBalanceAfter": 105,
+      "goalCurrency": "RUB",
+      "goalId": "g1",
+      "goalTitleSnapshot": "Laptop",
+      "operationId": "tg-555-nomsg-1792056600000-99e1ef7c-g1-contribution",
+      "rubAmount": 5,
+      "schemaVersion": 2,
+      "source": "telegram-bot",
+      "type": "goal_deposit",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "deposit_to_goal: an invalid amount": {
+  "steps": [
+   {
+    "returned": {
+     "error": "amount must be a positive number",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "withdraw_from_goal: more than saved": {
+  "steps": [
+   {
+    "returned": {
+     "error": "Недостаточно средств. Накоплено: 100 ₽",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "withdraw_from_goal: a withdrawal": {
+  "steps": [
+   {
+    "returned": {
+     "message": "📉 Снятие: -40 ₽\n🎯 <b>Laptop</b>\n▓░░░░░░░░░ 6%\n60 / 1000 ₽",
+     "ok": true
+    },
+    "writes": {
+     "goals/g1": {
+      "createdAt": {
+       "$ts": "2026-10-01T00:00:00.000Z"
+      },
+      "currency": "RUB",
+      "currentAmount": 60,
+      "currentAmountRub": 60,
+      "targetAmount": 1000,
+      "title": "Laptop",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     },
+     "transactions/goalxfer-tg-555-11-g1-withdrawal": {
+      "amount": 40,
+      "amountInGoalCurrency": 40,
+      "budgetImpact": false,
+      "categoryId": "cat-goal",
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "currency": "RUB",
+      "date": "2026-10-15T09:30:00.000Z",
+      "description": "Снятие из накоплений: Laptop",
+      "fx": null,
+      "goalBalanceAfter": 60,
+      "goalCurrency": "RUB",
+      "goalId": "g1",
+      "goalTitleSnapshot": "Laptop",
+      "operationId": "tg-555-11-g1-withdrawal",
+      "rubAmount": 40,
+      "schemaVersion": 2,
+      "source": "telegram-bot",
+      "type": "goal_withdraw",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "withdraw_from_goal: unknown goal": {
+  "steps": [
+   {
+    "returned": {
+     "error": "Цель не найдена",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "list_goals: none": {
+  "steps": [
+   {
+    "returned": {
+     "message": "У тебя нет целей накопления.\n\nСоздай первую: «Хочу накопить на отпуск 50 000»",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "list_goals: progress and deadlines": {
+  "steps": [
+   {
+    "returned": {
+     "message": "🎯 <b>Цели накопления:</b>\n\n🎯 <b>Laptop</b> — 100 / 1000 $ (10%)\n▓░░░░░░░░░\nID: <code>g1</code>\n\n🎯 <b>Car</b> — 600000 / 500000 $ (100%)\n▓▓▓▓▓▓▓▓▓▓\n📅 1 июн. 2027 г.\nID: <code>g2</code>",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "delete_goal: unknown goal": {
+  "steps": [
+   {
+    "returned": {
+     "error": "Цель не найдена",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "delete_goal: another user's goal": {
+  "steps": [
+   {
+    "returned": {
+     "error": "Цель не найдена",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "delete_goal: the balance is returned": {
+  "steps": [
+   {
+    "returned": {
+     "message": "✅ Цель «Laptop» удалена.\n💰 Возвращено на свободный баланс: 100 ₽",
+     "ok": true
+    },
+    "writes": {
+     "goals/g1": "$deleted",
+     "transactions/goalxfer-tg-555-14-g1-close": {
+      "amount": 100,
+      "amountInGoalCurrency": 100,
+      "budgetImpact": false,
+      "categoryId": "cat-goal",
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "currency": "RUB",
+      "date": "2026-10-15T09:30:00.000Z",
+      "description": "Закрытие цели: возврат остатка — Laptop",
+      "fx": null,
+      "goalBalanceAfter": 0,
+      "goalClosed": true,
+      "goalCurrency": "RUB",
+      "goalId": "g1",
+      "goalTitleSnapshot": "Laptop",
+      "operationId": "tg-555-14-g1-close",
+      "rubAmount": 100,
+      "schemaVersion": 2,
+      "source": "telegram-bot",
+      "type": "goal_withdraw",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "delete_goal: an empty goal": {
+  "steps": [
+   {
+    "returned": {
+     "message": "✅ Цель «Laptop» удалена.",
+     "ok": true
+    },
+    "writes": {
+     "goals/g1": "$deleted"
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "create_automation: weekly needs days": {
+  "steps": [
+   {
+    "returned": {
+     "error": "Для weekly расписания укажи days_of_week (1=Пн, 7=Вс)",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "create_automation: monthly needs a day": {
+  "steps": [
+   {
+    "returned": {
+     "error": "Для monthly расписания укажи day_of_month (1-31)",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "create_automation: daily, weekly and monthly schedules": {
+  "steps": [
+   {
+    "returned": {
+     "message": "✅ Автоматизация «Daily» создана.\nРасписание: Каждый день в 08:00\nПервый запуск: 16 октября в 08:00 (GMT+3)\nID: 1792056600000-99e1ef7c",
+     "ok": true
+    },
+    "writes": {
+     "automations/1792056600000-99e1ef7c": {
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "lastRunAt": null,
+      "messageText": "Water",
+      "name": "Daily",
+      "nextRunAt": {
+       "$ts": "2026-10-16T05:00:00.000Z"
+      },
+      "scheduleData": {
+       "dayOfMonth": null,
+       "daysOfWeek": [],
+       "time": "08:00"
+      },
+      "scheduleType": "daily",
+      "status": "active",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "✅ Автоматизация «Daily late» создана.\nРасписание: Каждый день в 23:00\nПервый запуск: 15 октября в 23:00 (GMT+3)\nID: 1792056600000-72c32b8a",
+     "ok": true
+    },
+    "writes": {
+     "automations/1792056600000-72c32b8a": {
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "lastRunAt": null,
+      "messageText": "Sleep",
+      "name": "Daily late",
+      "nextRunAt": {
+       "$ts": "2026-10-15T20:00:00.000Z"
+      },
+      "scheduleData": {
+       "dayOfMonth": null,
+       "daysOfWeek": [],
+       "time": "23:00"
+      },
+      "scheduleType": "daily",
+      "status": "active",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "✅ Автоматизация «Weekly» создана.\nРасписание: Каждый Чт, Пн в 10:00\nПервый запуск: 19 октября в 10:00 (GMT+3)\nID: 1792056600000-da3b32c",
+     "ok": true
+    },
+    "writes": {
+     "automations/1792056600000-da3b32c": {
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "lastRunAt": null,
+      "messageText": "Plan",
+      "name": "Weekly",
+      "nextRunAt": {
+       "$ts": "2026-10-19T07:00:00.000Z"
+      },
+      "scheduleData": {
+       "dayOfMonth": null,
+       "daysOfWeek": [
+        4,
+        1
+       ],
+       "time": "10:00"
+      },
+      "scheduleType": "weekly",
+      "status": "active",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "✅ Автоматизация «Monthly» создана.\nРасписание: 31-го числа каждого месяца в 12:00\nПервый запуск: 31 октября в 12:00 (GMT+3)\nID: 1792056600000-ab73b0ad",
+     "ok": true
+    },
+    "writes": {
+     "automations/1792056600000-ab73b0ad": {
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "lastRunAt": null,
+      "messageText": "Rent",
+      "name": "Monthly",
+      "nextRunAt": {
+       "$ts": "2026-10-31T09:00:00.000Z"
+      },
+      "scheduleData": {
+       "dayOfMonth": 31,
+       "daysOfWeek": [],
+       "time": "12:00"
+      },
+      "scheduleType": "monthly",
+      "status": "active",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "✅ Автоматизация «Odd» создана.\nРасписание: yearly в 07:00\nПервый запуск: 16 октября в 07:00 (GMT+2)\nID: 1792056600000-2cc09a8a",
+     "ok": true
+    },
+    "writes": {
+     "automations/1792056600000-2cc09a8a": {
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "lastRunAt": null,
+      "messageText": "x",
+      "name": "Odd",
+      "nextRunAt": {
+       "$ts": "2026-10-16T05:00:00.000Z"
+      },
+      "scheduleData": {
+       "dayOfMonth": null,
+       "daysOfWeek": [],
+       "time": "07:00"
+      },
+      "scheduleType": "yearly",
+      "status": "active",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "✅ Автоматизация «Daily with days» создана.\nРасписание: Каждый день в 07:00\nПервый запуск: 16 октября в 07:00 (GMT+3)\nID: 1792056600000-86cec4d3",
+     "ok": true
+    },
+    "writes": {
+     "automations/1792056600000-86cec4d3": {
+      "chatId": 555,
+      "createdAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "lastRunAt": null,
+      "messageText": "x",
+      "name": "Daily with days",
+      "nextRunAt": {
+       "$ts": "2026-10-16T04:00:00.000Z"
+      },
+      "scheduleData": {
+       "dayOfMonth": null,
+       "daysOfWeek": [],
+       "time": "07:00"
+      },
+      "scheduleType": "daily",
+      "status": "active",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "list_automations: none": {
+  "steps": [
+   {
+    "returned": {
+     "message": "У вас нет активных автоматизаций.",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "list_automations: active ones": {
+  "steps": [
+   {
+    "returned": {
+     "message": "⚙️ Автоматизации:\n\n🔁 Water\n   Каждый день в 08:00 | след: 16 окт., 08:00 (GMT+3)\n   ID: a1\n\n🔁 Rent\n   1-го числа каждого месяца в 12:00 | след: — (GMT+3)\n   ID: a4",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "delete_automation: unknown, foreign and own": {
+  "steps": [
+   {
+    "returned": {
+     "error": "Автоматизация не найдена",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "error": "Автоматизация не найдена",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "✅ Автоматизация «Water» удалена",
+     "ok": true
+    },
+    "writes": {
+     "automations/a1": {
+      "name": "Water",
+      "nextRunAt": {
+       "$ts": "2026-10-16T05:00:00.000Z"
+      },
+      "scheduleData": {
+       "time": "08:00"
+      },
+      "scheduleType": "daily",
+      "status": "deleted",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "pause_automation: pause, resume, bad action and unknown": {
+  "steps": [
+   {
+    "returned": {
+     "message": "⏸ Автоматизация «Water» приостановлена",
+     "ok": true
+    },
+    "writes": {
+     "automations/a1": {
+      "name": "Water",
+      "nextRunAt": {
+       "$ts": "2026-10-16T05:00:00.000Z"
+      },
+      "scheduleData": {
+       "time": "08:00"
+      },
+      "scheduleType": "daily",
+      "status": "paused",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "▶️ Автоматизация «Plan» возобновлена. Следующий запуск: 19 октября в 10:00",
+     "ok": true
+    },
+    "writes": {
+     "automations/a2": {
+      "name": "Plan",
+      "nextRunAt": {
+       "$ts": "2026-10-19T07:00:00.000Z"
+      },
+      "scheduleData": {
+       "daysOfWeek": [
+        1
+       ],
+       "time": "10:00"
+      },
+      "scheduleType": "weekly",
+      "status": "active",
+      "updatedAt": {
+       "$ts": "2026-10-15T09:30:00.000Z"
+      },
+      "userId": "u1"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "error": "action должен быть pause или resume",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "error": "Автоматизация не найдена",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "send_message: no bot token": {
+  "steps": [
+   {
+    "returned": {
+     "error": "TELEGRAM_BOT_TOKEN not set",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "send_message: delivered and refused": {
+  "steps": [
+   {
+    "returned": {
+     "message": "✅ Сообщение отправлено в чат 1",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/sendMessage",
+      "method": "POST",
+      "body": {
+       "chat_id": 1,
+       "parse_mode": "HTML",
+       "text": "<b>hi</b>"
+      }
+     }
+    ],
+    "logs": []
+   },
+   {
+    "returned": {
+     "error": "Telegram: Forbidden",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/sendMessage",
+      "method": "POST",
+      "body": {
+       "chat_id": 2,
+       "parse_mode": "HTML",
+       "text": "x"
+      }
+     }
+    ],
+    "logs": [
+     "error: [send_message] TG error: Forbidden"
+    ]
+   },
+   {
+    "returned": {
+     "error": "Telegram: Unknown Telegram error",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/sendMessage",
+      "method": "POST",
+      "body": {
+       "chat_id": 3,
+       "parse_mode": "HTML",
+       "text": "x"
+      }
+     }
+    ],
+    "logs": [
+     "error: [send_message] TG error: Unknown Telegram error"
+    ]
+   }
+  ]
+ },
+ "forward_message: default source chat and refusal": {
+  "steps": [
+   {
+    "returned": {
+     "message": "✅ Сообщение переслано в чат 1",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/forwardMessage",
+      "method": "POST",
+      "body": {
+       "chat_id": 1,
+       "from_chat_id": "555",
+       "message_id": 5
+      }
+     }
+    ],
+    "logs": []
+   },
+   {
+    "returned": {
+     "error": "Telegram: Unknown Telegram error",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/forwardMessage",
+      "method": "POST",
+      "body": {
+       "chat_id": 2,
+       "from_chat_id": "77",
+       "message_id": 5
+      }
+     }
+    ],
+    "logs": [
+     "error: [forward_message] TG error: Unknown Telegram error"
+    ]
+   }
+  ]
+ },
+ "forward_message: no bot token": {
+  "steps": [
+   {
+    "returned": {
+     "error": "TELEGRAM_BOT_TOKEN not set",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "generate_image: provider error": {
+  "steps": [
+   {
+    "returned": {
+     "error": "Ошибка генерации (500). Попробуй позже.",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://openrouter.ai/api/v1/images/generations",
+      "method": "POST",
+      "body": {
+       "model": "openai/gpt-image-1",
+       "n": 1,
+       "prompt": "a cat, watercolor style",
+       "size": "1024x1024"
+      }
+     }
+    ],
+    "logs": [
+     "log: [generate_image] model: openai/gpt-image-1 | prompt: a cat, watercolor style",
+     "error: [generate_image] API error: 500 {\"error\":\"busy\"}"
+    ]
+   }
+  ]
+ },
+ "generate_image: a URL result is sent as a photo": {
+  "steps": [
+   {
+    "returned": {
+     "message": "🖼 Картинка отправлена!",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://openrouter.ai/api/v1/images/generations",
+      "method": "POST",
+      "body": {
+       "model": "test/model",
+       "n": 1,
+       "prompt": "a cat",
+       "size": "1024x1024"
+      }
+     },
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/sendPhoto",
+      "method": "POST",
+      "body": {
+       "caption": "🎨 a cat",
+       "chat_id": 555,
+       "photo": "https://img.example.test/cat.png"
+      }
+     }
+    ],
+    "logs": [
+     "log: [generate_image] model: test/model | prompt: a cat"
+    ]
+   }
+  ]
+ },
+ "generate_image: a base64 result is uploaded": {
+  "steps": [
+   {
+    "returned": {
+     "message": "🖼 Картинка отправлена!",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://openrouter.ai/api/v1/images/generations",
+      "method": "POST",
+      "body": {
+       "model": "openai/gpt-image-1",
+       "n": 1,
+       "prompt": "a dog",
+       "size": "1024x1024"
+      }
+     },
+     {
+      "url": "https://api.telegram.org/bot<BOT_TOKEN>/sendPhoto",
+      "method": "POST",
+      "body": {
+       "$formData": [
+        [
+         "chat_id",
+         "555"
+        ],
+        [
+         "caption",
+         "🎨 a dog"
+        ],
+        [
+         "photo",
+         {
+          "$blob": {
+           "bytes": 7,
+           "name": "image.png",
+           "type": "image/png"
+          }
+         }
+        ]
+       ]
+      }
+     }
+    ],
+    "logs": [
+     "log: [generate_image] model: openai/gpt-image-1 | prompt: a dog"
+    ]
+   }
+  ]
+ },
+ "generate_image: no image in the answer": {
+  "steps": [
+   {
+    "returned": {
+     "error": "Модель не вернула изображение.",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [
+     {
+      "url": "https://openrouter.ai/api/v1/images/generations",
+      "method": "POST",
+      "body": {
+       "model": "openai/gpt-image-1",
+       "n": 1,
+       "prompt": "nothing",
+       "size": "1024x1024"
+      }
+     }
+    ],
+    "logs": [
+     "log: [generate_image] model: openai/gpt-image-1 | prompt: nothing",
+     "error: [generate_image] no image in response: {\"data\":[]}"
+    ]
+   }
+  ]
+ },
+ "set_timezone: invalid and valid": {
+  "steps": [
+   {
+    "returned": {
+     "error": "Неверный часовой пояс: «Mars/Olympus». Пример: Europe/Warsaw",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "✅ Часовой пояс обновлён: Asia/Tokyo (GMT+9)",
+     "ok": true
+    },
+    "writes": {
+     "users/u1": {
+      "timezone": "Asia/Tokyo"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "set_banks and get_banks": {
+  "steps": [
+   {
+    "returned": {
+     "banks": [],
+     "message": "Банки не настроены. Добавь: «Мои банки: Тинькофф, Сбербанк, Наличные»",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "error": "banks должен быть массивом",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "✅ Банки сохранены:\n• Сбер\n• Наличные",
+     "ok": true
+    },
+    "writes": {
+     "users/u1": {
+      "banks": [
+       "Сбер",
+       "Наличные"
+      ],
+      "currency": "RUB"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "banks": [
+      "Сбер",
+      "Наличные"
+     ],
+     "message": "🏦 Твои банки:\n• Сбер\n• Наличные",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "✅ Список банков очищен.",
+     "ok": true
+    },
+    "writes": {
+     "users/u1": {
+      "banks": [],
+      "currency": "RUB"
+     }
+    },
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "get_banks: no profile document": {
+  "steps": [
+   {
+    "returned": {
+     "banks": [],
+     "message": "Банки не настроены. Добавь: «Мои банки: Тинькофф, Сбербанк, Наличные»",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "search_web is handed back to the caller": {
+  "steps": [
+   {
+    "returned": {
+     "error": "SEARCH_WEB_REDIRECT",
+     "ok": false,
+     "query": "weather"
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "error": "SEARCH_WEB_REDIRECT",
+     "ok": false,
+     "query": "$undefined"
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "an unknown tool": {
+  "steps": [
+   {
+    "returned": {
+     "error": "Unknown tool: teleport",
+     "ok": false
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "query tools show at most 20 rows": {
+  "steps": [
+   {
+    "returned": {
+     "message": "📋 Задачи:\n📋 T21 — 2026-10-22\n📋 T20 — 2026-10-21\n📋 T19 — 2026-10-20\n📋 T18 — 2026-10-19\n📋 T17 — 2026-10-18\n📋 T16 — 2026-10-17\n📋 T15 — 2026-10-16\n📋 T14 — 2026-10-15\n📋 T13 — 2026-10-14\n📋 T12 — 2026-10-13\n📋 T11 — 2026-10-12\n📋 T10 — 2026-10-11\n📋 T9 — 2026-10-10\n📋 T8 — 2026-10-09\n📋 T7 — 2026-10-08\n📋 T6 — 2026-10-07\n📋 T5 — 2026-10-06\n📋 T4 — 2026-10-05\n📋 T3 — 2026-10-04\n📋 T2 — 2026-10-03",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "📅 Напоминания:\n⏳ R0 — 1 окт., 13:00 (GMT+3)\n⏳ R1 — 2 окт., 13:00 (GMT+3)\n⏳ R2 — 3 окт., 13:00 (GMT+3)\n⏳ R3 — 4 окт., 13:00 (GMT+3)\n⏳ R4 — 5 окт., 13:00 (GMT+3)\n⏳ R5 — 6 окт., 13:00 (GMT+3)\n⏳ R6 — 7 окт., 13:00 (GMT+3)\n⏳ R7 — 8 окт., 13:00 (GMT+3)\n⏳ R8 — 9 окт., 13:00 (GMT+3)\n⏳ R9 — 10 окт., 13:00 (GMT+3)\n⏳ R10 — 11 окт., 13:00 (GMT+3)\n⏳ R11 — 12 окт., 13:00 (GMT+3)\n⏳ R12 — 13 окт., 13:00 (GMT+3)\n⏳ R13 — 14 окт., 13:00 (GMT+3)\n⏳ R14 — 15 окт., 13:00 (GMT+3)\n⏳ R15 — 16 окт., 13:00 (GMT+3)\n⏳ R16 — 17 окт., 13:00 (GMT+3)\n⏳ R17 — 18 окт., 13:00 (GMT+3)\n⏳ R18 — 19 окт., 13:00 (GMT+3)\n⏳ R19 — 20 окт., 13:00 (GMT+3)",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "message": "💳 История:\n💸 X21 — 22 ₽\n💸 X20 — 21 ₽\n💸 X19 — 20 ₽\n💸 X18 — 19 ₽\n💸 X17 — 18 ₽\n💸 X16 — 17 ₽\n💸 X15 — 16 ₽\n💸 X14 — 15 ₽\n💸 X13 — 14 ₽\n💸 X12 — 13 ₽\n💸 X11 — 12 ₽\n💸 X10 — 11 ₽\n💸 X9 — 10 ₽\n💸 X8 — 9 ₽\n💸 X7 — 8 ₽\n💸 X6 — 7 ₽\n💸 X5 — 6 ₽\n💸 X4 — 5 ₽\n💸 X3 — 4 ₽\n💸 X2 — 3 ₽",
+     "ok": true
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "getUserTimezone and getUserCurrency": {
+  "steps": [
+   {
+    "returned": "Asia/Almaty",
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": "KZT",
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": "Europe/Warsaw",
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": "RUB",
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": "Europe/Warsaw",
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": "RUB",
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": "Europe/Warsaw",
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": "RUB",
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "getUserTimezone: a storage failure falls back": {
+  "steps": [
+   {
+    "returned": "Europe/Warsaw",
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": "RUB",
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "isValidTimezone and getUtcOffsetStr": {
+  "steps": [
+   {
+    "returned": true,
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": "GMT+3",
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": true,
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": "GMT-4",
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": true,
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": "GMT+5:30",
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": true,
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": "GMT",
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": false,
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": "Bad/Zone",
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": false,
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": "",
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": true,
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": "GMT",
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "calculateNextRun: schedules across zones and month ends": {
+  "steps": [
+   {
+    "returned": {
+     "$date": "2026-10-16T05:00:00.000Z"
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "$date": "2026-10-25T22:30:00.000Z"
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "$date": "2026-10-16T07:00:00.000Z"
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "$date": "2026-10-22T07:00:00.000Z"
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "$date": "2026-10-19T08:00:00.000Z"
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "$date": "2026-02-28T09:00:00.000Z"
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "$date": "2027-01-15T17:00:00.000Z"
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "$date": "2026-11-01T03:00:00.000Z"
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   },
+   {
+    "returned": {
+     "$date": "2026-10-02T09:00:00.000Z"
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "tool definitions are unchanged": {
+  "steps": [
+   {
+    "returned": {
+     "names": [
+      "create_reminder",
+      "create_task",
+      "create_transaction",
+      "query_reminders",
+      "query_tasks",
+      "query_transactions",
+      "set_timezone",
+      "search_web",
+      "generate_image",
+      "get_finance_stats",
+      "send_message",
+      "create_automation",
+      "list_automations",
+      "delete_automation",
+      "pause_automation",
+      "forward_message",
+      "set_banks",
+      "get_banks",
+      "create_goal",
+      "deposit_to_goal",
+      "withdraw_from_goal",
+      "list_goals",
+      "delete_goal",
+      "export_finance_pdf"
+     ],
+     "sha256": "15aa754567621d1257144c61727f963dffc4889d9da2aeb6f76083cf5ad7e7c6"
+    },
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ },
+ "the module export surface is unchanged": {
+  "steps": [
+   {
+    "returned": [
+     "TOOL_DEFINITIONS",
+     "calculateNextRun",
+     "executeTool",
+     "getFinanceStats",
+     "getUserCurrency",
+     "getUserTimezone",
+     "getUtcOffsetStr",
+     "isValidTimezone"
+    ],
+    "writes": {},
+    "fetch": [],
+    "logs": []
+   }
+  ]
+ }
+}
