@@ -36,8 +36,10 @@ export function isPerfMarksEnabled(env: { NODE_ENV?: string; REACT_APP_PERF_MARK
   return env.NODE_ENV === 'development' || env.REACT_APP_PERF_MARKS === 'true';
 }
 
-// Written out (not via isPerfMarksEnabled) so the build replaces both values
-// and the minifier drops the recording code from builds where it is off.
+// Written out (not via isPerfMarksEnabled) so the build substitutes the values.
+// When REACT_APP_PERF_MARKS is not set at build time the check is made at
+// start-up instead (and is false): the recording code stays in the bundle but
+// never runs.
 const enabled = process.env.NODE_ENV === 'development' || process.env.REACT_APP_PERF_MARKS === 'true';
 const entries: PerfEntry[] = [];
 let summaryPrinted = false;

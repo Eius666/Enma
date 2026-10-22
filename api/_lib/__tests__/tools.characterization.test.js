@@ -26,6 +26,20 @@ test('scenario names are unique', () => {
   assert.equal(new Set(names).size, names.length);
 });
 
+// A zero-offset zone ('UTC', or no zone in the harness's UTC process) is named
+// by ICU: 'GMT' with ICU 77 (Node 22), 'GMT+0' with ICU 78 (Node 24 — Vercel
+// and CI). Pinned here as either, not byte-for-byte in the golden file.
+test('getUtcOffsetStr: a zero offset is named the way the runtime ICU names it', async () => {
+  const out = await runScenario({
+    name: 'zero offset',
+    steps: [{ call: (m) => m.getUtcOffsetStr('UTC') }, { call: (m) => m.getUtcOffsetStr(undefined) }],
+  }, TARGET);
+  const [utc, none] = out.steps.map(s => s.returned);
+  assert.match(utc, /^GMT(\+0)?$/);
+  assert.equal(none, utc);
+  assert.deepEqual(out.steps.map(s => [s.writes, s.fetch, s.logs]), [[{}, [], []], [{}, [], []]]);
+});
+
 if (update) {
   test('record golden file', async () => {
     const out = {};

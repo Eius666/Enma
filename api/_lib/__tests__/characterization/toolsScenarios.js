@@ -246,8 +246,14 @@ add('getUserTimezone and getUserCurrency', {
   steps: ['a', 'b', 'c', 'missing'].flatMap(u => [fn('getUserTimezone', u), fn('getUserCurrency', u)]),
 });
 add('getUserTimezone: a storage failure falls back', { failures: [{ collection: 'users' }], steps: [fn('getUserTimezone', 'a'), fn('getUserCurrency', 'a')] });
+// getUtcOffsetStr of a zero-offset zone ('UTC', or no zone in this UTC process)
+// is ICU's name for it, which depends on the Node version — checked in
+// tools.characterization.test.js instead of byte-for-byte here.
 add('isValidTimezone and getUtcOffsetStr', {
-  steps: ['Europe/Moscow', 'America/New_York', 'Asia/Kolkata', 'UTC', 'Bad/Zone', '', undefined].flatMap(tz => [fn('isValidTimezone', tz), fn('getUtcOffsetStr', tz)]),
+  steps: [
+    ...['Europe/Moscow', 'America/New_York', 'Asia/Kolkata', 'Bad/Zone', ''].flatMap(tz => [fn('isValidTimezone', tz), fn('getUtcOffsetStr', tz)]),
+    fn('isValidTimezone', 'UTC'), fn('isValidTimezone', undefined),
+  ],
 });
 add('calculateNextRun: schedules across zones and month ends', {
   steps: [

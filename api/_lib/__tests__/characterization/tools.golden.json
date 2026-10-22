@@ -2661,18 +2661,6 @@
     "logs": []
    },
    {
-    "returned": true,
-    "writes": {},
-    "fetch": [],
-    "logs": []
-   },
-   {
-    "returned": "GMT",
-    "writes": {},
-    "fetch": [],
-    "logs": []
-   },
-   {
     "returned": false,
     "writes": {},
     "fetch": [],
@@ -2703,7 +2691,7 @@
     "logs": []
    },
    {
-    "returned": "GMT",
+    "returned": true,
     "writes": {},
     "fetch": [],
     "logs": []
