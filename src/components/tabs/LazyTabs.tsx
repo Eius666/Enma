@@ -6,10 +6,13 @@ import type { HabitsTab } from './HabitsTab';
 
 // The Calendar, Notes, Finance and Habits tabs are not part of the startup
 // bundle (the Day tab, shown first, is) — same approach as LazySettings.
-const loadCalendarTab = () => import(/* webpackPrefetch: true */ './CalendarTab');
-const loadNotesTab    = () => import(/* webpackPrefetch: true */ './NotesTab');
-const loadFinanceTab  = () => import(/* webpackPrefetch: true */ './FinanceTab');
-const loadHabitsTab   = () => import(/* webpackPrefetch: true */ './HabitsTab');
+// No webpackPrefetch hint: it made Chromium start these downloads as soon as
+// the app chunk arrived, sharing the connection with the app's own (larger)
+// chunk mid-startup; preloadTabs below loads them once the shell is up.
+const loadCalendarTab = () => import('./CalendarTab');
+const loadNotesTab    = () => import('./NotesTab');
+const loadFinanceTab  = () => import('./FinanceTab');
+const loadHabitsTab   = () => import('./HabitsTab');
 
 const CalendarTabChunk = React.lazy(() => loadCalendarTab().then(m => ({ default: m.CalendarTab })));
 const NotesTabChunk    = React.lazy(() => loadNotesTab().then(m => ({ default: m.NotesTab })));

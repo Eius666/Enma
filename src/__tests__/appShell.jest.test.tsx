@@ -300,17 +300,46 @@ test('header shows no plan when the server-side end time has passed, whatever th
   expect(within(screen.getByRole('banner')).queryByText('PRO')).toBeNull();
 });
 
-test('header shows the trial with the days left', async () => {
-  mockDocs['subscriptions/u-email'] = { plan: 'free', trialPlan: 'pro', status: 'trial', endDate: iso(Date.now() + 3 * DAY - 1000), trialEndDate: iso(Date.now() + 3 * DAY - 1000) };
+// The document registration writes (api/_lib/subscription/plan.js, buildTrialSubscription).
+const registrationTrial = (daysLeft: number) => {
+  const end = Date.now() + daysLeft * DAY - 1000;
+  return {
+    plan: 'free', trialPlan: 'premium', period: 'month', status: 'active', paymentMethod: 'trial',
+    endDate: iso(end), endDateMs: end, trialEndDate: iso(end), trialEndDateMs: end,
+  };
+};
+
+test('header shows a running registration trial as TRIAL, not as PREMIUM (BUG-09)', async () => {
+  mockDocs['subscriptions/u-email'] = registrationTrial(6);
   await renderSignedIn(emailUser);
   const header = screen.getByRole('banner');
-  expect((await within(header).findByText('TRIAL 3d')).className).toBe('header-avatar-pro-label header-avatar-pro-label--trial');
+  expect((await within(header).findByText('TRIAL')).className).toBe('header-avatar-pro-label header-avatar-pro-label--trial');
+  expect(within(header).queryByText('PREMIUM')).toBeNull();
+  expect(within(header).getByText('MA').className).toBe('header-avatar header-avatar--pro');
+});
+
+test('header shows a plan paid for during the trial as that plan', async () => {
+  mockDocs['subscriptions/u-email'] = { ...registrationTrial(3), plan: 'pro', endDate: iso(Date.now() + 33 * DAY), endDateMs: Date.now() + 33 * DAY, lastPaymentMethod: 'sbp' };
+  await renderSignedIn(emailUser);
+  const header = screen.getByRole('banner');
+  expect((await within(header).findByText('PRO')).className).toBe('header-avatar-pro-label');
+  expect(within(header).queryByText('TRIAL')).toBeNull();
+});
+
+test('header shows no plan for an ended trial or a cancelled one', async () => {
+  mockDocs['subscriptions/u-email'] = { ...registrationTrial(3), status: 'cancelled' };
+  await renderSignedIn(emailUser);
+  await act(async () => { await new Promise(r => setTimeout(r, 20)); });
+  const header = screen.getByRole('banner');
+  expect(within(header).queryByText(/TRIAL|PREMIUM|PRO/)).toBeNull();
+  expect(within(header).getByText('MA').className).toBe('header-avatar');
 });
 
 test('an ended trial without payment shows the upgrade banner leading to Settings', async () => {
   mockDocs['subscriptions/u-email'] = { plan: 'free', trialPlan: 'pro', status: 'expired', endDate: iso(Date.now() - DAY), trialEndDate: iso(Date.now() - DAY) };
   await renderSignedIn(emailUser);
   expect(await screen.findByText('Your trial ended. Upgrade to Pro to keep adding items.')).toBeTruthy();
+  expect(within(screen.getByRole('banner')).queryByText(/TRIAL|PRO/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Upgrade' }));
   expect(await screen.findByTestId('settings-screen')).toBeTruthy();
 });

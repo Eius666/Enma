@@ -391,6 +391,7 @@ const App: React.FC = () => {
             transactions={transactions}
             banks={banks}
             subscription={subscription}
+            subscriptionLoaded={subscriptionLoaded}
           />
         )}
         {activeTab === 'habits' && (
@@ -410,6 +411,7 @@ const App: React.FC = () => {
             currency={currency}
             user={user}
             subscription={subscription}
+            subscriptionLoaded={subscriptionLoaded}
             ratesStatus={ratesStatus}
             ratesUpdatedAt={ratesUpdatedAt}
             onLanguageChange={updateLanguage}

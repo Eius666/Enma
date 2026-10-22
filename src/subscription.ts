@@ -166,6 +166,30 @@ export const trialDaysRemaining = (sub: Subscription): number => {
   return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
 };
 
+/** What the app shows as the user's plan: header badge, Settings, onboarding. */
+export type PlanDisplay =
+  | { kind: 'none' }
+  | { kind: 'trial'; plan: PaidPlan; daysLeft: number }
+  | { kind: 'paid'; plan: PaidPlan };
+
+// Decided the way the server decides (api/_lib/subscription/plan.js,
+// resolveActivePlan): a paid plan still running wins over a trial recorded in
+// the same document (a plan bought during the trial); a trial shows only on a
+// free document whose trial is still running; a document that is not 'active'
+// or whose time is over shows nothing. Display only: what the user may use is
+// decided by the server and, for the app's own limits, by getActivePlan above
+// — neither is changed by this.
+export const getPlanDisplay = (sub: Subscription | null): PlanDisplay => {
+  if (!sub || sub.status !== 'active') return { kind: 'none' };
+  if (sub.plan === 'pro' || sub.plan === 'premium') {
+    return isSubscriptionActive(sub) ? { kind: 'paid', plan: sub.plan } : { kind: 'none' };
+  }
+  if (sub.plan === 'free' && (sub.trialPlan === 'pro' || sub.trialPlan === 'premium') && isInTrial(sub)) {
+    return { kind: 'trial', plan: sub.trialPlan, daysLeft: trialDaysRemaining(sub) };
+  }
+  return { kind: 'none' };
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Feature gating
 // ─────────────────────────────────────────────────────────────────────────────

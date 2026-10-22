@@ -19,6 +19,8 @@ interface FinanceListProps {
   categories: Category[];
   transactions: Transaction[];
   user: User | null;
+  /** Shown between the search and the category chips (the PDF report button). */
+  reportButton?: React.ReactNode;
   onOpenEditor: (txId: string | null) => void;
 }
 
@@ -162,6 +164,7 @@ const FinanceList: React.FC<FinanceListProps> = ({
   categories,
   transactions,
   user,
+  reportButton,
   onOpenEditor,
 }) => {
   const t = T[language];
@@ -386,6 +389,8 @@ const FinanceList: React.FC<FinanceListProps> = ({
           onChange={e => setSearchQuery(e.target.value)}
         />
       </div>
+
+      {reportButton}
 
       {/* ── Category chips ── */}
       <div className="fin-list__chips-wrap">

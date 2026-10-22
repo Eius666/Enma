@@ -179,10 +179,11 @@ body.theme-light .subscription-panel__title {
 .subscription-panel__active-text {
   font-size: 13px;
   font-weight: 600;
+  line-height: 1.35;
   color: var(--notes-text, #fff);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* Wraps on narrow screens: the end date is the point of this line. */
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 
 .subscription-panel__active-dot {
@@ -867,6 +868,7 @@ body.theme-light .subscription-panel__method-btn {
 
 .subscription-panel__promo-input {
   flex: 1;
+  min-width: 0; /* an input's default width would push "Apply" out on 320px */
   padding: 10px 14px;
   border-radius: 10px;
   border: 1px solid var(--notes-card-border, rgba(255, 255, 255, 0.12));

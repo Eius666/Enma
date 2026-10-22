@@ -1,6 +1,6 @@
 import React from 'react';
 import { FaMoon, FaSun, FaCog, FaSignOutAlt } from 'react-icons/fa';
-import { isSubscriptionActive, isInTrial, getActivePlan, trialDaysRemaining } from '../../subscription';
+import { getPlanDisplay } from '../../subscription';
 import type { Subscription } from '../../subscription';
 import type { TranslationKey } from '../../i18n/appStrings';
 
@@ -24,24 +24,20 @@ export function AppHeader({
   language, theme, subscription, avatarInitials, headerNick, identityLine,
   settingsActive, onOpenSettings, onToggleTheme, onSignOut, t,
 }: Props): React.ReactElement {
-  const hasPlan = !!subscription && (isSubscriptionActive(subscription) || isInTrial(subscription));
-  const trialOnly = !!subscription && isInTrial(subscription) && !isSubscriptionActive(subscription);
+  // A running trial reads TRIAL (its days left are in Settings); a paid plan
+  // reads PRO / PREMIUM and wins over a trial in the same document.
+  const plan = getPlanDisplay(subscription);
   return (
     <header className="header-bar">
       <div className="header-left">
         {/* Avatar + optional PRO label below (Instagram-story style) */}
         <div className="header-avatar-wrap" aria-hidden="true">
-          <div className={`header-avatar${hasPlan ? ' header-avatar--pro' : ''}`}>
+          <div className={`header-avatar${plan.kind !== 'none' ? ' header-avatar--pro' : ''}`}>
             {avatarInitials}
           </div>
-          {hasPlan && (
-            <span className={`header-avatar-pro-label${trialOnly ? ' header-avatar-pro-label--trial' : ''}`}>
-              {trialOnly
-                ? (language === 'ru'
-                  ? `TRIAL ${trialDaysRemaining(subscription!)}д`
-                  : `TRIAL ${trialDaysRemaining(subscription!)}d`)
-                : getActivePlan(subscription).toUpperCase()
-              }
+          {plan.kind !== 'none' && (
+            <span className={`header-avatar-pro-label${plan.kind === 'trial' ? ' header-avatar-pro-label--trial' : ''}`}>
+              {plan.kind === 'trial' ? 'TRIAL' : plan.plan.toUpperCase()}
             </span>
           )}
         </div>

@@ -36,6 +36,10 @@ if (window.location.pathname.startsWith('/admin')) {
     })
     .catch(showBootFailure);
 } else {
+  // Firebase Auth starts restoring the session while the app chunk is still
+  // downloading (src/firebaseApp.ts). A failure here is reported by the app's
+  // own import just below, which loads the same module.
+  import('./firebaseApp').catch(() => undefined);
   import('./App')
     .then(({ default: App }) => {
       root.render(

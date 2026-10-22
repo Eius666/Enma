@@ -9,6 +9,7 @@ import {
   doc,
   updateDoc,
   serverTimestamp,
+  increment,
 } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 import {
@@ -356,9 +357,13 @@ const NotesList: React.FC<NotesListProps> = ({
     const note = notes.find(n => n.id === contextNoteId);
     if (!note) return;
     try {
+      // A pin is an edit like any other: raising `rev` makes an editor open
+      // on another device see it as a newer version (conflict banner) instead
+      // of silently writing its old pin state back.
       await updateDoc(doc(db, 'notes', contextNoteId), {
         pinned: !note.pinned,
         updatedAt: serverTimestamp(),
+        rev: increment(1),
       });
     } catch (err) {
       console.warn('Pin error', err);

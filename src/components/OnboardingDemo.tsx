@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ModalSheet } from './ui/ModalSheet';
 import type { Subscription } from '../subscription';
-import { canOfferTrial, getActivePlan, isInTrial, trialDaysRemaining } from '../subscription';
+import { canOfferTrial, getPlanDisplay } from '../subscription';
 import './OnboardingDemo.css';
 
 interface OnboardingDemoProps {
@@ -63,7 +63,7 @@ const DEMO_INSIGHT = {
   },
 };
 
-const PLAN_LABEL: Record<string, string> = { pro: 'Pro', premium: 'Premium' };
+const PLAN_LABEL = { pro: 'Pro', premium: 'Premium' } as const;
 
 // The AI analysis preview shown once to a new user, as a modal sheet. The
 // free-trial button appears only when the server would grant a trial (no
@@ -82,13 +82,12 @@ const OnboardingDemo: React.FC<OnboardingDemoProps> = ({
   const tx = DEMO_TRANSACTIONS[language];
 
   const offerTrial = canOfferTrial(subscription, subscriptionLoaded);
-  const plan = getActivePlan(subscription);
-  const planLabel = PLAN_LABEL[plan];
+  const shown = getPlanDisplay(subscription);
   let planStatus: string | null = null;
-  if (subscriptionLoaded && subscription && planLabel) {
-    planStatus = isInTrial(subscription)
-      ? t.trialActive(planLabel, trialDaysRemaining(subscription))
-      : t.planActive(planLabel);
+  if (subscriptionLoaded && shown.kind !== 'none') {
+    planStatus = shown.kind === 'trial'
+      ? t.trialActive(PLAN_LABEL[shown.plan], shown.daysLeft)
+      : t.planActive(PLAN_LABEL[shown.plan]);
   }
 
   return (

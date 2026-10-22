@@ -78,6 +78,8 @@ export function subscribeFreeUsage(
 export function subscribeAiUsage(
   userId: string,
   cb: (snapshot: AiUsageSnapshot) => void,
+  // When given, a failed read is reported here instead of as zero usage.
+  onError?: () => void,
 ): Unsubscribe {
   const ref = doc(db, 'aiUsage', userId);
   return onSnapshot(
@@ -91,6 +93,6 @@ export function subscribeAiUsage(
         pdfReports:    same ? Number(d.pdfReports    ?? 0) : 0,
       });
     },
-    () => cb({ textRequests: 0, imageRequests: 0, pdfReports: 0 }),
+    () => (onError ? onError() : cb({ textRequests: 0, imageRequests: 0, pdfReports: 0 })),
   );
 }

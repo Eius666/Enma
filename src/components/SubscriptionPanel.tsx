@@ -11,6 +11,7 @@ import {
   getSubscriptionEndMs,
   isInTrial,
   getActivePlan,
+  getPlanDisplay,
   Subscription,
   PaidPlan,
   SubscriptionPeriod,
@@ -66,6 +67,7 @@ const T = {
     trialSub:        'For new users',
     trialBtn:        'Start trial',
     activeSub:       'Active until {date}',
+    trialUntil:      'Trial until {date}',
     free:            'Free',
     pro:             'Pro',
     premium:         'Premium',
@@ -131,6 +133,7 @@ const T = {
     trialSub:        'Для новых пользователей',
     trialBtn:        'Начать пробный период',
     activeSub:       'Активна до {date}',
+    trialUntil:      'Пробный период до {date}',
     free:            'Free',
     pro:             'Pro',
     premium:         'Premium',
@@ -208,6 +211,10 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
   const effectivePlan = getActivePlan(subscription ?? null);
   const isActive      = subscription && (isSubscriptionActive(subscription) || isInTrial(subscription));
   const activePlan    = isActive ? effectivePlan : null;
+  // How the current plan is named and marked; the purchase flow above and
+  // below keeps using effectivePlan / isActive as before.
+  const shown         = getPlanDisplay(subscription ?? null);
+  const shownPlan     = shown.kind === 'none' ? null : shown.plan;
 
   const [plan,   setPlan]   = useState<SelectedPlan>(activePlan ?? 'free');
   const [period, setPeriod] = useState<SubscriptionPeriod>('month');
@@ -764,14 +771,14 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       )}
 
       {/* Active subscription banner */}
-      {isActive && (
+      {subscription && shown.kind !== 'none' && (
         <div className="subscription-panel__active">
           <div className="subscription-panel__active-body">
             <span className="subscription-panel__active-dot" />
             <span className="subscription-panel__active-text">
-              {t.activeSub.replace(
+              {(shown.kind === 'trial' ? t.trialUntil : t.activeSub).replace(
                 '{date}',
-                new Date(getSubscriptionEndMs(subscription)).toLocaleDateString(
+                new Date(shown.kind === 'trial' ? subscription.trialEndDate! : getSubscriptionEndMs(subscription)).toLocaleDateString(
                   language === 'ru' ? 'ru-RU' : 'en-US',
                   { day: 'numeric', month: 'long', year: 'numeric' }
                 )
@@ -803,7 +810,7 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
               onClick={() => setPlan(p)}
             >
               {label[p]}
-              {activePlan === p && <span className="subscription-panel__plan-toggle-dot" />}
+              {shownPlan === p && <span className="subscription-panel__plan-toggle-dot" />}
             </button>
           );
         })}
@@ -820,10 +827,10 @@ const SubscriptionPanel: React.FC<SubscriptionPanelProps> = ({
       </div>
 
       {/* Upgrade context hints */}
-      {effectivePlan === 'pro' && plan === 'premium' && (
+      {shownPlan === 'pro' && plan === 'premium' && (
         <p className="subscription-panel__upgrade-hint">{t.upgradeFromPro}</p>
       )}
-      {effectivePlan === 'premium' && isActive && (
+      {shown.kind === 'paid' && shown.plan === 'premium' && (
         <p className="subscription-panel__upgrade-hint subscription-panel__upgrade-hint--success">
           {t.alreadyPremium}
         </p>

@@ -77,6 +77,8 @@ const T = {
     restoredHint: 'Restored unsaved changes from this device',
     confirmDelete: 'Delete this note?',
     todoPlaceholder: 'New item…',
+    loadFailed: 'Could not open the note. Check the connection and try again.',
+    retry: 'Retry',
   },
   ru: {
     back: 'Заметки',
@@ -101,6 +103,8 @@ const T = {
     restoredHint: 'Восстановлены несохранённые изменения с этого устройства',
     confirmDelete: 'Удалить эту заметку?',
     todoPlaceholder: 'Новый пункт…',
+    loadFailed: 'Не удалось открыть заметку. Проверьте соединение и попробуйте ещё раз.',
+    retry: 'Повторить',
   },
 };
 
@@ -112,6 +116,24 @@ function makeItemId(): string {
 
 function makeNoteId(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+type NoteFields = {
+  title: string;
+  content: string;
+  type: 'text' | 'checklist';
+  checklistItems: ChecklistItem[];
+  category: string;
+  pinned: boolean;
+};
+
+/** The editable fields as one comparable string. */
+function fieldsKey(f: NoteFields): string {
+  return JSON.stringify([f.title, f.content, f.type, f.checklistItems, f.category, f.pinned]);
+}
+
+function isBlank(f: NoteFields): boolean {
+  return !f.title.trim() && !f.content.trim() && f.checklistItems.every(i => !i.text.trim());
 }
 
 const NoteEditor: React.FC<NoteEditorProps> = ({
@@ -145,6 +167,13 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
   const [savingState, setSavingState] = useState<SaveStatus>('idle');
   const [menuOpen, setMenuOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  // An existing note that could not be read (offline, no access) is never
+  // shown as an empty, editable note: typing into that would replace it.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  // The fields as last read from or handed to the server. While the editor
+  // still shows exactly that, nothing is written and no draft is kept.
+  const lastSentRef = useRef<string | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
   const [usedNotes, setUsedNotes] = useState<number | null>(null);
   const limitPassedRef = useRef(false);
@@ -186,15 +215,7 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
   const titleRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  type NotePatch = {
-    id: string;
-    title: string;
-    content: string;
-    type: 'text' | 'checklist';
-    checklistItems: ChecklistItem[];
-    category: string;
-    pinned: boolean;
-  };
+  type NotePatch = NoteFields & { id: string };
 
   // ── Load existing note ──────────────────────────────────────────────────
   useEffect(() => {
@@ -230,19 +251,29 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
       // Load from Firestore
       getDoc(doc(db, 'notes', noteId)).then(async snap => {
         let serverRev = 0;
+        let server: NoteFields = { title: '', content: '', type: 'text', checklistItems: [], category: defaultCats[0], pinned: false };
         if (snap.exists()) {
           const d = snap.data();
-          setTitle(d.title ?? '');
-          setContent(d.content ?? '');
-          setType(d.type ?? 'text');
-          setChecklistItems(d.checklistItems ?? []);
-          setCategory(d.category ?? defaultCats[0]);
-          setPinned(d.pinned ?? false);
+          server = {
+            title: d.title ?? '',
+            content: d.content ?? '',
+            type: d.type ?? 'text',
+            checklistItems: d.checklistItems ?? [],
+            category: d.category ?? defaultCats[0],
+            pinned: d.pinned ?? false,
+          };
+          setTitle(server.title);
+          setContent(server.content);
+          setType(server.type);
+          setChecklistItems(server.checklistItems);
+          setCategory(server.category);
+          setPinned(server.pinned);
           const ts = d.updatedAt;
           if (ts?.seconds) setUpdatedAt(new Date(ts.seconds * 1000));
           serverRev = typeof d.rev === 'number' ? d.rev : 0;
         }
         knownRevRef.current = serverRev;
+        lastSentRef.current = fieldsKey(server);
 
         // ENMA notes-durability audit, PHASE 3: a draft left in IndexedDB
         // from a previous session means a write never reached Firestore
@@ -250,7 +281,18 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
         // dropped, but also never applied blindly: only restore it if
         // nothing else has changed this note since the draft was taken.
         const draft = await getNoteDraftStore().load(user.uid, noteId);
-        const decision = decideDraftAction(draft, serverRev);
+        let decision = decideDraftAction(draft, serverRev);
+        if (draft && decision === 'restore') {
+          if (fieldsKey(draft) === lastSentRef.current) {
+            // Nothing unsaved in it: the note already reads exactly so.
+            getNoteDraftStore().clear(user.uid, noteId).catch(() => {});
+            decision = 'none';
+          } else if (isBlank(draft) && !isBlank(server)) {
+            // A draft that would empty the note is never applied unasked
+            // (a failed load used to leave such drafts behind).
+            decision = 'conflict';
+          }
+        }
         if (decision === 'restore' && draft) {
           setTitle(draft.title);
           setContent(draft.content);
@@ -287,7 +329,7 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
         // Don't auto-focus on existing note (user is reading)
       }).catch(err => {
         console.warn('NoteEditor load error', err);
-        setLoaded(true);
+        setLoadFailed(true);
       });
     } else {
       // New note — auto-focus title
@@ -295,7 +337,7 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
       setTimeout(() => titleRef.current?.focus(), 80);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadAttempt]);
 
   // Close menu on outside click
   useEffect(() => {
@@ -481,6 +523,10 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
   useEffect(() => {
     if (!loaded || !docId || !user) return;
     const patch: NotePatch = { id: docId, title, content, type, checklistItems, category, pinned };
+    // Opening a note, or a re-render that changed nothing, writes nothing.
+    const key = fieldsKey(patch);
+    if (key === lastSentRef.current) return;
+    lastSentRef.current = key;
     // save() never throws — it resolves to false (rather than rejecting)
     // when local storage is unavailable/full/blocked, so a degraded local
     // safety net is logged for debugging but never blocks or fails the
@@ -633,12 +679,22 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
     const snap = await getDoc(doc(db, 'notes', docId));
     if (snap.exists()) {
       const d = snap.data();
-      setTitle(d.title ?? '');
-      setContent(d.content ?? '');
-      setType(d.type ?? 'text');
-      setChecklistItems(d.checklistItems ?? []);
-      setCategory(d.category ?? defaultCats[0]);
-      setPinned(d.pinned ?? false);
+      const server: NoteFields = {
+        title: d.title ?? '',
+        content: d.content ?? '',
+        type: d.type ?? 'text',
+        checklistItems: d.checklistItems ?? [],
+        category: d.category ?? defaultCats[0],
+        pinned: d.pinned ?? false,
+      };
+      // Showing the server version is not an edit: nothing to write back.
+      lastSentRef.current = fieldsKey(server);
+      setTitle(server.title);
+      setContent(server.content);
+      setType(server.type);
+      setChecklistItems(server.checklistItems);
+      setCategory(server.category);
+      setPinned(server.pinned);
       knownRevRef.current = typeof d.rev === 'number' ? d.rev : 0;
     }
     await getNoteDraftStore().clear(user.uid, docId).catch(() => {});
@@ -664,6 +720,22 @@ const NoteEditor: React.FC<NoteEditorProps> = ({
             <FaArrowLeft /> {t.back}
           </button>
         </div>
+        {loadFailed && (
+          <div className="note-editor__conflict-banner" role="alert">
+            <div className="note-editor__conflict-text">
+              <span>{t.loadFailed}</span>
+            </div>
+            <div className="note-editor__conflict-actions">
+              <button
+                type="button"
+                className="note-editor__conflict-btn"
+                onClick={() => { setLoadFailed(false); setLoadAttempt(n => n + 1); }}
+              >
+                {t.retry}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

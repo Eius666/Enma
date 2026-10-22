@@ -151,6 +151,20 @@ body.theme-light .sett-row:not(.sett-row--danger):active {
   display: block;
   font-size: 12px;
   margin-top: 2px;
+  /* The plan status wraps instead of losing its end (the trial's days left). */
+  white-space: normal;
+  max-width: none;
+  overflow: visible;
+}
+
+/* Subscription status row: on a narrow screen the manage button moves below
+   the status rather than squeezing it. */
+.sett-row--plan {
+  flex-wrap: wrap;
+}
+
+.sett-row--plan .sett-row__body {
+  flex: 1 1 160px;
 }
 
 /* Chevron icon */
@@ -461,6 +475,7 @@ body.theme-light .sett-subscription-wrap .subscription-panel {
 
 .sett-banks__add-input {
   flex: 1;
+  min-width: 0; /* an input's default width would push the button out on 320px */
   padding: 9px 12px;
   border-radius: 12px;
   border: 1px solid var(--notes-card-border);
@@ -475,6 +490,8 @@ body.theme-light .sett-subscription-wrap .subscription-panel {
 .sett-banks__add-input::placeholder { color: var(--notes-text-muted); }
 
 .sett-banks__add-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
   padding: 9px 16px;
   border-radius: 12px;
   border: none;

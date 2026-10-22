@@ -16,7 +16,7 @@ import type { Subscription } from '../subscription';
 import { getActivePlan, FREE_LIMITS } from '../subscription';
 import { subscribeFreeUsage } from '../lib/usageCounters';
 import { cancelTodayHabitReminder } from '../lib/habitReminders';
-import { deviceTimeZone } from '../lib/timeZone';
+import { deviceTimeZone, convertTime, SERVER_DEFAULT_TIME_ZONE } from '../lib/timeZone';
 import Paywall, { LimitBanner } from './Paywall';
 import { TimeField } from './ui/TimeField';
 import './Habits.css';
@@ -34,9 +34,12 @@ interface HabitEditorProps {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
+// The first eight are the original palette (saved habits keep these values);
+// the last four were added with the two-row grid.
 export const HABIT_COLORS = [
   '#7B68EE', '#4ECDC4', '#FF6B6B', '#45B7D1',
   '#96CEB4', '#FFEAA7', '#DDA0DD', '#FF8A5C',
+  '#F78FB3', '#6BCB77', '#5C7CFA', '#A1887F',
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -101,9 +104,12 @@ const T = {
     reminderLabel: 'REMINDER',
     reminderOff: 'Off',
     reminderClear: 'Remove reminder time',
-    timeZoneHint: (tz: string) => `Time in the ${tz} time zone`,
-    timeZoneDiffers: (tz: string, device: string) => `Time in the ${tz} time zone (this device: ${device})`,
+    timeZoneHint: (tz: string, isDefault: boolean) => `Time in the ${tz} time zone${isDefault ? ' (default)' : ''}`,
+    timeZoneDiffers: (tz: string, isDefault: boolean, deviceTime: string | null) =>
+      `Time in the ${tz} time zone${isDefault ? ' (default)' : ''}${deviceTime ? ` — ${deviceTime} on this device` : ''}`,
     useDeviceZone: (device: string) => `Use ${device}`,
+    confirmZone: (device: string, current: string) =>
+      `Reminder times of all your habits and repeating bot reminders will be read in ${device} instead of ${current}. Continue?`,
     pickDays: 'Choose at least one day',
     statsLabel: 'STATISTICS',
     streakLabel: 'Streak',
@@ -129,9 +135,12 @@ const T = {
     reminderLabel: 'НАПОМИНАНИЕ',
     reminderOff: 'Не задано',
     reminderClear: 'Убрать время напоминания',
-    timeZoneHint: (tz: string) => `Время по часовому поясу ${tz}`,
-    timeZoneDiffers: (tz: string, device: string) => `Время по часовому поясу ${tz} (на устройстве — ${device})`,
+    timeZoneHint: (tz: string, isDefault: boolean) => `Время по часовому поясу ${tz}${isDefault ? ' (по умолчанию)' : ''}`,
+    timeZoneDiffers: (tz: string, isDefault: boolean, deviceTime: string | null) =>
+      `Время по часовому поясу ${tz}${isDefault ? ' (по умолчанию)' : ''}${deviceTime ? ` — на этом устройстве это ${deviceTime}` : ''}`,
     useDeviceZone: (device: string) => `Использовать ${device}`,
+    confirmZone: (device: string, current: string) =>
+      `Время напоминаний всех привычек и повторяющихся напоминаний бота будет считаться по ${device}, а не по ${current}. Продолжить?`,
     pickDays: 'Выберите хотя бы один день',
     statsLabel: 'СТАТИСТИКА',
     streakLabel: 'Подряд',
@@ -173,10 +182,11 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
   const [showPaywall,    setShowPaywall]    = useState(false);
   const [usedHabits,     setUsedHabits]     = useState<number | null>(null);
   // users/{uid}.timezone — the zone the server reads reminderTime in (it falls
-  // back to its own default when the field is missing). undefined = not read
-  // (yet, or the read failed): then nothing is shown or written about it.
+  // back to SERVER_DEFAULT_TIME_ZONE when the field is missing). undefined =
+  // not read (yet, or the read failed): then nothing is shown about it.
   const [storedZone,     setStoredZone]     = useState<string | null | undefined>(undefined);
   const deviceZone = useMemo(() => deviceTimeZone(), []);
+  const effectiveZone = storedZone ?? SERVER_DEFAULT_TIME_ZONE;
 
   const plan   = getActivePlan(subscription ?? null);
   const isFree = plan === 'free';
@@ -200,17 +210,12 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
     return () => { alive = false; };
   }, [user]);
 
-  // The server reads a habit's reminder time in users/{uid}.timezone. A user
-  // who never set one gets this device's zone — written only when the field
-  // is known to be missing, never over a zone that is already set.
-  const saveDeviceZoneIfMissing = async () => {
-    if (!user || storedZone !== null || !deviceZone) return;
-    await setDoc(doc(db, 'users', user.uid), { timezone: deviceZone, updatedAt: serverTimestamp() }, { merge: true });
-    setStoredZone(deviceZone);
-  };
-
+  // The zone applies to every reminder the server schedules for this user
+  // (all habits, repeating bot reminders), so it changes only when the user
+  // asks for it here — never as a side effect of saving a habit.
   const switchToDeviceZone = async () => {
     if (!user || !deviceZone) return;
+    if (!window.confirm(t.confirmZone(deviceZone, effectiveZone))) return;
     try {
       await setDoc(doc(db, 'users', user.uid), { timezone: deviceZone, updatedAt: serverTimestamp() }, { merge: true });
       setStoredZone(deviceZone);
@@ -281,12 +286,6 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
   const daysMissing = repeatType === 'custom' && repeatDays.length === 0;
   const canSave = !saving && !!title.trim() && !daysMissing;
 
-  // Non-fatal: the habit itself is already saved.
-  const afterSaved = async () => {
-    if (!reminderTime) return;
-    try { await saveDeviceZoneIfMissing(); } catch (err) { console.warn('HabitEditor time zone save error', err); }
-  };
-
   const handleSave = async () => {
     if (!user || !title.trim() || daysMissing) return;
     setSaving(true);
@@ -328,7 +327,6 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
           setSaving(false);
           return;
         }
-        await afterSaved();
         onBack();
       } catch (err) {
         console.error('HabitEditor create error', err);
@@ -358,7 +356,6 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
       if (!reminderTime) {
         await cancelTodayHabitReminder(id, format(new Date(), 'yyyy-MM-dd'));
       }
-      await afterSaved();
       onBack();
     } catch (err) {
       console.error('HabitEditor save error', err);
@@ -546,21 +543,21 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
         </div>
       )}
 
-      {/* ── Color picker — 8 colored circles, no emoji ── */}
+      {/* ── Color picker — a 6-column grid, every circle fully visible ── */}
       <div className="hab-editor__section-label">{t.colorLabel}</div>
-      <div className="hab-editor__colors-wrap">
-        <div className="hab-editor__colors">
-          {HABIT_COLORS.map(c => (
-            <button
-              key={c}
-              className={`hab-editor__color-btn${color === c ? ' hab-editor__color-btn--selected' : ''}`}
-              style={{ backgroundColor: c }}
-              onClick={() => setColor(c)}
-              type="button"
-              aria-label={`Color ${c}`}
-            />
-          ))}
-        </div>
+      <div className="hab-editor__colors" role="group" aria-label={t.colorLabel}>
+        {HABIT_COLORS.map(c => (
+          <button
+            key={c}
+            className={`hab-editor__color-btn${color === c ? ' hab-editor__color-btn--selected' : ''}`}
+            onClick={() => setColor(c)}
+            type="button"
+            aria-label={`Color ${c}`}
+            aria-pressed={color === c}
+          >
+            <span className="hab-editor__color-dot" style={{ backgroundColor: c }} aria-hidden="true" />
+          </button>
+        ))}
       </div>
 
       {daysMissing && <div className="hab-editor__hint">{t.pickDays}</div>}
@@ -572,15 +569,15 @@ const HabitEditor: React.FC<HabitEditorProps> = ({
         onChange={setReminderTime}
         emptyText={t.reminderOff}
         clearLabel={t.reminderClear}
-        hint={reminderTime && storedZone !== undefined && deviceZone ? (
-          storedZone && storedZone !== deviceZone ? (
+        hint={reminderTime && storedZone !== undefined ? (
+          deviceZone && deviceZone !== effectiveZone ? (
             <>
-              {t.timeZoneDiffers(storedZone, deviceZone)}{' '}
+              {t.timeZoneDiffers(effectiveZone, storedZone === null, convertTime(reminderTime, effectiveZone, deviceZone))}{' '}
               <button type="button" className="hab-editor__zone-btn" onClick={switchToDeviceZone}>
                 {t.useDeviceZone(deviceZone)}
               </button>
             </>
-          ) : t.timeZoneHint(storedZone ?? deviceZone)
+          ) : t.timeZoneHint(effectiveZone, storedZone === null)
         ) : undefined}
       />
 

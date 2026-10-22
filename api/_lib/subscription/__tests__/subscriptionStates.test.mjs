@@ -64,6 +64,62 @@ for (const [name, doc, serverExpected, clientExpected, clientActive] of ROWS) {
   });
 }
 
+// ── what the app shows (header badge, Settings, onboarding) ─────────────────
+// getPlanDisplay names the plan the server grants: for every state above the
+// shown plan is the server's, a running trial is shown as a trial and a paid
+// plan as paid.
+const display = (sub) => atNow(() => client.getPlanDisplay(sub));
+const DISPLAY = {
+  'no document': { kind: 'none' },
+  'trial just granted': { kind: 'trial', plan: 'premium', daysLeft: 6 },
+  'trial ended': { kind: 'none' },
+  'SBP / balance / Stars: active Pro': { kind: 'paid', plan: 'pro' },
+  'SBP / balance / Stars: active Premium': { kind: 'paid', plan: 'premium' },
+  'SBP / balance / Stars: period over': { kind: 'none' },
+  'TON payment: no endDate, only expiresAt + endDateMs': { kind: 'paid', plan: 'pro' },
+  'admin grant on a new user: no endDate': { kind: 'paid', plan: 'premium' },
+  'admin grant on top of an old SBP period: endDate stale, endDateMs new': { kind: 'paid', plan: 'pro' },
+  'TON / admin period over': { kind: 'none' },
+  'only expiresAt (no endDateMs)': { kind: 'paid', plan: 'pro' },
+  'Stars refund rolled back to the previous end': { kind: 'paid', plan: 'pro' },
+  'Stars refund of the first payment: status expired': { kind: 'none' },
+  'admin cancel of a paid plan': { kind: 'none' },
+  'endDate in the future but endDateMs past (server reads endDateMs)': { kind: 'none' },
+};
+test('every state of the table has its expected display', () => {
+  assert.deepEqual(Object.keys(DISPLAY), ROWS.map(r => r[0]));
+});
+for (const [name, doc] of ROWS) {
+  test(`display: ${name}`, () => {
+    const shown = display(doc);
+    assert.deepEqual(shown, DISPLAY[name]);
+    assert.equal(shown.kind === 'none' ? 'free' : shown.plan, serverPlan(doc), 'the plan shown is the plan the server grants');
+  });
+}
+
+test('display: a plan paid for during a running trial is shown as that paid plan, not as the trial', () => {
+  const doc = { ...trialDoc(), ...extendedDoc('pro', NOW + 30 * DAY) };
+  assert.deepEqual(display(doc), { kind: 'paid', plan: 'pro' });
+  assert.equal(serverPlan(doc), 'pro');
+  const premium = { ...trialDoc(), ...extendedDoc('premium', NOW + 30 * DAY, { lastPaymentMethod: 'stars' }) };
+  assert.deepEqual(display(premium), { kind: 'paid', plan: 'premium' });
+});
+
+test('display: a cancelled document with a running trial date shows no plan (the server grants none)', () => {
+  const doc = { ...trialDoc(), status: 'cancelled' };
+  assert.deepEqual(display(doc), { kind: 'none' });
+  assert.equal(serverPlan(doc), 'free');
+});
+
+test('display: a trial counts its days to the trial end', () => {
+  const lastDay = server.buildTrialSubscription('u1', { now: new Date(NOW - 7 * DAY), trialEnd: new Date(NOW + 3600000) }, 'TS');
+  assert.deepEqual(display(lastDay), { kind: 'trial', plan: 'premium', daysLeft: 1 });
+});
+
+test('display: the shown plan never changes what the app itself allows (getActivePlan is untouched)', () => {
+  for (const [, doc, , clientExpected] of ROWS) assert.equal(clientView(doc).plan, clientExpected);
+});
+
 test('client end date of the paid period follows the server precedence (endDateMs, expiresAt, endDate)', () => {
   assert.equal(client.getSubscriptionEndMs(expiresDoc('pro', NOW + 5 * DAY)), NOW + 5 * DAY);
   assert.equal(client.getSubscriptionEndMs({ ...extendedDoc('pro', NOW - 40 * DAY), endDateMs: NOW + 7 * DAY }), NOW + 7 * DAY);
@@ -78,20 +134,23 @@ test('days remaining use the same end date', () => {
 });
 
 // ── remaining differences: product decisions, not display bugs ─────────────
-test('OWNER DECISION: paid plan bought during a running trial — server grants the paid plan, client shows the trial plan until the trial ends', () => {
+// (the app's own limits come from getActivePlan; what it shows comes from
+// getPlanDisplay above)
+test('OWNER DECISION: paid plan bought during a running trial — server grants the paid plan, the app\'s own limits follow the trial plan until the trial ends', () => {
   const doc = { ...trialDoc(), ...extendedDoc('pro', NOW + 30 * DAY) };
   assert.equal(serverPlan(doc), 'pro');
   assert.equal(clientView(doc).plan, 'premium');
 });
 
-test('OWNER DECISION: cancelled document with a running trial date — server free, client still shows the trial', () => {
+test('OWNER DECISION: cancelled document with a running trial date — server free, the app\'s own limits still follow the trial', () => {
   const doc = { ...trialDoc(), status: 'cancelled' };
   assert.equal(serverPlan(doc), 'free');
   assert.equal(clientView(doc).plan, 'premium');
 });
 
-test('OWNER DECISION: active document without any end date — server grants the plan indefinitely, client shows free', () => {
+test('OWNER DECISION: active document without any end date — server grants the plan indefinitely, the app shows and allows free', () => {
   const doc = { userId: 'u1', plan: 'pro', status: 'active' };
   assert.equal(serverPlan(doc), 'pro');
   assert.equal(clientView(doc).plan, 'free');
+  assert.deepEqual(display(doc), { kind: 'none' });
 });

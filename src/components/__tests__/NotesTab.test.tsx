@@ -11,18 +11,21 @@ const mockNotes = [
   { id: 'n2', userId: 'u1', title: 'Plan', content: '', type: 'text', checklistItems: [], category: 'Проект', pinned: false },
 ];
 
+const mockUpdates: Array<{ path: string; data: Record<string, unknown> }> = [];
+
 jest.mock('../../firebase', () => ({ db: { __db: true }, auth: {} }));
 jest.mock('firebase/firestore', () => ({
   collection: () => ({}),
   query: () => ({}),
   where: () => ({}),
   orderBy: () => ({}),
-  doc: () => ({}),
+  doc: (_db: unknown, ...parts: string[]) => ({ path: parts.join('/') }),
   onSnapshot: (_q: unknown, next: (s: unknown) => void) => {
     setTimeout(() => next({ docs: mockNotes.map(n => ({ id: n.id, data: () => n })) }), 0);
     return () => undefined;
   },
-  updateDoc: async () => undefined,
+  updateDoc: async (ref: { path: string }, data: Record<string, unknown>) => { mockUpdates.push({ path: ref.path, data }); },
+  increment: (n: number) => ({ increment: n }),
   deleteDoc: async () => undefined,
   serverTimestamp: () => 'SERVER_TS',
 }));
@@ -113,4 +116,13 @@ test('switching folders between two new notes uses the folder current at each pr
   fireEvent.click(chip('Идеи'));
   newNote();
   expect(editorFolder()).toBe('Идеи');
+});
+
+test('pinning from the list is a full edit: it raises the note revision', async () => {
+  mockUpdates.length = 0;
+  await renderTab();
+  fireEvent.contextMenu(screen.getByText('Plan'));
+  fireEvent.click(screen.getByRole('button', { name: /Закрепить/ }));
+  await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+  expect(mockUpdates).toEqual([{ path: 'notes/n2', data: { pinned: true, updatedAt: 'SERVER_TS', rev: { increment: 1 } } }]);
 });

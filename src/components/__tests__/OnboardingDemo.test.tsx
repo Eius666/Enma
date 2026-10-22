@@ -49,6 +49,18 @@ test('a paid Premium user is not offered a trial', () => {
   expect(screen.getByRole('status').textContent).toBe('Premium уже активен');
 });
 
+test('a plan paid for during the trial is named as that plan, not as the trial (BUG-09)', () => {
+  showDemo({ ...registrationTrial(), plan: 'pro', endDate: iso(Date.now() + 30 * DAY), endDateMs: Date.now() + 30 * DAY } as Subscription);
+  expect(screen.queryByRole('button', { name: CTA })).toBeNull();
+  expect(screen.getByRole('status').textContent).toBe('Pro уже активен');
+});
+
+test('a cancelled trial is not shown as active and not offered again (BUG-09)', () => {
+  showDemo({ ...registrationTrial(), status: 'cancelled' } as Subscription);
+  expect(screen.queryByRole('button', { name: CTA })).toBeNull();
+  expect(screen.queryByRole('status')).toBeNull();
+});
+
 test('a past subscription (no active plan) gets no offer either — the server would refuse it', () => {
   showDemo(expiredPaid());
   expect(screen.queryByRole('button', { name: CTA })).toBeNull();

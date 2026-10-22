@@ -490,38 +490,50 @@
 }
 
 /* — Color picker — horizontal scroll row of 32px circles — */
-.hab-editor__colors-wrap {
-  overflow-x: auto;
-  scrollbar-width: none;
+.hab-editor__colors {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px 4px;
   margin-bottom: 22px;
 }
 
-.hab-editor__colors-wrap::-webkit-scrollbar { display: none; }
-
-.hab-editor__colors {
-  display: flex;
-  gap: 14px;
-  padding: 6px 16px 6px 6px;
+/* 44px touch target around a 32px circle: the selection ring (40px) stays
+   inside the button, so nothing is clipped at any width. */
+.hab-editor__color-btn {
+  justify-self: center;
+  width: 100%;
+  max-width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.hab-editor__color-btn {
+.hab-editor__color-dot {
+  position: relative;
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  border: none;
-  cursor: pointer;
-  flex-shrink: 0;
-  position: relative;
-  transition: transform 0.15s;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s;
 }
 
-.hab-editor__color-btn:active {
+.hab-editor__color-btn:active .hab-editor__color-dot {
   transform: scale(0.88);
 }
 
-/* Ring outline around selected color */
-.hab-editor__color-btn--selected::after {
+.hab-editor__color-btn:focus-visible {
+  outline: 2px solid var(--notes-accent, #7b68ee);
+  outline-offset: 0;
+  border-radius: 12px;
+}
+
+/* Ring outline around the selected color */
+.hab-editor__color-btn--selected .hab-editor__color-dot::after {
   content: '';
   position: absolute;
   inset: -4px;
@@ -530,8 +542,19 @@
   pointer-events: none;
 }
 
-body.theme-light .hab-editor__color-btn--selected::after {
-  border-color: rgba(0, 0, 0, 0.3);
+body.theme-light .hab-editor__color-btn--selected .hab-editor__color-dot::after {
+  border-color: rgba(0, 0, 0, 0.45);
+}
+
+body.theme-light .hab-editor__color-dot {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18), inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+/* Very narrow screens: three rows of four keep the circles their size. */
+@media (max-width: 300px) {
+  .hab-editor__colors {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 /* — Hints under the repeat and reminder fields — */

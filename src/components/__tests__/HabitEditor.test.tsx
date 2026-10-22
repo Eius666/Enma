@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import HabitEditor from '../HabitEditor';
 import type { HabitDoc } from '../HabitsList';
 
@@ -13,7 +13,7 @@ const mockCancelled: string[] = [];
 const mockUserDoc: { data: Record<string, unknown> | undefined; fail: boolean; read: Promise<unknown> } = { data: undefined, fail: false, read: Promise.resolve() };
 
 jest.mock('../../firebase', () => ({ db: { __db: true }, auth: {} }));
-jest.mock('../../lib/timeZone', () => ({ deviceTimeZone: () => 'Europe/Moscow' }));
+jest.mock('../../lib/timeZone', () => ({ ...jest.requireActual('../../lib/timeZone'), deviceTimeZone: () => 'Europe/Moscow' }));
 jest.mock('../../lib/usageCounters', () => ({ subscribeFreeUsage: () => () => undefined }));
 jest.mock('../../lib/habitReminders', () => ({
   cancelTodayHabitReminder: async (id: string) => { mockCancelled.push(id); },
@@ -124,37 +124,74 @@ test('leaving the editor without saving writes nothing', async () => {
 });
 
 // ── time zone ────────────────────────────────────────────────────────────────
+// users/{uid}.timezone applies to all of the user's reminders, so it changes
+// only on an explicit, confirmed request — never as a side effect of saving.
+
+const { convertTime } = jest.requireActual('../../lib/timeZone');
 
 test('the hint names the zone the server will use', async () => {
   await openEditor(habit({ reminderTime: '08:15' }));
   expect(await screen.findByText('Время по часовому поясу Europe/Moscow')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /Использовать/ })).toBeNull();
 });
 
-test('no zone stored yet: this device\'s zone is written on save, and only then', async () => {
+test('no zone stored: the hint names the server default and the time on this device', async () => {
+  mockUserDoc.data = {};
+  await openEditor(habit({ reminderTime: '09:00' }));
+  const deviceTime = convertTime('09:00', 'Europe/Warsaw', 'Europe/Moscow');
+  expect(await screen.findByText(`Время по часовому поясу Europe/Warsaw (по умолчанию) — на этом устройстве это ${deviceTime}`, { exact: false })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Использовать Europe/Moscow' })).toBeTruthy();
+});
+
+test('no zone stored: saving a habit with a reminder writes no zone (existing reminders keep their time)', async () => {
   mockUserDoc.data = {};
   const onBack = await openEditor(habit());
   fireEvent.change(timeInput(), { target: { value: '07:00' } });
-  await screen.findByText('Время по часовому поясу Europe/Moscow');
-  expect(mockWrites).toEqual([]);
   save();
   await waitFor(() => expect(onBack).toHaveBeenCalled());
-  expect(mockWrites.find(w => w.path === 'users/u1')!.data).toEqual({ timezone: 'Europe/Moscow', updatedAt: 'SERVER_TS' });
+  expect(habitWrite()!.data.reminderTime).toBe('07:00');
+  expect(mockWrites.filter(w => w.path === 'users/u1')).toEqual([]);
 });
 
-test('a different stored zone is never overwritten by saving; switching is an explicit action', async () => {
+test('no zone stored: a new habit with a reminder writes no zone either', async () => {
+  mockUserDoc.data = {};
+  const onBack = await openEditor();
+  fireEvent.change(screen.getByPlaceholderText('Название привычки'), { target: { value: 'Вода' } });
+  fireEvent.change(timeInput(), { target: { value: '07:00' } });
+  save();
+  await waitFor(() => expect(onBack).toHaveBeenCalled());
+  expect(apiCalls[0].body.data.reminderTime).toBe('07:00');
+  expect(mockWrites.filter(w => w.path === 'users/u1')).toEqual([]);
+});
+
+test('a different stored zone is never overwritten by saving', async () => {
   mockUserDoc.data = { timezone: 'Asia/Almaty' };
   const onBack = await openEditor(habit({ reminderTime: '08:15' }));
-  expect(await screen.findByText(/Время по часовому поясу Asia\/Almaty \(на устройстве — Europe\/Moscow\)/)).toBeTruthy();
+  expect(await screen.findByText(/Время по часовому поясу Asia\/Almaty — на этом устройстве это \d\d:\d\d/)).toBeTruthy();
   save();
   await waitFor(() => expect(onBack).toHaveBeenCalled());
   expect(mockWrites.filter(w => w.path === 'users/u1')).toEqual([]);
 });
 
-test('switching to the device zone writes it', async () => {
+test('switching to the device zone asks first; declining writes nothing', async () => {
+  mockUserDoc.data = {};
+  const confirm = jest.spyOn(window, 'confirm').mockReturnValue(false);
+  await openEditor(habit({ reminderTime: '08:15' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Использовать Europe/Moscow' }));
+  expect(confirm).toHaveBeenCalledWith('Время напоминаний всех привычек и повторяющихся напоминаний бота будет считаться по Europe/Moscow, а не по Europe/Warsaw. Продолжить?');
+  await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+  expect(mockWrites).toEqual([]);
+  confirm.mockRestore();
+});
+
+test('switching to the device zone after confirming writes it', async () => {
   mockUserDoc.data = { timezone: 'Asia/Almaty' };
+  const confirm = jest.spyOn(window, 'confirm').mockReturnValue(true);
   await openEditor(habit({ reminderTime: '08:15' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Использовать Europe/Moscow' }));
   await waitFor(() => expect(mockWrites.find(w => w.path === 'users/u1')?.data.timezone).toBe('Europe/Moscow'));
+  expect(await screen.findByText('Время по часовому поясу Europe/Moscow')).toBeTruthy();
+  confirm.mockRestore();
 });
 
 test('when the stored zone cannot be read nothing is claimed or written about it', async () => {
@@ -182,4 +219,46 @@ test('save needs a name, and on chosen days at least one day', async () => {
   expect(saveBtn).toBeEnabled();
   // The reminder time itself is optional.
   expect(timeInput().value).toBe('');
+});
+
+// ── color palette (BUG-10) ───────────────────────────────────────────────────
+
+const ORIGINAL_COLORS = ['#7B68EE', '#4ECDC4', '#FF6B6B', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#FF8A5C'];
+const swatches = () => within(screen.getByRole('group', { name: 'ЦВЕТ' })).getAllByRole('button');
+
+test('the palette has twelve colors; the original eight keep their values and order', async () => {
+  await openEditor();
+  const labels = swatches().map(b => b.getAttribute('aria-label'));
+  expect(labels).toHaveLength(12);
+  expect(labels.slice(0, 8)).toEqual(ORIGINAL_COLORS.map(c => `Color ${c}`));
+  expect(new Set(labels).size).toBe(12);
+});
+
+test('a new habit starts on the first color, and a chosen color is saved', async () => {
+  const onBack = await openEditor();
+  expect(screen.getByRole('button', { name: 'Color #7B68EE' })).toHaveAttribute('aria-pressed', 'true');
+  fireEvent.change(screen.getByPlaceholderText('Название привычки'), { target: { value: 'Вода' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Color #5C7CFA' }));
+  expect(screen.getByRole('button', { name: 'Color #5C7CFA' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByRole('button', { name: 'Color #7B68EE' })).toHaveAttribute('aria-pressed', 'false');
+  save();
+  await waitFor(() => expect(onBack).toHaveBeenCalled());
+  expect(apiCalls[0].body.data.color).toBe('#5C7CFA');
+});
+
+test('reopening a habit marks its saved color; changing it saves the new one', async () => {
+  const onBack = await openEditor(habit({ color: '#DDA0DD' }));
+  expect(swatches().filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.getAttribute('aria-label'))).toEqual(['Color #DDA0DD']);
+  fireEvent.click(screen.getByRole('button', { name: 'Color #6BCB77' }));
+  save();
+  await waitFor(() => expect(onBack).toHaveBeenCalled());
+  expect(habitWrite()!.data.color).toBe('#6BCB77');
+});
+
+test('a habit saved with a color outside the palette keeps it when saved again', async () => {
+  const onBack = await openEditor(habit({ color: '#7C5CFF' }));
+  expect(swatches().filter(b => b.getAttribute('aria-pressed') === 'true')).toEqual([]);
+  save();
+  await waitFor(() => expect(onBack).toHaveBeenCalled());
+  expect(habitWrite()!.data.color).toBe('#7C5CFF');
 });

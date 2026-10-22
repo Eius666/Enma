@@ -14,13 +14,14 @@ import {
 } from 'react-icons/fa';
 import { User } from 'firebase/auth';
 import type { Subscription } from '../subscription';
-import { isSubscriptionActive, isInTrial, getActivePlan, trialDaysRemaining, AI_LIMITS, FREE_LIMITS } from '../subscription';
+import { getActivePlan, getPlanDisplay, AI_LIMITS, FREE_LIMITS } from '../subscription';
 import { subscribeAiUsage, subscribeFreeUsage } from '../lib/usageCounters';
 import type { FreeUsageSnapshot } from '../lib/usageCounters';
 import WalletConnect from './WalletConnect';
 import SubscriptionPanel from './SubscriptionPanel';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 import { StartupDiagnostics } from './StartupDiagnostics';
+import { FinancePdfSettingsBlock } from './FinancePdfExport';
 import './Settings.css';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -31,6 +32,8 @@ interface SettingsScreenProps {
   currency: string;
   user: User | null;
   subscription: Subscription | null;
+  /** Whether `subscription` has been read for this user (useSubscription). */
+  subscriptionLoaded: boolean;
   ratesStatus: 'idle' | 'loading' | 'error';
   ratesUpdatedAt: string | null;
   banks: string[];
@@ -80,13 +83,10 @@ const T = {
     subFree: 'Free plan',
     subPro: 'Pro — Active',
     subPremium: 'Premium — Active',
-    subTrial: 'Premium trial — {days} days left',
+    subTrial: '{plan} — trial · {left}',
     aiUsageLabel: 'AI requests remaining',
     aiImageLabel: 'AI images remaining',
     aiPdfLabel: 'PDF reports remaining',
-    exportPdfButton: 'Export full finance report (PDF)',
-    exportPdfLoading: 'Generating report…',
-    exportPdfUpgrade: 'PDF export is a Premium feature',
     manageSub: 'Manage subscription',
     freeLimitsTitle: 'Free plan usage',
     freeTasksLabel: 'Tasks today',
@@ -135,13 +135,10 @@ const T = {
     subFree: 'Бесплатный тариф',
     subPro: 'Pro — Активна',
     subPremium: 'Premium — Активна',
-    subTrial: 'Пробный Premium — осталось {days} дн.',
+    subTrial: '{plan} — пробный период · {left}',
     aiUsageLabel: 'AI-запросы',
     aiImageLabel: 'AI-изображения',
     aiPdfLabel: 'PDF-отчёты',
-    exportPdfButton: 'Выгрузить полный финансовый отчёт (PDF)',
-    exportPdfLoading: 'Формируем отчёт…',
-    exportPdfUpgrade: 'Экспорт в PDF доступен на тарифе Premium',
     manageSub: 'Управление подпиской',
     freeLimitsTitle: 'Использование Free',
     freeTasksLabel: 'Задачи сегодня',
@@ -160,6 +157,19 @@ const T = {
 
 const CURRENCIES = ['USD', 'EUR', 'RUB', 'BYN', 'CNY'];
 
+const PLAN_NAMES = { pro: 'Pro', premium: 'Premium' } as const;
+
+// "осталось 1 день / 3 дня / 6 дней", "1 day left / 6 days left"
+function daysLeftText(n: number, language: 'en' | 'ru'): string {
+  if (language === 'en') return `${n} ${n === 1 ? 'day' : 'days'} left`;
+  const m10 = n % 10;
+  const m100 = n % 100;
+  const word = m10 === 1 && m100 !== 11 ? 'день'
+    : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 'дня'
+    : 'дней';
+  return `осталось ${n} ${word}`;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const SettingsScreen: React.FC<SettingsScreenProps> = ({
@@ -168,6 +178,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   currency,
   user,
   subscription,
+  subscriptionLoaded,
   ratesStatus,
   banks,
   onLanguageChange,
@@ -186,8 +197,6 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [aiTextUsed,   setAiTextUsed]   = useState<number | null>(null);
   const [aiImgUsed,    setAiImgUsed]    = useState<number | null>(null);
   const [aiPdfUsed,    setAiPdfUsed]    = useState<number | null>(null);
-  const [pdfExportState, setPdfExportState] = useState<'idle' | 'loading' | 'error'>('idle');
-  const [pdfExportError, setPdfExportError] = useState<string | null>(null);
   const [freeUsage,    setFreeUsage]    = useState<FreeUsageSnapshot | null>(null);
 
   const [referralBalance,        setReferralBalance]        = useState(0);
@@ -199,13 +208,16 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const subPanelRef = useRef<HTMLDivElement>(null);
 
   const userEmail  = user?.email ?? '—';
+  // activePlan decides what this screen offers (AI meters, free limits, PDF
+  // export) exactly as before; shownPlan only decides how the plan is named.
   const activePlan = getActivePlan(subscription);
-  const inTrial    = subscription ? isInTrial(subscription) : false;
+  const shownPlan  = getPlanDisplay(subscription);
+  const planName   = shownPlan.kind === 'none' ? '' : PLAN_NAMES[shownPlan.plan];
 
-  const subLabel = inTrial
-    ? t.subTrial.replace('{days}', String(trialDaysRemaining(subscription!)))
-    : subscription && isSubscriptionActive(subscription)
-      ? (subscription.plan === 'premium' ? t.subPremium : t.subPro)
+  const subLabel = shownPlan.kind === 'trial'
+    ? t.subTrial.replace('{plan}', planName).replace('{left}', daysLeftText(shownPlan.daysLeft, language))
+    : shownPlan.kind === 'paid'
+      ? (shownPlan.plan === 'premium' ? t.subPremium : t.subPro)
       : t.subFree;
 
   const aiLimits    = AI_LIMITS[activePlan];
@@ -272,45 +284,6 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
       tgWebApp.openLink(url);
     } else {
       window.open(url, '_blank', 'noopener,noreferrer');
-    }
-  };
-
-  // Delivers the PDF directly as this one authenticated request's
-  // response body (api/ai/[action].js: exportFinancePdf) — never a
-  // separately-stored file or a signed URL. The blob only ever exists in
-  // this tab's memory, released as soon as the download starts.
-  const handleExportPdf = async () => {
-    if (!user) return;
-    setPdfExportState('loading');
-    setPdfExportError(null);
-    try {
-      const token = await user.getIdToken();
-      const resp = await fetch('/api/ai/exportFinancePdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ period: 'all' }),
-      });
-      if (!resp.ok) {
-        const body = await resp.json().catch(() => ({}));
-        throw new Error(body.error || `Не удалось сформировать отчёт (${resp.status})`);
-      }
-      const blob = await resp.blob();
-      const disposition = resp.headers.get('Content-Disposition') || '';
-      const match = disposition.match(/filename="([^"]+)"/);
-      const filename = match ? match[1] : 'ENMA-finance-report.pdf';
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      setPdfExportState('idle');
-    } catch (err) {
-      setPdfExportState('error');
-      setPdfExportError(err instanceof Error ? err.message : 'Не удалось сформировать отчёт.');
     }
   };
 
@@ -461,6 +434,15 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
         </button>
       </div>
 
+      {/* ━━━ Finance PDF reports (every plan; Premium downloads) ━━━ */}
+      <FinancePdfSettingsBlock
+        language={language}
+        user={user}
+        subscription={subscription}
+        subscriptionLoaded={subscriptionLoaded}
+        onUpgrade={handleManageSub}
+      />
+
       {/* ━━━ Group: Banks ━━━ */}
       <div className="sett-group__label">{t.groupBanks}</div>
       <div className="sett-banks">
@@ -522,15 +504,15 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
       {/* Subscription status card */}
       <div className="sett-group">
-        <div className="sett-row sett-row--tall">
+        <div className="sett-row sett-row--tall sett-row--plan">
           <div className="sett-row__icon-wrap">
-            <FaStar className={`sett-row__icon${activePlan !== 'free' ? ' sett-row__icon--accent' : ''}`} />
+            <FaStar className={`sett-row__icon${shownPlan.kind !== 'none' ? ' sett-row__icon--accent' : ''}`} />
           </div>
           <div className="sett-row__body">
-            <span className="sett-row__label">Enma {activePlan === 'free' ? '' : activePlan.charAt(0).toUpperCase() + activePlan.slice(1)}</span>
-            <span className={`sett-row__value sett-row__value--sub${inTrial ? ' sett-row__value--trial' : ''}`}>{subLabel}</span>
+            <span className="sett-row__label">Enma {planName}</span>
+            <span className={`sett-row__value sett-row__value--sub${shownPlan.kind === 'trial' ? ' sett-row__value--trial' : ''}`}>{subLabel}</span>
           </div>
-          {activePlan !== 'free' && (
+          {shownPlan.kind !== 'none' && (
             <button
               type="button"
               className="sett-row__manage-btn"
@@ -599,27 +581,6 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({
             </div>
           </>
         )}
-
-        {/* Export button — PDF export is Premium-only (aiPdfLimit === 0
-            for free/pro); shown disabled with an upgrade hint otherwise,
-            never hidden outright, so non-Premium users can discover and
-            upgrade into it rather than not knowing it exists. */}
-        <div className="sett-row__divider" />
-        <div className="sett-row sett-row--column">
-          <button
-            type="button"
-            className="sett-export-pdf-btn"
-            onClick={aiPdfLimit > 0 ? handleExportPdf : handleManageSub}
-            disabled={pdfExportState === 'loading'}
-          >
-            {pdfExportState === 'loading' ? t.exportPdfLoading
-              : aiPdfLimit > 0 ? t.exportPdfButton
-              : t.exportPdfUpgrade}
-          </button>
-          {pdfExportState === 'error' && pdfExportError && (
-            <span className="sett-export-pdf-error" role="alert">{pdfExportError}</span>
-          )}
-        </div>
       </div>
 
       {/* Free plan usage meters — only for free users */}
