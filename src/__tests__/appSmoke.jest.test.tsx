@@ -103,6 +103,12 @@ beforeEach(() => {
   jest.spyOn(console, 'warn').mockImplementation(() => undefined);
   // jsdom lacks these browser APIs used by the shell.
   window.scrollTo = jest.fn() as unknown as typeof window.scrollTo;
+  // No Telegram unless a test sets it up.
+  delete window.Telegram;
+  delete window.__enmaTgSdk;
+  document.head.innerHTML = '';
+  sessionStorage.clear();
+  window.history.replaceState(null, '', '/');
 });
 afterEach(() => jest.restoreAllMocks());
 
@@ -168,4 +174,46 @@ test('TonConnect and Settings are not loaded at startup, only when Settings is o
   fireEvent.click(gear!);
   expect(await screen.findByTestId('settings-screen')).toBeTruthy();
   expect(mockTonLoads.count).toBe(1);
+});
+
+// Inside Telegram with the SDK still loading (it no longer blocks the page):
+// the shell waits for it, so its first frame already has Telegram's theme;
+// and a missing SDK gets the Telegram retry screen, never the email form.
+const openInsideTelegram = () => {
+  window.history.replaceState(null, '', '/#tgWebAppData=x&tgWebAppVersion=8.0&tgWebAppPlatform=ios');
+  const script = document.createElement('script');
+  script.setAttribute('src', 'https://telegram.org/js/telegram-web-app.js');
+  document.head.appendChild(script);
+  return script;
+};
+
+test('inside Telegram, saved session: no shell until the SDK has run, then the shell in Telegram\'s theme, ready() once', async () => {
+  const script = openInsideTelegram();
+  const ready = jest.fn();
+  const App = await loadApp();
+  render(<App />);
+  await signIn();
+  expect(screen.queryByRole('navigation', { name: /primary navigation/i })).toBeNull();
+  await act(async () => {
+    window.Telegram = { WebApp: {
+      initData: 'signed', initDataUnsafe: {}, colorScheme: 'light', ready, expand: jest.fn(),
+    } };
+    window.__enmaTgSdk = 'loaded';
+    script.dispatchEvent(new Event('load'));
+  });
+  expect(await screen.findByRole('navigation', { name: /primary navigation/i })).toBeTruthy();
+  expect(document.body).toHaveClass('theme-light');
+  expect(ready).toHaveBeenCalledTimes(1);
+});
+
+test('inside Telegram, no session, SDK failed: the Telegram retry screen, not the email form', async () => {
+  const script = openInsideTelegram();
+  const App = await loadApp();
+  render(<App />);
+  await act(async () => { mockAuth.callback!(null); });
+  await act(async () => { window.__enmaTgSdk = 'failed'; script.dispatchEvent(new Event('error')); });
+  expect(await screen.findByText(/Mini App library|библиотеку Telegram/)).toBeTruthy();
+  expect(screen.getByRole('button', { name: /Retry Telegram sign-in|Повторить вход через Telegram/ })).toBeTruthy();
+  expect(screen.queryAllByRole('textbox')).toHaveLength(0);
+  expect(screen.queryByRole('navigation', { name: /primary navigation/i })).toBeNull();
 });

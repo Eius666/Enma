@@ -56,3 +56,67 @@ test('Telegram auth already attempted and still pending -> do not re-trigger, do
   // this is the exact race the TELEGRAM_AUTOLOGIN audit was about.
   assert.equal(decision, 'wait');
 });
+
+// The Telegram SDK loads without blocking the page. Inside Telegram, until it
+// has run, initData is unknown: its absence must not be read as "no Telegram".
+
+test('inside Telegram, SDK not run yet, no session -> wait (never the login screen)', () => {
+  const decision = decideBootstrap({
+    hasExistingSession: false,
+    telegramInitDataPresent: false,
+    alreadyAttemptedTelegramAuth: false,
+    telegramSdkPending: true,
+  });
+  assert.equal(decision, 'wait');
+});
+
+test('inside Telegram, SDK not run yet, session restored -> the session is used as before', () => {
+  const decision = decideBootstrap({
+    hasExistingSession: true,
+    telegramInitDataPresent: false,
+    alreadyAttemptedTelegramAuth: false,
+    telegramSdkPending: true,
+  });
+  assert.equal(decision, 'wait');
+});
+
+test('SDK has run with initData, no session -> Telegram auth, exactly as before', () => {
+  const decision = decideBootstrap({
+    hasExistingSession: false,
+    telegramInitDataPresent: true,
+    alreadyAttemptedTelegramAuth: false,
+    telegramSdkPending: false,
+  });
+  assert.equal(decision, 'telegram_auth');
+});
+
+test('SDK settled without initData (outside Telegram, or an empty initData), no session -> login screen, exactly as before', () => {
+  const decision = decideBootstrap({
+    hasExistingSession: false,
+    telegramInitDataPresent: false,
+    alreadyAttemptedTelegramAuth: false,
+    telegramSdkPending: false,
+  });
+  assert.equal(decision, 'unauthenticated');
+});
+
+test('inside Telegram, SDK failed (or too slow), no session -> the Telegram retry screen, not the login screen', () => {
+  const decision = decideBootstrap({
+    hasExistingSession: false,
+    telegramInitDataPresent: false,
+    alreadyAttemptedTelegramAuth: false,
+    telegramSdkPending: false,
+    telegramSdkFailed: true,
+  });
+  assert.equal(decision, 'telegram_sdk_error');
+});
+
+test('inside Telegram, SDK failed, session restored -> the session is used (no error screen)', () => {
+  const decision = decideBootstrap({
+    hasExistingSession: true,
+    telegramInitDataPresent: false,
+    alreadyAttemptedTelegramAuth: false,
+    telegramSdkFailed: true,
+  });
+  assert.equal(decision, 'wait');
+});

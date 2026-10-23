@@ -44,6 +44,10 @@ test('requests are reduced to fixed labels: no query strings, keys or ids surviv
   assert.equal(requestLabel('/api/ai/entityCreate?uid=u1'), 'api ai/entityCreate');
   assert.equal(requestLabel('https://elsewhere.example/api/auth/telegram'), null);
   assert.equal(requestLabel('https://api.exchangerate-api.com/v4/latest/RUB'), null);
+  // Firebase Auth's popup/redirect helper, so a start that still loads it shows it.
+  assert.equal(requestLabel('https://apis.google.com/js/api.js?onload=__iframefcb123'), 'auth: gapi');
+  assert.equal(requestLabel('https://apis.google.com/_/scs/abc-static/_/js/k=gapi.lb.ru.x/m=gapi_iframes'), 'auth: gapi');
+  assert.equal(requestLabel('https://enmadev-aa7b1.firebaseapp.com/__/auth/iframe?apiKey=AIzaSECRET&appName=%5BDEFAULT%5D'), 'auth: iframe');
   for (const url of ['https://securetoken.googleapis.com/v1/token?key=AIzaSECRET', '/api/ai/entityCreate?uid=u1']) {
     assert.doesNotMatch(String(requestLabel(url)), /AIza|uid|key=|\?/);
   }
@@ -68,7 +72,7 @@ test('the run text separates first screen, interface ready and data', () => {
   const text = formatStartupRun({
     recordedAt: '2026-10-22T15:10:59.729Z',
     navigationType: 'navigate',
-    page: { htmlReceived: 640, bundleStarted: 1900, domReady: 1950 },
+    page: { htmlReceived: 640, bundleStarted: 1900, domReady: 1950, dns: 12, connect: 230, firstByte: 520, firstContentfulPaint: 2310, authInit: 1960 },
     requests: [{ name: 'telegram-sdk', start: 40, end: 820, count: 1, cached: true }],
     marks: [
       { phase: 'first-render', ms: 2300 }, { phase: 'auth-resolved', ms: 3400 }, { phase: 'shell-rendered', ms: 3450 },
@@ -80,6 +84,8 @@ test('the run text separates first screen, interface ready and data', () => {
   assert.match(text, /^Интерфейс готов: 3450 мс$/m);
   assert.match(text, /^Задачи: 4100 мс · финансы: —$/m);
   assert.match(text, /^ {2}telegram-sdk: 40→820 \(кэш\)$/m);
+  assert.match(text, /^ {2}DNS: 12 мс · соединение: 230 мс · первый байт: 520 мс$/m);
+  assert.match(text, /^ {2}первая отрисовка: 2310 мс · старт Auth: 1960 мс$/m);
 });
 
 test('production builds: the switch does not exist and a stored flag is ignored', async () => {

@@ -43,7 +43,14 @@
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
     <title>Enma</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!--
+      The Telegram SDK no longer blocks the page: the app's own scripts and
+      the session restore run while it downloads. Inside Telegram the app
+      waits for it (src/telegram.ts, whenTelegramSdkSettled) before deciding
+      between Telegram sign-in and the login screen; the attributes below
+      record that it has finished.
+    -->
+    <script async src="https://telegram.org/js/telegram-web-app.js" onload="window.__enmaTgSdk='loaded'" onerror="window.__enmaTgSdk='failed'"></script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

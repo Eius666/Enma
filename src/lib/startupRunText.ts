@@ -16,6 +16,8 @@ export function formatStartupRun(run: StartupRun, language: 'en' | 'ru'): string
   lines.push(`${ru ? 'Задачи' : 'Tasks'}: ${ms(at(run, 'first-snapshot:tasks'))} · ${ru ? 'финансы' : 'finance'}: ${ms(at(run, 'first-snapshot:transactions'))}`);
   lines.push('');
   lines.push(`HTML: ${ms(run.page.htmlReceived)} · main.js: ${ms(run.page.bundleStarted)} · DOM: ${ms(run.page.domReady)}`);
+  lines.push(`  DNS: ${ms(run.page.dns)} · ${ru ? 'соединение' : 'connection'}: ${ms(run.page.connect)} · ${ru ? 'первый байт' : 'first byte'}: ${ms(run.page.firstByte)}`);
+  lines.push(`  ${ru ? 'первая отрисовка' : 'first paint'}: ${ms(run.page.firstContentfulPaint)} · ${ru ? 'старт Auth' : 'Auth start'}: ${ms(run.page.authInit)}`);
   for (const r of run.requests) {
     const extra = [r.count > 1 ? `×${r.count}` : '', r.cached === true ? (ru ? 'кэш' : 'cache') : ''].filter(Boolean).join(' ');
     lines.push(`  ${r.name}: ${r.start}→${r.end}${extra ? ` (${extra})` : ''}`);

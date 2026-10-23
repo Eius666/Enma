@@ -6,14 +6,8 @@
 //
 // NEVER runs inside a real Telegram session (see TELEGRAM_AUTOLOGIN audit —
 // this is the proven root cause of auto-login breaking after this mechanism
-// shipped): `telegram-web-app.js` is a blocking <head> script that parses
-// `tgWebAppData` out of the URL and reports it as `WebApp.initData` before
-// ANY of our own JS runs, and it strips that data from the visible
-// location.hash/search as part of that parse. By the time this module's
-// code could run, the hash is already gone from `window.location.href` —
-// so a `location.replace()` reload here does not "lose" initData by
-// forgetting to carry it forward, it reloads a URL that no longer has it to
-// give back. Telegram's WebView does a full fresh navigation (and gets
+// shipped): a self-reload of a Telegram session is never needed and was
+// observed to lose the Telegram sign-in. Telegram's WebView does a full fresh navigation (and gets
 // whatever is currently deployed, thanks to the no-store/no-cache headers
 // below) every time the Mini App is actually reopened, so skipping the
 // self-reload here costs nothing — it only matters for a tab that is kept
@@ -33,6 +27,7 @@
 //  - Never blocks first paint — this runs as a fire-and-forget check.
 
 import { fetchWithTimeout } from './lib/fetchWithTimeout';
+import { launchedFromTelegram } from './telegram';
 
 const BUILD_ID = process.env.REACT_APP_BUILD_ID || 'dev';
 const RELOAD_GUARD_KEY = 'enma_reloaded_for_build';
@@ -48,9 +43,14 @@ if (typeof window !== 'undefined') {
 // source; see TELEGRAM_AUTOLOGIN audit §14). A non-empty string here is the
 // one reliable signal that this page load is a real Telegram Mini App
 // session and must not be reloaded out from under itself.
+//
+// The SDK now loads without blocking the page, so it may not have run yet
+// when this check does: a page opened by Telegram (launch parameters in the
+// URL hash or in the SDK's sessionStorage copy, see src/telegram.ts) counts
+// as a Telegram session as well.
 function isRealTelegramSession(): boolean {
   try {
-    return !!window.Telegram?.WebApp?.initData;
+    return !!window.Telegram?.WebApp?.initData || launchedFromTelegram();
   } catch {
     return false;
   }

@@ -79,7 +79,9 @@ type Transaction = {
 // its own list/editor state (it resets when the tab is left); the shell keeps
 // only what several tabs share.
 const App: React.FC = () => {
-  const telegram = useTelegramWebApp();
+  const {
+    webApp: telegram, sdkPending: telegramSdkPending, sdkFailed: telegramSdkFailed, retrySdk: retryTelegramSdk,
+  } = useTelegramWebApp();
 
   const { theme, language, currency, setCurrency, toggleTheme, updateLanguage } = usePreferences(telegram);
   const { rates, ratesUpdatedAt, ratesStatus, loadExchangeRates } = useExchangeRates();
@@ -93,7 +95,11 @@ const App: React.FC = () => {
 
   const {
     user, authLoading, authStatus, telegramAuthErrorReason, retryTelegramAuth, chooseOtherSignInMethod,
-  } = useAuthBootstrap(telegram, () => setShowOnboarding(true));
+  } = useAuthBootstrap(
+    telegram,
+    { pending: telegramSdkPending, failed: telegramSdkFailed, retry: retryTelegramSdk },
+    () => setShowOnboarding(true),
+  );
 
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const {
@@ -242,7 +248,11 @@ const App: React.FC = () => {
   }, [user, trialActivating]);
 
 
-  const deciding = authLoading || authStatus === 'checking' || authStatus === 'telegram_auth' || authStatus === 'telegram_auth_error';
+  // Inside Telegram the shell also waits for the SDK (at most
+  // TELEGRAM_SDK_WAIT_MS): theme, viewport height and safe areas come from it,
+  // so the first frame of the shell is already the right one.
+  const deciding = authLoading || authStatus === 'checking' || authStatus === 'telegram_auth'
+    || authStatus === 'telegram_auth_error' || telegramSdkPending;
   const shellVisible = !deciding && !!user;
   useEffect(() => {
     if (!shellVisible) return;

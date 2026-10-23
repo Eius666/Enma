@@ -31,13 +31,27 @@ export type AuthStatus =
 // Never looks at initDataUnsafe — only whether raw initData is a non-empty
 // string, which is the one reliable, HMAC-verifiable signal that we are
 // actually running inside Telegram (see telegram.ts / useTelegramWebApp).
+//
+// telegramSdkPending: the page was opened inside Telegram but the Telegram SDK
+// (loaded without blocking the page) has not run yet, so whether initData is
+// present is not known — nothing is decided until it is. Outside Telegram it
+// is always false.
+//
+// telegramSdkFailed: inside Telegram the SDK failed to load (or is taking too
+// long). Without it there is no initData, so neither the Telegram sign-in nor
+// — inside Telegram — the email screen is right: 'telegram_sdk_error' shows
+// the retry screen.
 export function decideBootstrap(params: {
   hasExistingSession: boolean;
   telegramInitDataPresent: boolean;
   alreadyAttemptedTelegramAuth: boolean;
-}): 'telegram_auth' | 'unauthenticated' | 'wait' {
+  telegramSdkPending?: boolean;
+  telegramSdkFailed?: boolean;
+}): 'telegram_auth' | 'telegram_sdk_error' | 'unauthenticated' | 'wait' {
   if (params.hasExistingSession) return 'wait';
   if (params.alreadyAttemptedTelegramAuth) return 'wait';
+  if (params.telegramSdkPending) return 'wait';
+  if (params.telegramSdkFailed) return 'telegram_sdk_error';
   if (params.telegramInitDataPresent) return 'telegram_auth';
   return 'unauthenticated';
 }

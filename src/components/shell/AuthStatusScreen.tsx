@@ -40,7 +40,9 @@ export function AuthStatusScreen({
 
   // Telegram initData was present but the auto-auth attempt itself failed
   // (network error, backend rejection, etc.) — a distinct screen, never a
-  // silent fall-through to the manual login form (audit §15/§16).
+  // silent fall-through to the manual login form (audit §15/§16). The same
+  // screen when, inside Telegram, the Telegram SDK could not be loaded
+  // ('sdk_unavailable'): retry requests it again.
   //
   // recovery_required gets its own, single-button copy: retrying the exact
   // same initData against a deterministically dead mapping changes nothing,
@@ -66,7 +68,9 @@ export function AuthStatusScreen({
       <div className={`auth-screen theme-${theme}`}>
         <div className="auth-card loading-card">
           <p className="auth-error">
-            {telegramAuthErrorReason === 'identity_conflict' ? t('authTelegramConflictTitle') : t('authTelegramErrorTitle')}
+            {telegramAuthErrorReason === 'identity_conflict' ? t('authTelegramConflictTitle')
+              : telegramAuthErrorReason === 'sdk_unavailable' ? t('authTelegramSdkErrorTitle')
+              : t('authTelegramErrorTitle')}
           </p>
           <button type="button" className="primary-button auth-submit" onClick={onRetryTelegram}>
             {t('authTelegramErrorRetry')}

@@ -41,7 +41,15 @@ export interface StartupRequest { name: string; start: number; end: number; coun
 export interface StartupRun {
   recordedAt: string;
   navigationType: string | null;
-  page: { htmlReceived?: number; bundleStarted?: number; domReady?: number };
+  page: {
+    htmlReceived?: number; bundleStarted?: number; domReady?: number;
+    /** Before the HTML: name lookup, connection (with TLS) and the first byte of the response. */
+    dns?: number; connect?: number; firstByte?: number;
+    /** First paint with content, when the browser reports it. */
+    firstContentfulPaint?: number;
+    /** src/firebaseApp.ts ran: Firebase Auth starts restoring the session. */
+    authInit?: number;
+  };
   requests: StartupRequest[];
   marks: PerfEntry[];
 }
@@ -150,6 +158,10 @@ export function requestLabel(url: string): string | null {
     return op ? `auth: ${op}` : 'auth';
   }
   if (u.hostname === 'firestore.googleapis.com') return 'firestore';
+  // Firebase Auth's popup/redirect helper (gapi loader and the authDomain
+  // iframe) — not expected since Auth is created without it.
+  if (u.hostname === 'apis.google.com') return 'auth: gapi';
+  if (path === '/__/auth/iframe' || path === '/__/auth/iframe.js') return 'auth: iframe';
   // This app's own API, same origin only (a relative URL counts as same origin).
   const api = /^\/api\/([a-z]+)\/([A-Za-z]+)/.exec(path);
   const sameOrigin = u.hostname === 'app.invalid' || (typeof window !== 'undefined' && u.hostname === window.location.hostname);
@@ -181,8 +193,14 @@ export function summarizeRequests(resources: ResourceLike[]): StartupRequest[] {
 function saveRun(): void {
   try {
     const perf = typeof performance !== 'undefined' ? performance : null;
-    const nav = perf?.getEntriesByType?.('navigation')?.[0] as (PerformanceEntry & { type?: string; responseEnd?: number; domContentLoadedEventEnd?: number }) | undefined;
+    const nav = perf?.getEntriesByType?.('navigation')?.[0] as (PerformanceEntry & {
+      type?: string; responseEnd?: number; domContentLoadedEventEnd?: number; responseStart?: number;
+      domainLookupStart?: number; domainLookupEnd?: number; connectStart?: number; connectEnd?: number;
+    }) | undefined;
     const bundle = perf?.getEntriesByName?.('enma:index')?.[0];
+    const authInit = perf?.getEntriesByName?.('enma:auth-init')?.[0];
+    const fcp = perf?.getEntriesByName?.('first-contentful-paint')?.[0];
+    const span = (a?: number, b?: number) => (typeof a === 'number' && typeof b === 'number' && b >= a ? Math.round(b - a) : undefined);
     const run: StartupRun = {
       recordedAt,
       navigationType: nav?.type ?? null,
@@ -190,6 +208,11 @@ function saveRun(): void {
         htmlReceived: nav?.responseEnd ? Math.round(nav.responseEnd) : undefined,
         bundleStarted: bundle ? Math.round(bundle.startTime) : undefined,
         domReady: nav?.domContentLoadedEventEnd ? Math.round(nav.domContentLoadedEventEnd) : undefined,
+        dns: span(nav?.domainLookupStart, nav?.domainLookupEnd),
+        connect: span(nav?.connectStart, nav?.connectEnd),
+        firstByte: nav?.responseStart ? Math.round(nav.responseStart) : undefined,
+        firstContentfulPaint: fcp ? Math.round(fcp.startTime) : undefined,
+        authInit: authInit ? Math.round(authInit.startTime) : undefined,
       },
       requests: summarizeRequests((perf?.getEntriesByType?.('resource') ?? []) as unknown as ResourceLike[]),
       marks: entries.slice(),

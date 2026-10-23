@@ -6,7 +6,7 @@ import { decideBootstrap, AuthStatus } from '../lib/authBootstrap';
 import { perfMark } from '../lib/perfMarks';
 import type { TelegramWebApp } from '../telegram';
 
-export type TelegramAuthErrorReason = 'generic' | 'identity_conflict' | 'recovery_required';
+export type TelegramAuthErrorReason = 'generic' | 'identity_conflict' | 'recovery_required' | 'sdk_unavailable';
 
 export interface AuthBootstrap {
   user: User | null;
@@ -22,10 +22,17 @@ export interface AuthBootstrap {
 // Session restore + Telegram auto sign-in (moved out of App.tsx unchanged).
 // `onNewTelegramUser` is called once the backend reports that the Telegram
 // sign-in created a new account.
+// `telegramSdk` (see useTelegramWebApp): inside Telegram, while the SDK is
+// loading the Telegram-or-login decision waits; if it failed, the retry screen
+// is shown (reason 'sdk_unavailable') and "retry" requests the SDK again.
+export interface TelegramSdkState { pending: boolean; failed: boolean; retry: () => void }
+
 export function useAuthBootstrap(
   telegram: TelegramWebApp | null,
+  telegramSdk: TelegramSdkState,
   onNewTelegramUser: () => void
 ): AuthBootstrap {
+  const { pending: telegramSdkPending, failed: telegramSdkFailed, retry: retryTelegramSdk } = telegramSdk;
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   // See src/lib/authBootstrap.ts / TELEGRAM_AUTOLOGIN audit: kept separate
@@ -117,9 +124,17 @@ export function useAuthBootstrap(
       hasExistingSession: !!user,
       telegramInitDataPresent: !!telegram?.initData,
       alreadyAttemptedTelegramAuth: telegramAuthAttemptedRef.current,
+      telegramSdkPending,
+      telegramSdkFailed,
     });
 
     if (decision === 'wait') return;
+
+    if (decision === 'telegram_sdk_error') {
+      setTelegramAuthErrorReason('sdk_unavailable');
+      setAuthStatus('telegram_auth_error');
+      return;
+    }
 
     if (decision === 'unauthenticated') {
       setAuthStatus('unauthenticated');
@@ -129,13 +144,22 @@ export function useAuthBootstrap(
     // decision === 'telegram_auth'
     telegramAuthAttemptedRef.current = true;
     attemptTelegramAuth(telegram!.initData);
-  }, [authLoading, user, telegram, attemptTelegramAuth]);
+  }, [authLoading, user, telegram, telegramSdkPending, telegramSdkFailed, attemptTelegramAuth]);
 
   // "Повторить вход через Telegram" — reuses the CURRENT raw initData
   // (audit §16), never asks for login/password/Telegram id.
+  //
+  // When the SDK itself is what failed, "retry" requests it again and shows
+  // the loading screen; once it arrives the decision above runs the Telegram
+  // sign-in (or, with no initData, shows the login screen as before).
   const retryTelegramAuth = useCallback(() => {
+    if (telegramSdkFailed) {
+      setAuthStatus('checking');
+      retryTelegramSdk();
+      return;
+    }
     if (telegram?.initData) attemptTelegramAuth(telegram.initData);
-  }, [telegram, attemptTelegramAuth]);
+  }, [telegram, telegramSdkFailed, retryTelegramSdk, attemptTelegramAuth]);
 
   // "Другой способ входа" — explicit opt-in escape hatch to the manual
   // AuthScreen. Only reachable from telegram_auth_error, never automatic.
