@@ -42,48 +42,7 @@ async function getAllTasks(uid) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Pure filter helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-function filterToday(tasks, today) {
-  return tasks.filter(t => t.date === today);
-}
-
-function filterUpcoming(tasks, today) {
-  return tasks.filter(t => t.date > today);
-}
-
-function filterByStatus(tasks, status) {
-  if (status === 'completed') return tasks.filter(t =>  t.completed);
-  if (status === 'pending')   return tasks.filter(t => !t.completed);
-  return tasks;
-}
-
-function filterByQuery(tasks, q) {
-  if (!q) return tasks;
-  const lc = q.toLowerCase();
-  return tasks.filter(t =>
-    (t.title       || '').toLowerCase().includes(lc) ||
-    (t.description || '').toLowerCase().includes(lc)
-  );
-}
-
-function filterByDateRange(tasks, from, to) {
-  return tasks.filter(t => {
-    const d = t.date || '';
-    if (from && d < from) return false;
-    if (to   && d > to)   return false;
-    return true;
-  });
-}
-
 module.exports = {
   getAllTasks,
-  filterToday,
-  filterUpcoming,
-  filterByStatus,
-  filterByQuery,
-  filterByDateRange,
   normalizeTask,
 };

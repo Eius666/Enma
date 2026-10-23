@@ -9,14 +9,6 @@ import { db } from '../firebase';
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type FreeEntity = 'transaction' | 'task' | 'habit' | 'note' | 'bank';
-
-export interface AtomicResult {
-  allowed: boolean;
-  used: number;
-  limit: number;
-}
-
 export interface FreeUsageSnapshot {
   dailyTaskCount:   number;
   habitCount:       number;

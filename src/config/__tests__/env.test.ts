@@ -25,7 +25,6 @@ function setFakeEnv(overrides: Record<string, string> = {}) {
 function clearEnv() {
   for (const k of REQUIRED_KEYS) delete process.env[k];
   delete process.env.REACT_APP_URL;
-  delete process.env.REACT_APP_CLIENT_REMINDERS;
 }
 function freshImport() {
   return import(`../env.ts?case=${Date.now()}-${Math.random()}`);

@@ -66,18 +66,6 @@ function buildSystemPrompt(timezone = 'Europe/Warsaw') {
     .replace(/\{\{CURRENT_TIME\}\}/g, now);
 }
 
-// ── JSON extractor (handles Gemini's markdown wrapping) ───────────────────────
-
-function extractJSON(str) {
-  if (!str) return null;
-  try { return JSON.parse(str); } catch (_) {}
-  const fenced = str.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenced) try { return JSON.parse(fenced[1].trim()); } catch (_) {}
-  const bare = str.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-  if (bare)   try { return JSON.parse(bare[1]); } catch (_) {}
-  return null;
-}
-
 // ── Core LLM call ─────────────────────────────────────────────────────────────
 
 async function callLLM(messages, tools = [], timeoutMs = 8_000, modelOverride) {
@@ -264,4 +252,4 @@ async function chatWithTools(userMessage, userId, chatId, history = [], messageI
   return { text, toolCalls: toolResults };
 }
 
-module.exports = { chatWithTools, searchWeb, callLLM, extractJSON };
+module.exports = { chatWithTools, searchWeb, callLLM };

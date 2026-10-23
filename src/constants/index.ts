@@ -8,7 +8,6 @@ import type { Currency } from '../types';
 // Settings) is only the currency NEW operations are entered in.
 export const HOME_BUDGET_CURRENCY: Currency = 'RUB';
 export const BASE_CURRENCY: Currency = 'RUB';
-export const DEFAULT_CURRENCY: Currency = 'RUB';
 export const SUPPORTED_CURRENCIES: Currency[] = ['RUB', 'USD', 'EUR', 'BYN', 'CNY'];
 
 // ---------------------------------------------------------------------------
@@ -41,78 +40,3 @@ export const STORAGE_KEYS = {
 } as const;
 
 export const PROFILE_STORAGE_PREFIX = 'profile';
-
-// ---------------------------------------------------------------------------
-// Feature flags
-// ---------------------------------------------------------------------------
-
-export const ENABLE_CLIENT_REMINDERS =
-  process.env.REACT_APP_CLIENT_REMINDERS === 'true';
-
-// ---------------------------------------------------------------------------
-// UI — calendar tasks
-// ---------------------------------------------------------------------------
-
-export const TASK_COLOR_PALETTE: string[] = [
-  '#7C5CFF',
-  '#FF7EB6',
-  '#6CFFB8',
-  '#58A6FF',
-  '#F7D060',
-  '#FF9F40',
-];
-
-// ---------------------------------------------------------------------------
-// Finance — default categories (localized)
-// ---------------------------------------------------------------------------
-
-export type DefaultCategory = {
-  id: string;
-  nameEn: string;
-  nameRu: string;
-  type: 'income' | 'expense';
-};
-
-export const FINANCE_CATEGORIES: DefaultCategory[] = [
-  { id: 'cat-salary',    nameEn: 'Salary',     nameRu: 'Зарплата', type: 'income' },
-  { id: 'cat-freelance', nameEn: 'Freelance',  nameRu: 'Фриланс',  type: 'income' },
-  { id: 'cat-food',      nameEn: 'Food',       nameRu: 'Еда',      type: 'expense' },
-  { id: 'cat-software',  nameEn: 'Software',   nameRu: 'Софт',     type: 'expense' },
-];
-
-// ---------------------------------------------------------------------------
-// Notes — default projects (localized)
-// ---------------------------------------------------------------------------
-
-export type DefaultNoteProject = {
-  id: string;
-  nameEn: string;
-  nameRu: string;
-};
-
-export const NOTE_PROJECTS_DEFAULT: DefaultNoteProject[] = [
-  { id: 'project-default', nameEn: 'General', nameRu: 'Общее' },
-];
-
-// ---------------------------------------------------------------------------
-// Habits — colors
-// ---------------------------------------------------------------------------
-
-export const HABIT_COLORS: string[] = [
-  '#7C5CFF',
-  '#FF7EB6',
-  '#6CFFB8',
-  '#58A6FF',
-  '#F7D060',
-  '#FF9F40',
-  '#A78BFA',
-  '#34D399',
-];
-
-// ---------------------------------------------------------------------------
-// Workspace icons
-// ---------------------------------------------------------------------------
-
-export const WORKSPACE_ICONS: string[] = [
-  '📋', '💰', '✅', '📝', '🏃', '🎯', '❤️', '🏠', '🎓', '🔧',
-];

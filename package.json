@@ -21,8 +21,7 @@
     "react-dom": "^18.2.0",
     "react-icons": "^4.12.0",
     "react-scripts": "5.0.1",
-    "typescript": "^4.9.5",
-    "web-vitals": "^2.1.4"
+    "typescript": "^4.9.5"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -52,9 +51,7 @@
     "eval": "node api/_lib/evals/runner.js --json-output eval-report.json",
     "typecheck": "npx tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx",
-    "eject": "react-scripts eject",
-    "predeploy": "cross-env PUBLIC_URL=https://Eius666.github.io/Enma npm run build",
-    "deploy": "gh-pages -d build"
+    "eject": "react-scripts eject"
   },
   "eslintConfig": {
     "extends": [
@@ -76,8 +73,6 @@
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",
-    "cross-env": "^7.0.3",
-    "gh-pages": "^6.3.0",
     "pdf-parse": "^2.4.5"
   },
   "engines": {

@@ -44,12 +44,6 @@ try {
   process.exit(1);
 }
 
-function tsInfo(v) {
-  if (v == null) return 'missing';
-  if (typeof v.toDate === 'function') return `Timestamp(${v.toDate().toISOString()})`;
-  return `unexpected type: ${typeof v}`;
-}
-
 async function main() {
   console.log(`ENMA notes diagnostic — uid=${uid} — project=${admin.app().options.projectId || '(default)'}\n`);
 

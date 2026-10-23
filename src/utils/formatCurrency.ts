@@ -36,8 +36,3 @@ export function formatCurrency(
 export function getCurrencySymbol(currency: Currency | string): string {
   return CURRENCY_SYMBOLS[currency] ?? currency;
 }
-
-/** Return the ISO 4217 currency code as a string (passthrough helper). */
-export function getCurrencyCode(currency: Currency | string): string {
-  return currency;
-}

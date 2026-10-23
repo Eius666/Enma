@@ -16,7 +16,7 @@ const { saveMessage, loadHistory }                         = require('../_lib/ai
 const { createSbpPayment, BASE_PRICE }                     = require('../_lib/platega');
 const { validatePromoCode, applyPromoToUser, getUserPromo } = require('../_lib/promoCodes');
 const { APP_URL }                                           = require('../_lib/appUrl');
-const { LEGACY_STARS_BOT_INVOICE_ENABLED, starsPriceFor }   = require('../_lib/stars/config');
+const { LEGACY_STARS_BOT_INVOICE_ENABLED }   = require('../_lib/stars/config');
 const { validatePreCheckoutQuery, validateLegacyPreCheckout, processStarsSuccessfulPayment } = require('../_lib/stars/payments');
 
 // Deliberately NOT importing processSubscriptionPayment (old consumer/TON
@@ -86,47 +86,12 @@ const subscriptionKeyboard = () => ({
   inline_keyboard: [[{ text: 'Оформить подписку', web_app: { url: `${APP_URL}/#settings` } }]],
 });
 
-const sendSubscriptionPrompt = (token, chatId) =>
-  sendMessage(token, chatId, 'Для использования AI-ассистента необходима подписка.', {
-    reply_markup: subscriptionKeyboard(),
-  });
-
 const sendTrialExhaustedPrompt = (token, chatId) =>
   sendMessage(token, chatId,
     `У вас закончились пробные запросы (${TRIAL_LIMIT}/${TRIAL_LIMIT}).\n` +
     'Оформите подписку, чтобы продолжить пользоваться Enma.',
     { reply_markup: subscriptionKeyboard() }
   );
-
-// ── /subscribe — legacy Telegram Stars invoice (Telegram Stars Audit §18) ───
-//
-// The main Stars purchase path is now the Mini App (Settings → Subscription
-// → Telegram Stars → api/payment/[action].js:handleStarsCreate). This
-// bot-command invoice is kept ONLY as a feature-flagged fallback — default
-// OFF — because it has no server-side payment session to validate against
-// (see validateLegacyPreCheckout) and shouldn't be the primary entry point
-// going forward.
-
-async function handleSubscribeCommand(token, chatId) {
-  if (!LEGACY_STARS_BOT_INVOICE_ENABLED) {
-    await sendMessage(token, chatId,
-      'Оплата Stars теперь доступна в Enma.',
-      { reply_markup: subscriptionKeyboard() }
-    );
-    return;
-  }
-
-  const starPrice = starsPriceFor('pro', 'month');
-  await tg(token, 'sendInvoice', {
-    chat_id:     chatId,
-    title:       'Enma Pro — 1 месяц',
-    description: 'Безлимит сообщений, AI-ассистент, финансы, напоминания',
-    payload:     `enma_sub_${chatId}_${Date.now()}`,
-    provider_token: '',
-    currency:    'XTR',
-    prices:      [{ label: 'Enma Pro · 1 месяц', amount: starPrice }],
-  });
-}
 
 // ── Content generation (/generate, /post commands) ───────────────────────────
 

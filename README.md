@@ -1,47 +1,50 @@
-# Getting Started with Create React App
-
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
-
-## Available Scripts
-
-In the project directory, you can run:
-
-### `npm start`
-
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
-
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
-
-### `npm test`
-
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
-
-### `npm run build`
-
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
-
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
-
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
 # Enma
+
+Personal organizer for Telegram: day plan, habits, notes, finances and an AI
+assistant. A Telegram Mini App (React, Create React App) with a serverless API
+on Vercel and Firebase (Auth, Firestore).
+
+## Layout
+
+| Path | What it is |
+|---|---|
+| `src/` | the Mini App (React + TypeScript); `src/admin/` — the admin panel (`/admin`) |
+| `api/` | Vercel serverless functions; shared server code in `api/_lib/` |
+| `functions/` | Firebase Functions (reminder scheduling) |
+| `firestore.rules`, `firestore.indexes.json` | Firestore security rules and indexes |
+| `firestore-tests/` | rules and data-protocol tests against the Firestore emulator |
+| `scripts/` | build helpers, DEV tooling and owner-run maintenance scripts |
+| `public/` | static pages and assets (privacy, terms, partners, manifests) |
+| `finance-bot/` | a separate Express service with its own tooling — not part of the app build |
+
+## Local development
+
+Requires Node.js 24 and the Firebase CLI (for the emulator suites).
+
+```bash
+npm ci
+npm start                 # dev server
+npm run typecheck
+npm run lint
+npm run test:unit         # node --test (no network, no emulator)
+npm run test:ui           # jest + jsdom
+npm run test:rules        # Firestore emulator; see package.json for the other *-integration suites
+npm run test:brain        # AI assistant regression scenarios
+npm run build             # production build (postbuild adds startup preload hints)
+```
+
+Environment variables are described in `.env.example` (and `.env.dev.example`
+for the DEV environment). Never commit real values.
+
+## Environments and releases
+
+- **DEV** is built and deployed automatically from `main` by the Vercel Git
+  integration after CI. See `docs/DEV_ENVIRONMENT.md` and
+  `docs/GIT_AUTODEPLOY_CHECKLIST.md`.
+- **Production** releases are made separately by the owner from an approved
+  commit; nothing in this repository deploys to production.
+- CI (`.github/workflows/ci.yml`) runs type checks, unit, UI, emulator and
+  build checks on every push; it has no deployment step.
+
+Manual test matrix for subscriptions: `TESTING.md`. Firestore rules release
+checklist: `DEPLOY_CHECKLIST.md`.

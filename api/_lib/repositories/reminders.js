@@ -50,29 +50,14 @@ async function getAllReminders(uid) {
 // Pure filter helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function filterPending(reminders) {
-  return reminders.filter(r => r.status === 'pending');
-}
-
 function filterByStatus(reminders, status) {
   if (status === 'all') return reminders;
   return reminders.filter(r => r.status === status);
 }
 
-function filterByDateRange(reminders, from, to) {
-  return reminders.filter(r => {
-    const d = r.date || '';
-    if (from && d < from) return false;
-    if (to   && d > to)   return false;
-    return true;
-  });
-}
-
 module.exports = {
   getAllReminders,
-  filterPending,
   filterByStatus,
-  filterByDateRange,
   normalizeReminder,
   scheduledAtMillis,
 };

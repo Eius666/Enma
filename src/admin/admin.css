@@ -421,7 +421,6 @@ table.adm-table tr:hover td { background: rgba(255,255,255,0.02); }
 /* ── Misc ── */
 .adm-ref-table td:first-child { font-weight: 600; color: #c4b5fd; }
 .adm-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.adm-section-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin: 20px 0 10px; }
 .adm-mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
 .adm-row-actions { display: flex; gap: 6px; flex-wrap: nowrap; }
 

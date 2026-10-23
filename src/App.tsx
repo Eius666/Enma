@@ -10,7 +10,6 @@ import { useAuthBootstrap } from './hooks/useAuthBootstrap';
 import { AuthScreen } from './components/workspaces/AuthScreen';
 import type { DayTask } from './lib/dayTask';
 import type { HabitDoc } from './components/HabitsList';
-import { ToastProvider } from './components/ui/Toast';
 import LazySettings from './components/LazySettings';
 import { isSubscriptionActive, isInTrial } from './subscription';
 import { LimitBanner } from './components/Paywall';
@@ -41,11 +40,11 @@ import { useCollectionListener } from './hooks/useCollectionListener';
 import { reduceTransactions, reduceByCreatedAtDesc, reduceReminders } from './lib/snapshotReducers';
 import { translate } from './i18n/appStrings';
 import type { TranslationKey } from './i18n/appStrings';
-import { BASE_CURRENCY, ENABLE_CLIENT_REMINDERS } from './constants';
+import { BASE_CURRENCY } from './constants';
 import { deriveUserLabels } from './lib/userLabels';
 import { perfMark } from './lib/perfMarks';
 import {
-  buildTelegramReminderText, getReminderScheduledDate, notifyTelegramReminder,
+  buildTelegramReminderText, getReminderScheduledDate,
 } from './lib/reminderMessages';
 
 // The app chunk has been fetched and evaluated (DEV/local timing only).
@@ -197,29 +196,6 @@ const App: React.FC = () => {
     });
   }, [reminders, persistReminderToFirestore, user]);
 
-  useEffect(() => {
-    if (!ENABLE_CLIENT_REMINDERS) return;
-    if (!telegram?.initDataUnsafe?.user?.id) return;
-    const chatId = telegram.initDataUnsafe.user.id;
-    const interval = setInterval(() => {
-      setReminders(prev => {
-        let changed = false;
-        const updated = prev.map(reminder => {
-          if (reminder.done || reminder.notified) return reminder;
-          const scheduled = getReminderScheduledDate(reminder);
-          if (scheduled <= new Date()) {
-            notifyTelegramReminder(chatId, reminder, language);
-            changed = true;
-            return { ...reminder, notified: true };
-          }
-          return reminder;
-        });
-        return changed ? updated : prev;
-      });
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [telegram, language]);
-
   useTelegramUserMapping(user, telegram);
 
   const updateCurrency = (next: Currency) => {
@@ -329,7 +305,6 @@ const App: React.FC = () => {
   }
 
   return (
-    <ToastProvider>
     <div className={`app-shell theme-${theme}`}>
 
       <AppHeader
@@ -429,7 +404,6 @@ const App: React.FC = () => {
       <BottomNav language={language} activeTab={activeTab} onSelect={handleTabSwitch} />
 
     </div>
-    </ToastProvider>
   );
 };
 

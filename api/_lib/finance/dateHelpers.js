@@ -19,15 +19,6 @@ function prevYearMonth(yearMonth) {
   return `${y}-${String(m - 1).padStart(2, '0')}`;
 }
 
-// Days until a YYYY-MM-DD date from today in user's timezone.
-// Negative = past.
-function daysUntil(dateStr, timezone) {
-  const today   = userToday(timezone);
-  const todayMs = new Date(today   + 'T12:00:00Z').getTime();
-  const targMs  = new Date(dateStr + 'T12:00:00Z').getTime();
-  return Math.round((targMs - todayMs) / 86_400_000);
-}
-
 // Whole months between two YYYY-MM strings (positive = b is later).
 function monthsBetween(ymA, ymB) {
   const [yA, mA] = ymA.split('-').map(Number);
@@ -73,7 +64,6 @@ module.exports = {
   userToday,
   currentYearMonth,
   prevYearMonth,
-  daysUntil,
   monthsBetween,
   monthsUntilDeadline,
   txDateStr,

@@ -1,6 +1,5 @@
 import ReactDOM from 'react-dom/client';
 import './index.css';
-import reportWebVitals from './reportWebVitals';
 import { checkBuildFreshness, unregisterStaleServiceWorkers } from './buildFreshness';
 import ErrorBoundary, { ErrorFallback } from './components/ErrorBoundary';
 
@@ -50,5 +49,3 @@ if (window.location.pathname.startsWith('/admin')) {
     })
     .catch(showBootFailure);
 }
-
-reportWebVitals();

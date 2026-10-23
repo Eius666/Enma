@@ -592,12 +592,6 @@ body.theme-light .sett-ai-usage__bar {
 }
 
 /* ━━━ PDF export button ━━━ */
-.sett-row--column {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 6px;
-  padding: 10px 16px 12px;
-}
 
 .sett-export-pdf-btn {
   width: 100%;

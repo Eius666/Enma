@@ -88,41 +88,6 @@ const INSIGHTS_CONFIG = {
   },
 };
 
-// ── EVENT_REGISTRY — canonical definition per event type ─────────────────────
-
-const EVENT_REGISTRY = {
-  'finance.cash_gap': {
-    id:      'finance.cash_gap',
-    domain:  'finance',
-    action:  { type: 'skill', target: 'finance.cashflow', params: {} },
-  },
-  'finance.payment_cluster': {
-    id:      'finance.payment_cluster',
-    domain:  'finance',
-    action:  { type: 'skill', target: 'finance.cashflow', params: {} },
-  },
-  'finance.category_spike': {
-    id:      'finance.category_spike',
-    domain:  'finance',
-    action:  { type: 'skill', target: 'finance.leaks', params: {} },
-  },
-  'finance.goal_off_track': {
-    id:      'finance.goal_off_track',
-    domain:  'finance',
-    action:  { type: 'skill', target: 'finance.goal', params: {} },
-  },
-  'tasks.overdue': {
-    id:      'tasks.overdue',
-    domain:  'tasks',
-    action:  { type: 'skill', target: 'tasks.prioritize', params: {} },
-  },
-  'system.month_review_ready': {
-    id:      'system.month_review_ready',
-    domain:  'system',
-    action:  { type: 'skill', target: 'finance.month_review', params: {} },
-  },
-};
-
 // ── Severity — deterministic, no LLM ─────────────────────────────────────────
 
 function determineSeverity(type, facts) {
@@ -186,7 +151,6 @@ function computeInsightScore(insight) {
 
 module.exports = {
   INSIGHTS_CONFIG,
-  EVENT_REGISTRY,
   determineSeverity,
   computeInsightScore,
   DETECTOR_VERSION,

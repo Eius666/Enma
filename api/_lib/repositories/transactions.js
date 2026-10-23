@@ -125,26 +125,11 @@ function filterByType(transactions, type) {
   return transactions.filter(t => t.type === type);
 }
 
-function filterByQuery(transactions, q) {
-  if (!q) return transactions;
-  const lc = q.toLowerCase();
-  return transactions.filter(t =>
-    (t.description || '').toLowerCase().includes(lc) ||
-    (t.category    || '').toLowerCase().includes(lc)
-  );
-}
-
-function getRecentTransactions(transactions, limit = 15) {
-  return transactions.slice(0, limit);
-}
-
 module.exports = {
   getAllTransactions,
   calculateCurrentBalance,
   filterByPeriod,
   filterByType,
-  filterByQuery,
-  getRecentTransactions,
   normalizeTransaction,
   sortByDateDesc,
 };

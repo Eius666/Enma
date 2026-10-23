@@ -61,12 +61,6 @@ export const env = {
   },
 
   // ---------------------------------------------------------------------------
-  // Feature flags
-  // ---------------------------------------------------------------------------
-  /** Enable client-side reminder polling (set to 'true' to activate). */
-  enableClientReminders: optional('REACT_APP_CLIENT_REMINDERS', 'false') === 'true',
-
-  // ---------------------------------------------------------------------------
   // App metadata
   // ---------------------------------------------------------------------------
   // Falls back to the browser's own origin so this stays correct on whichever
@@ -81,4 +75,4 @@ export const env = {
 } as const;
 
 // Export individual values for convenient destructuring.
-export const { firebase: firebaseConfig, enableClientReminders } = env;
+export const { firebase: firebaseConfig } = env;
