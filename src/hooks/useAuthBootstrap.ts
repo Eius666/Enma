@@ -3,7 +3,7 @@ import { User, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { auth } from '../firebase';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 import { decideBootstrap, AuthStatus } from '../lib/authBootstrap';
-import { perfMark } from '../lib/perfMarks';
+import { perfMark, recordAuthState, startupTraceId } from '../lib/perfMarks';
 import type { TelegramWebApp } from '../telegram';
 
 export type TelegramAuthErrorReason = 'generic' | 'identity_conflict' | 'recovery_required' | 'sdk_unavailable';
@@ -54,6 +54,9 @@ export function useAuthBootstrap(
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, current => {
       perfMark('auth-resolved');
+      // Startup diagnostics only (a no-op unless they are on): whether a saved
+      // session came back, and Firebase's storage type at that moment.
+      recordAuthState(!!current, (auth as unknown as { _getPersistenceType?: () => string })._getPersistenceType?.());
       setUser(current);
       setAuthLoading(false);
       if (current) setAuthStatus('authenticated');
@@ -78,10 +81,13 @@ export function useAuthBootstrap(
     perfMark('telegram-auth-start');
     setAuthStatus('telegram_auth');
     try {
+      // X-Enma-Trace only while startup diagnostics are on: lets the DEV
+      // server's timing log line be matched with this start. Not a credential.
+      const trace = startupTraceId();
       const res = await fetchWithTimeout('/api/auth/telegram', {
         timeoutMs: 30_000, // identity lookup is idempotent; a stalled request lands on the retry screen
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(trace ? { 'X-Enma-Trace': trace } : {}) },
         body: JSON.stringify({ initData }),
       });
       if (res.ok) {

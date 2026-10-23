@@ -222,10 +222,13 @@ function createMockDb(seed = {}) {
 
   return {
     collection: (name) => colRef(name),
+    // Same contract as Firestore#getAll: snapshots in the order of the refs.
+    getAll: async (...refs) => Promise.all(refs.map(ref => ref.get())),
     runTransaction: async (fn) => {
       const writes = [];
       const tx = {
         get:    async (ref)       => ref.get(),
+        getAll: async (...refs)   => Promise.all(refs.map(ref => ref.get())),
         set:    (ref, data, options) => writes.push(() => applySet(ref.path, data, options)),
         update: (ref, patch)      => writes.push(() => {
           const ex = store.get(ref.path) || {};
@@ -239,14 +242,23 @@ function createMockDb(seed = {}) {
     },
     batch: () => {
       const ops = [];
+      const mustNotExist = [];
       return {
+        // Like Firestore: the whole batch is refused (ALREADY_EXISTS, code 6)
+        // if any create() target exists when it commits.
+        create: (ref, data) => { mustNotExist.push(ref.path); ops.push(() => applySet(ref.path, data)); },
         set:    (ref, data, options) => ops.push(() => applySet(ref.path, data, options)),
         update: (ref, patch) => ops.push(() => {
           const ex = store.get(ref.path) || {};
           store.set(ref.path, { ...ex, ...resolveData(ref.path, patch) });
         }),
         delete: (ref) => ops.push(() => store.delete(ref.path)),
-        commit: async () => { for (const op of ops) op(); },
+        commit: async () => {
+          if (mustNotExist.some(path => store.has(path))) {
+            throw Object.assign(new Error('6 ALREADY_EXISTS: document already exists'), { code: 6 });
+          }
+          for (const op of ops) op();
+        },
       };
     },
     _store: store,

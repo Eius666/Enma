@@ -35,7 +35,24 @@ export type PerfPhase =
 export interface PerfEntry { phase: PerfPhase; ms: number }
 
 /** One network request of the startup, by a fixed label (never its URL). */
-export interface StartupRequest { name: string; start: number; end: number; count: number; cached?: boolean }
+export interface StartupRequest {
+  name: string; start: number; end: number; count: number; cached?: boolean;
+  /** The server's own phase timings (Server-Timing, DEV only): names and ms. */
+  serverTiming?: Array<{ name: string; dur: number }>;
+}
+
+/**
+ * How the saved Firebase session fared at start: 'restored' — a user came
+ * back; 'rejected' — Firebase checked a saved session with its servers and
+ * reported no user (deleted or disabled account, revoked or invalid token);
+ * 'none' — there was nothing to check. No ids, tokens or claims.
+ */
+export interface StartupAuth {
+  session: 'restored' | 'rejected' | 'none';
+  /** Firebase's storage type at that moment: LOCAL (IndexedDB or localStorage), SESSION or NONE. */
+  persistence?: string;
+  indexedDbPresent: boolean;
+}
 
 /** What a start leaves for the Settings screen: labels and milliseconds only. */
 export interface StartupRun {
@@ -52,6 +69,9 @@ export interface StartupRun {
   };
   requests: StartupRequest[];
   marks: PerfEntry[];
+  auth?: StartupAuth;
+  /** Random per start, sent to the server so its log line can be matched (DEV). */
+  traceId?: string;
 }
 
 const SUMMARY_AFTER: PerfPhase[] = [
@@ -106,6 +126,53 @@ const enabled = process.env.NODE_ENV === 'development' || process.env.REACT_APP_
 const persistRun = isStartupDiagnosticsOn();
 const recordedAt = new Date().toISOString();
 const entries: PerfEntry[] = [];
+let authState: StartupAuth | undefined;
+let traceId: string | null | undefined;
+
+/**
+ * A random id for this start (16 hex characters), only while diagnostics are
+ * on; null otherwise. Sent as X-Enma-Trace so the DEV server log line of the
+ * sign-in can be matched with this device's timings. Identifies nothing else.
+ */
+export function startupTraceId(): string | null {
+  if (traceId !== undefined) return traceId;
+  traceId = null;
+  if (!enabled) return traceId;
+  try {
+    const bytes = new Uint8Array(8);
+    crypto.getRandomValues(bytes);
+    traceId = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  } catch { traceId = null; }
+  return traceId;
+}
+
+/**
+ * Called once, when Firebase first reports the session. Whether a saved
+ * session was checked is read from the requests Firebase made before that
+ * moment (a lookup or token refresh), not from storage.
+ */
+export function recordAuthState(userRestored: boolean, persistence?: string): void {
+  if (!enabled || authState) return;
+  let resources: ResourceLike[] = [];
+  let at = 0;
+  try {
+    at = performance.now();
+    resources = performance.getEntriesByType('resource') as unknown as ResourceLike[];
+  } catch { /* no timing API */ }
+  authState = {
+    session: classifySession(userRestored, resources, at),
+    persistence,
+    indexedDbPresent: typeof indexedDB !== 'undefined',
+  };
+  if (persistRun) saveRun();
+}
+
+/** 'rejected' when Firebase checked a saved session (lookup or token refresh) before reporting no user. */
+export function classifySession(userRestored: boolean, resources: ResourceLike[], at: number): StartupAuth['session'] {
+  if (userRestored) return 'restored';
+  const checked = resources.some(r => r.startTime <= at && /^auth: (accounts:lookup|token refresh)$/.test(requestLabel(r.name) ?? ''));
+  return checked ? 'rejected' : 'none';
+}
 let summaryPrinted = false;
 
 const now = (): number =>
@@ -169,17 +236,31 @@ export function requestLabel(url: string): string | null {
   return null;
 }
 
-type ResourceLike = { name: string; startTime: number; responseEnd: number; transferSize?: number; decodedBodySize?: number };
+export type ResourceLike = {
+  name: string; startTime: number; responseEnd: number; transferSize?: number; decodedBodySize?: number;
+  serverTiming?: ReadonlyArray<{ name: string; duration: number }>;
+};
+
+// Sign-in and API calls are listed one by one (the first and the second
+// accounts:lookup are different steps); everything else is grouped.
+const listedSeparately = (label: string) => label.startsWith('auth') || label.startsWith('api ');
+const SERVER_TIMING_NAME = /^[a-z]{2,16}$/;
 
 /** Groups resource timings by label: first start, first end, how many. */
 export function summarizeRequests(resources: ResourceLike[]): StartupRequest[] {
   const out = new Map<string, StartupRequest>();
+  const occurrences = new Map<string, number>();
   for (const r of resources) {
-    const name = requestLabel(r.name);
-    if (!name) continue;
+    const label = requestLabel(r.name);
+    if (!label) continue;
+    const n = (occurrences.get(label) ?? 0) + 1;
+    occurrences.set(label, n);
+    const name = listedSeparately(label) && n > 1 ? `${label} #${n}` : label;
     const seen = out.get(name);
     if (seen) { seen.count += 1; continue; }
     const item: StartupRequest = { name, start: Math.round(r.startTime), end: Math.round(r.responseEnd), count: 1 };
+    const st = (r.serverTiming ?? []).filter(e => SERVER_TIMING_NAME.test(e.name));
+    if (label.startsWith('api ') && st.length) item.serverTiming = st.map(e => ({ name: e.name, dur: Math.round(e.duration) }));
     // transferSize is 0 for a response served from the HTTP cache (when the
     // browser reports sizes at all — cross-origin responses may not).
     if (typeof r.transferSize === 'number' && typeof r.decodedBodySize === 'number' && r.decodedBodySize > 0) {
@@ -216,6 +297,8 @@ function saveRun(): void {
       },
       requests: summarizeRequests((perf?.getEntriesByType?.('resource') ?? []) as unknown as ResourceLike[]),
       marks: entries.slice(),
+      auth: authState,
+      traceId: traceId ?? undefined,
     };
     storage()?.setItem(LAST_RUN_KEY, JSON.stringify(run));
   } catch { /* diagnostics must never affect the app */ }

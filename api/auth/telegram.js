@@ -1,8 +1,17 @@
 'use strict';
 
+// Start-up cost of this function's modules (DEV-only timings, see below).
+const MODULE_T0 = process.hrtime.bigint();
+const BOOT_MS = process.uptime() * 1000;
+
 const crypto = require('crypto');
-const { admin, db } = require('../_lib/firebaseAdmin');
+const firebaseAdminModule = require('../_lib/firebaseAdmin');
+const { admin, db } = firebaseAdminModule;
 const { computeTrialWindow, buildTrialSubscription } = require('../_lib/subscription/plan');
+const { createRequestTimer } = require('../_lib/serverTiming');
+
+const MODULE_INIT_MS = Number(process.hrtime.bigint() - MODULE_T0) / 1e6;
+const NO_TIMER = { phase() {}, time: (_name, fn) => fn() };
 
 // Same freshness window as the (separate, Login-Widget-specific) check in
 // _lib/referral/partnerAuth.js — Telegram's own recommended practice for
@@ -93,34 +102,88 @@ function verifyInitData(initData, botToken) {
 // The live, authoritative "who could this Telegram id possibly be" check —
 // steps 2-4 of the lookup above, factored out of resolveCanonicalUid for
 // readability. Never touches canonicalUids — purely a read.
-async function gatherLiveCandidates(telegramId) {
-  const candidateUids = new Set();
-  const addDocs = (snap) => { for (const d of snap.docs) candidateUids.add(d.id); };
-
-  const [telegramUsersSnap, usersNumSnap, usersStrSnap] = await Promise.all([
-    db.collection('telegramUsers').doc(`tg_${telegramId}`).get(),
+//
+// `prefetched` holds what resolveCanonicalUid already read: the telegramUsers
+// mapping, whether the account it points to exists, and the two chatId
+// queries (started together with the first read, see below).
+function readChatIdCandidates(telegramId) {
+  return Promise.all([
     db.collection('users').where('chatId', '==', telegramId).get(),
     db.collection('users').where('chatId', '==', String(telegramId)).get(),
   ]);
+}
+
+async function gatherLiveCandidates(telegramId, prefetched) {
+  const candidateUids = new Set();
+  const addDocs = (snap) => { for (const d of snap.docs) candidateUids.add(d.id); };
+
+  const [usersNumSnap, usersStrSnap] = await prefetched.chatIdQueries;
 
   addDocs(usersNumSnap);
   addDocs(usersStrSnap);
 
-  const hadHistoricalMapping = telegramUsersSnap.exists;
+  const hadHistoricalMapping = prefetched.telegramUsersSnap.exists;
   if (hadHistoricalMapping) {
-    const mappedUid = telegramUsersSnap.data()?.firebaseUid;
-    if (mappedUid) {
-      // Defensive: only trust this mapping if the account it points to
-      // actually still exists (never resolve to an orphaned/deleted uid).
-      const mappedUserSnap = await db.collection('users').doc(mappedUid).get();
-      if (mappedUserSnap.exists) candidateUids.add(mappedUid);
-    }
+    const mappedUid = prefetched.telegramUsersSnap.data()?.firebaseUid;
+    // Defensive: only trust this mapping if the account it points to
+    // actually still exists (never resolve to an orphaned/deleted uid).
+    if (mappedUid && prefetched.userExists(mappedUid)) candidateUids.add(mappedUid);
   }
 
   return { candidateUids, hadHistoricalMapping };
 }
 
-async function resolveCanonicalUid(telegramId) {
+// Reading vs deciding. The documents every decision below may need are read
+// in at most two round trips — (1) the manual link, the canonical cache and
+// the telegramUsers mapping, and alongside them the two chatId queries (their
+// result is only USED when the links below settle nothing; for an existing
+// account they are two wasted reads, for a new one they save a round trip);
+// (2) every account the links point to, with its subscription document,
+// together. The decisions themselves are taken one at a time,
+// in the same order of trust as always: a verified manual link first, then
+// the canonical cache (only if its account still exists), then the live
+// candidates — conflict, recovery_required and new exactly as before.
+//
+// options.timer      — DEV-only phase timings (serverTiming.js).
+// options.deferCacheWrite — return the canonicalUids write as `cacheWrite`
+//   (already started) instead of awaiting it, so the caller can run it next
+//   to the account setup; the caller must await it before issuing a token.
+// A 'unique' result also carries `subscriptionSnap` when the account's
+// subscription document was read on the way (setupNewUserIfNeeded skips its
+// transaction when that document exists).
+async function resolveCanonicalUid(telegramId, options = {}) {
+  const timer = options.timer || NO_TIMER;
+  const manualRef = db.collection('telegramManualLinks').doc(`tg_${telegramId}`);
+  const canonicalRef = db.collection('canonicalUids').doc(`tg_${telegramId}`);
+  const telegramUsersRef = db.collection('telegramUsers').doc(`tg_${telegramId}`);
+
+  const chatIdQueries = timer.time('candidates', () => readChatIdCandidates(telegramId));
+  chatIdQueries.catch(() => {}); // awaited below only if needed; a failure there surfaces there
+  const [manualLinkSnap, canonicalSnap, telegramUsersSnap] = await timer.time('links',
+    () => db.getAll(manualRef, canonicalRef, telegramUsersRef));
+
+  const manualData = manualLinkSnap.exists ? manualLinkSnap.data() : null;
+  const manualUid = manualData?.verified === true && manualData?.uid ? manualData.uid : null;
+  const cachedUid = canonicalSnap.exists ? canonicalSnap.data().uid : null;
+  const mappedUid = telegramUsersSnap.exists ? telegramUsersSnap.data()?.firebaseUid || null : null;
+
+  // Every account a stored link points to, and its subscription, in one read.
+  const linkedUids = [...new Set([manualUid, cachedUid, mappedUid].filter(Boolean))];
+  const accountSnaps = new Map();
+  const subscriptionSnaps = new Map();
+  if (linkedUids.length) {
+    const snaps = await timer.time('accounts', () => db.getAll(
+      ...linkedUids.map(uid => db.collection('users').doc(uid)),
+      ...linkedUids.map(uid => db.collection('subscriptions').doc(uid)),
+    ));
+    linkedUids.forEach((uid, i) => {
+      accountSnaps.set(uid, snaps[i]);
+      subscriptionSnaps.set(uid, snaps[linkedUids.length + i]);
+    });
+  }
+  const userExists = uid => accountSnaps.get(uid)?.exists === true;
+  const unique = uid => ({ status: 'unique', uid, subscriptionSnap: subscriptionSnaps.get(uid) });
+
   // 0. Verified manual recovery link — authoritative, created ONLY by a
   // separate admin-gated recovery endpoint, never by this function. Checked
   // FIRST, before the ordinary canonicalUids cache, so a stale cache entry
@@ -128,45 +191,33 @@ async function resolveCanonicalUid(telegramId) {
   // deliberately a DIFFERENT trust tier from
   // the ordinary cache below, not a variant of it (see
   // TELEGRAM_PASSWORDLESS_AUTOAUTH audit, targeted-recovery round §5/§6).
-  let hadVerifiedManualLink = false;
-  const manualLinkSnap = await db.collection('telegramManualLinks').doc(`tg_${telegramId}`).get();
-  if (manualLinkSnap.exists) {
-    const manualData = manualLinkSnap.data();
-    if (manualData?.verified === true && manualData?.uid) {
-      hadVerifiedManualLink = true;
-      const manualTargetSnap = await db.collection('users').doc(manualData.uid).get();
-      if (manualTargetSnap.exists) {
-        return { status: 'unique', uid: manualData.uid };
-      }
-      // Target no longer exists — ignore the override entirely (never
-      // trust a dangling manual link as a real answer), but its mere
-      // existence is still definite proof this identity was seen and
-      // deliberately linked before, same as an orphaned telegramUsers
-      // mapping — so a "zero live candidates" outcome below still becomes
-      // recovery_required, never a silent "new account" fallback.
-    }
-  }
+  //
+  // A manual link whose target no longer exists is ignored entirely (never
+  // trust a dangling manual link as a real answer), but its mere existence
+  // is still definite proof this identity was seen and deliberately linked
+  // before, same as an orphaned telegramUsers mapping — so a "zero live
+  // candidates" outcome below still becomes recovery_required, never a
+  // silent "new account" fallback.
+  const hadVerifiedManualLink = !!manualUid;
+  if (manualUid && userExists(manualUid)) return unique(manualUid);
 
-  const canonicalRef = db.collection('canonicalUids').doc(`tg_${telegramId}`);
-  const canonicalSnap = await canonicalRef.get();
-  if (canonicalSnap.exists) {
-    const cachedUid = canonicalSnap.data().uid;
-    const cachedUserSnap = await db.collection('users').doc(cachedUid).get();
-    if (cachedUserSnap.exists) {
-      return { status: 'unique', uid: cachedUid };
-    }
-    // Stale cache entry (the account it names no longer exists) — fall
-    // through to a fresh resolution below instead of trusting it. Whatever
-    // this resolves to now will overwrite (or, for conflict/recovery_required,
-    // simply not touch) this stale doc.
-  }
+  // 1. Canonical cache — trusted only while the account it names exists. A
+  // stale entry falls through to a fresh resolution below; whatever that
+  // resolves to overwrites it (conflict/recovery_required leave it alone).
+  if (cachedUid && userExists(cachedUid)) return unique(cachedUid);
 
-  const { candidateUids, hadHistoricalMapping } = await gatherLiveCandidates(telegramId);
+  const { candidateUids, hadHistoricalMapping } =
+    await gatherLiveCandidates(telegramId, { telegramUsersSnap, userExists, chatIdQueries });
+
+  const cache = (result) => {
+    const write = canonicalRef.set({ uid: result.uid, telegramId, resolvedAt: admin.firestore.FieldValue.serverTimestamp() });
+    if (options.deferCacheWrite) return { ...result, cacheWrite: write };
+    return write.then(() => result);
+  };
 
   if (candidateUids.size === 1) {
     const uid = [...candidateUids][0];
-    await canonicalRef.set({ uid, telegramId, resolvedAt: admin.firestore.FieldValue.serverTimestamp() });
-    return { status: 'unique', uid };
+    return cache({ status: 'unique', uid, subscriptionSnap: subscriptionSnaps.get(uid) });
   }
 
   if (candidateUids.size > 1) {
@@ -181,9 +232,7 @@ async function resolveCanonicalUid(telegramId) {
     return { status: 'recovery_required', uid: null };
   }
 
-  const newUid = `tg_${telegramId}`;
-  await canonicalRef.set({ uid: newUid, telegramId, resolvedAt: admin.firestore.FieldValue.serverTimestamp() });
-  return { status: 'new', uid: newUid };
+  return cache({ status: 'new', uid: `tg_${telegramId}` });
 }
 
 // Observability events (TELEGRAM_PASSWORDLESS_AUTOAUTH audit §26) — plain
@@ -194,7 +243,19 @@ function logEvent(name, fields) {
 }
 
 async function telegramAuthHandler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  // DEV only: phase timings as Server-Timing plus one log line (names and
+  // milliseconds, see serverTiming.js). Elsewhere this records nothing.
+  const timer = createRequestTimer(req, {
+    boot: BOOT_MS,
+    modinit: MODULE_INIT_MS,
+    ...(firebaseAdminModule.initTimings || {}),
+  });
+  const reply = (status, body, outcome) => {
+    timer.finish(res, outcome);
+    return res.status(status).json(body);
+  };
+
+  if (req.method !== 'POST') return reply(405, { error: 'Method not allowed' }, 'method');
 
   logEvent('telegram_autoauth_started');
 
@@ -214,23 +275,24 @@ async function telegramAuthHandler(req, res) {
   if (!diag.initDataReceived) {
     console.log('[auth/telegram]', diag);
     logEvent('telegram_autoauth_failed', { reason: 'missing_init_data' });
-    return res.status(400).json({ error: 'Missing initData' });
+    return reply(400, { error: 'Missing initData' }, 'rejected');
   }
 
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   if (!botToken) {
     console.log('[auth/telegram]', diag, { reason: 'server_misconfigured' });
     logEvent('telegram_autoauth_failed', { reason: 'server_misconfigured' });
-    return res.status(500).json({ error: 'Server misconfigured' });
+    return reply(500, { error: 'Server misconfigured' }, 'error');
   }
 
   const verified = verifyInitData(initData, botToken);
+  timer.phase('verify');
   diag.hmacValid = verified.ok || verified.reason !== 'bad_signature';
   diag.authDateValid = verified.ok || (verified.reason !== 'missing_auth_date' && verified.reason !== 'expired');
   if (!verified.ok) {
     console.log('[auth/telegram]', diag, { reason: verified.reason });
     logEvent('telegram_autoauth_failed', { reason: verified.reason });
-    return res.status(401).json({ error: 'Invalid initData signature' });
+    return reply(401, { error: 'Invalid initData signature' }, 'rejected');
   }
   const params = verified.params;
 
@@ -240,7 +302,7 @@ async function telegramAuthHandler(req, res) {
   } catch {
     console.log('[auth/telegram]', diag, { reason: 'bad_user_payload' });
     logEvent('telegram_autoauth_failed', { reason: 'bad_user_payload' });
-    return res.status(400).json({ error: 'Invalid user payload' });
+    return reply(400, { error: 'Invalid user payload' }, 'rejected');
   }
 
   const telegramId = tgUser.id;
@@ -248,18 +310,18 @@ async function telegramAuthHandler(req, res) {
   if (!telegramId) {
     console.log('[auth/telegram]', diag);
     logEvent('telegram_autoauth_failed', { reason: 'missing_telegram_user_id' });
-    return res.status(400).json({ error: 'Missing user.id' });
+    return reply(400, { error: 'Missing user.id' }, 'rejected');
   }
 
   try {
-    const resolution = await resolveCanonicalUid(telegramId);
+    const resolution = await resolveCanonicalUid(telegramId, { timer, deferCacheWrite: true });
 
     if (resolution.status === 'conflict') {
       // Two or more distinct existing accounts map to this Telegram id.
       // Never auto-picked, never merged, never a new third account — see
       // TELEGRAM_PASSWORDLESS_AUTOAUTH audit §1/§8. No token is issued.
       logEvent('telegram_auth_identity_conflict');
-      return res.status(409).json({ error: 'identity_conflict', code: 'TELEGRAM_IDENTITY_CONFLICT' });
+      return reply(409, { error: 'identity_conflict', code: 'TELEGRAM_IDENTITY_CONFLICT' }, 'conflict');
     }
 
     if (resolution.status === 'recovery_required') {
@@ -269,28 +331,48 @@ async function telegramAuthHandler(req, res) {
       // the duplicate-account bug this whole effort exists to prevent — see
       // audit §10/§11. No token is issued.
       logEvent('telegram_auth_recovery_required');
-      return res.status(409).json({ error: 'recovery_required', code: 'TELEGRAM_ACCOUNT_RECOVERY_REQUIRED' });
+      return reply(409, { error: 'recovery_required', code: 'TELEGRAM_ACCOUNT_RECOVERY_REQUIRED' }, 'recovery');
     }
 
     const uid = resolution.uid;
     const isNewIdentity = resolution.status === 'new';
 
     const startParam = params.get('start_param') || null;
-    const isNewUser  = await setupNewUserIfNeeded(uid, tgUser, startParam);
-    const token      = await admin.auth().createCustomToken(uid);
+    // The canonical cache write (when this resolution made one) and the
+    // account setup touch different documents and run side by side; BOTH
+    // must succeed before a token is issued — a failure of either is a 500
+    // with no token, and the next attempt resolves the same uid again.
+    const [, isNewUser] = await Promise.all([
+      resolution.cacheWrite ? timer.time('cachewrite', () => resolution.cacheWrite) : null,
+      timer.time('setup', () => setupNewUserIfNeeded(uid, tgUser, startParam, {
+        subscriptionSnap: resolution.subscriptionSnap, likelyNew: isNewIdentity, timer,
+      })),
+    ]);
+    const token = await timer.time('token', () => admin.auth().createCustomToken(uid));
     diag.enmaUserResolved = true;
     console.log('[auth/telegram]', diag, { isNewUser });
     logEvent(isNewIdentity ? 'telegram_autoauth_new_user' : 'telegram_autoauth_existing_user');
     logEvent('telegram_autoauth_success');
-    return res.status(200).json({ token, uid, isNewUser });
+    return reply(200, { token, uid, isNewUser }, isNewUser ? 'new_account' : 'existing_account');
   } catch (err) {
     console.error('[auth/telegram] error', err);
     logEvent('telegram_autoauth_failed', { reason: 'server_error' });
-    return res.status(500).json({ error: 'Auth failed' });
+    return reply(500, { error: 'Auth failed' }, 'error');
   }
 }
 
-async function setupNewUserIfNeeded(uid, tgUser, startParam) {
+// options.subscriptionSnap — the subscription document as already read by
+// resolveCanonicalUid. When it exists the transaction below could only read it
+// and return false, so it is skipped (the referral step above still runs, as
+// before).
+// options.likelyNew — the identity resolved as never seen before: first try to
+// create the user and the trial in one atomic batch whose writes each require
+// the document NOT to exist (create). If either exists already — a concurrent
+// launch got there first, or the referral step wrote users/{uid} — the whole
+// batch is refused and the transaction below decides, exactly as before.
+// Either way a user and a trial are created at most once.
+async function setupNewUserIfNeeded(uid, tgUser, startParam, options = {}) {
+  const timer = options.timer || NO_TIMER;
   const userRef = db.collection('users').doc(uid);
   const subRef  = db.collection('subscriptions').doc(uid);
 
@@ -298,41 +380,60 @@ async function setupNewUserIfNeeded(uid, tgUser, startParam) {
   // idempotent). This IS the real "registration" moment for the deep-link
   // funnel: a Mini App launch is the only way a brand-new Enma account gets
   // created, so this is where a partner's "click" becomes a "registration".
+  // It stays BEFORE the transaction: consumer referrals only count while the
+  // users/{uid} document does not exist yet.
   if (startParam && startParam.startsWith('ref_')) {
     const refCode = startParam.slice(4);
     const { attributeReferral } = require('../_lib/referral/partners');
-    await attributeReferral(uid, refCode, { chatId: tgUser.id }).catch(err =>
+    await timer.time('referral', () => attributeReferral(uid, refCode, { chatId: tgUser.id }).catch(err =>
       console.error('[auth/telegram] referral start error:', err.message)
-    );
+    ));
   }
 
-  const trialWindow = computeTrialWindow(new Date());
+  if (options.subscriptionSnap && options.subscriptionSnap.exists) return false;
 
-  // The exists-check now happens INSIDE the transaction (tx.get, not a
+  const trialWindow = computeTrialWindow(new Date());
+  const newUserDoc = () => ({
+    uid,
+    telegramId: tgUser.id,
+    chatId:     tgUser.id,
+    firstName:  tgUser.first_name ?? '',
+    lastName:   tgUser.last_name  ?? '',
+    username:   tgUser.username   ?? '',
+    isPro:      false,
+    trialUsed:  true,
+    createdAt:  admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt:  admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  if (options.likelyNew) {
+    const batch = db.batch();
+    batch.create(userRef, newUserDoc());
+    batch.create(subRef, buildTrialSubscription(uid, trialWindow, admin.firestore.FieldValue.serverTimestamp()));
+    try {
+      await timer.time('create', () => batch.commit());
+      return true;
+    } catch (err) {
+      if (!isAlreadyExists(err)) throw err;
+      // Something exists already: the transaction below reads and decides.
+    }
+  }
+
+  // The exists-check now happens INSIDE the transaction (tx.getAll, not a
   // pre-fetched snapshot) — see TELEGRAM_PASSWORDLESS_AUTOAUTH audit §7/§10:
   // two concurrent Mini App launches for the same brand-new Telegram user
   // both resolve to the same deterministic uid (resolveCanonicalUid), and
   // this transaction is what stops them from racing to double-write the
-  // trial subscription — whichever commits first wins, the other's tx.get
-  // sees subSnap.exists === true and bails out as a no-op.
+  // trial subscription — whichever commits first wins, the other's read
+  // sees subSnap.exists === true and bails out as a no-op. Both documents are
+  // read in one call (two separate reads cost a round trip each).
   return db.runTransaction(async tx => {
-    const [userSnap, subSnap] = await Promise.all([tx.get(userRef), tx.get(subRef)]);
+    const [userSnap, subSnap] = await tx.getAll(userRef, subRef);
 
     if (subSnap.exists) return false;
 
     if (!userSnap.exists) {
-      tx.set(userRef, {
-        uid,
-        telegramId: tgUser.id,
-        chatId:     tgUser.id,
-        firstName:  tgUser.first_name ?? '',
-        lastName:   tgUser.last_name  ?? '',
-        username:   tgUser.username   ?? '',
-        isPro:      false,
-        trialUsed:  true,
-        createdAt:  admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt:  admin.firestore.FieldValue.serverTimestamp(),
-      });
+      tx.set(userRef, newUserDoc());
     } else {
       tx.update(userRef, { trialUsed: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
     }
@@ -341,6 +442,11 @@ async function setupNewUserIfNeeded(uid, tgUser, startParam) {
 
     return true;
   });
+}
+
+// Firestore's ALREADY_EXISTS (gRPC code 6), as raised by a refused create().
+function isAlreadyExists(err) {
+  return !!err && (err.code === 6 || err.code === 'already-exists' || /ALREADY_EXISTS/.test(String(err.message)));
 }
 
 module.exports = telegramAuthHandler;

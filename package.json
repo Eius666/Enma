@@ -41,6 +41,7 @@
     "test:trial-integration": "firebase emulators:exec --only firestore --project enma-rules-test \"node --test api/payment/__tests__/trial.integration.test.js\"",
     "test:reminders-integration": "firebase emulators:exec --only firestore --project enma-rules-test \"node --test api/_lib/reminders/__tests__/deliver.integration.test.js\"",
     "test:pdf-integration": "firebase emulators:exec --only firestore --project enma-rules-test \"node --test api/_lib/pdf/__tests__/exportFinancePdf.integration.test.js\"",
+    "test:auth-integration": "firebase emulators:exec --only firestore --project enma-rules-test \"node --test api/auth/__tests__/telegram.integration.test.js\"",
     "pretest:functions-integration": "npm --prefix functions run build",
     "test:functions-integration": "firebase emulators:exec --only firestore --project enma-rules-test \"node --test functions/lib/__tests__/materializeHabitReminders.integration.test.js\"",
     "test:brain": "node api/_lib/evals/runner.js",

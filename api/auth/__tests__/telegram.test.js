@@ -513,3 +513,84 @@ test('telegramAuthHandler: two simultaneous auth requests for a brand-new Telegr
     assert.equal(db._count('subscriptions/'), 1, 'exactly one trial subscription was created, not two');
   } finally { delete process.env.TELEGRAM_BOT_TOKEN; teardown(); }
 });
+
+// ── DEV-only timing breakdown (Server-Timing + one log line) ────────────────
+
+async function runWithCapture(env, headers) {
+  injectMockDb({
+    'canonicalUids/tg_777888999': { uid: 'existingUid', telegramId: 777888999 },
+    'users/existingUid': { chatId: 777888999 },
+    'subscriptions/existingUid': { plan: 'free', status: 'active' },
+  });
+  process.env.TELEGRAM_BOT_TOKEN = BOT_TOKEN;
+  const prevEnv = process.env.ENMA_ENV;
+  if (env) process.env.ENMA_ENV = env; else delete process.env.ENMA_ENV;
+  const logs = [];
+  const origLog = console.log;
+  console.log = (...a) => logs.push(a.map(x => (typeof x === 'string' ? x : JSON.stringify(x))).join(' '));
+  const initData = signInitData(freshFields());
+  const headersSet = {};
+  let statusCode, jsonBody;
+  try {
+    const handler = require('../telegram');
+    await handler({ method: 'POST', body: { initData }, headers }, {
+      status(c) { statusCode = c; return this; }, json(b) { jsonBody = b; return this; }, setHeader(k, v) { headersSet[k] = v; },
+    });
+  } finally {
+    console.log = origLog;
+    if (prevEnv === undefined) delete process.env.ENMA_ENV; else process.env.ENMA_ENV = prevEnv;
+    delete process.env.TELEGRAM_BOT_TOKEN; teardown();
+  }
+  return { statusCode, jsonBody, headersSet, logs, initData };
+}
+
+test('DEV: the sign-in reports its phases as Server-Timing and one log line, without ids, tokens or initData', async () => {
+  const r = await runWithCapture('dev', { 'x-enma-trace': '0123456789abcdef' });
+  assert.equal(r.statusCode, 200);
+  const header = r.headersSet['Server-Timing'];
+  const names = header.split(', ').map(e => e.split(';')[0]);
+  for (const n of ['verify', 'links', 'accounts', 'setup', 'token', 'total']) assert.ok(names.includes(n), `${n} in ${header}`);
+  assert.match(header, /^([a-z]+;dur=\d+\.\d)(, [a-z]+;dur=\d+\.\d)*$/);
+  const line = r.logs.find(l => l.startsWith('[auth/telegram] timing '));
+  const parsed = JSON.parse(line.slice('[auth/telegram] timing '.length));
+  assert.equal(parsed.trace, '0123456789abcdef');
+  assert.equal(parsed.outcome, 'existing_account');
+  const everything = header + r.logs.join('\n');
+  for (const secret of ['777888999', 'existingUid', r.jsonBody.token, new URLSearchParams(r.initData).get('hash'), BOT_TOKEN]) {
+    assert.ok(!everything.includes(secret), 'leaked a sensitive value');
+  }
+});
+
+test('DEV: a trace id of any other shape is dropped, never echoed', async () => {
+  const r = await runWithCapture('dev', { 'x-enma-trace': 'uid=existingUid' });
+  const line = r.logs.find(l => l.startsWith('[auth/telegram] timing '));
+  assert.equal(JSON.parse(line.slice('[auth/telegram] timing '.length)).trace, null);
+  assert.ok(!r.logs.join('\n').includes('uid=existingUid'));
+});
+
+test('production: no Server-Timing header and no timing log line', async () => {
+  const r = await runWithCapture(undefined, { 'x-enma-trace': '0123456789abcdef' });
+  assert.equal(r.statusCode, 200);
+  assert.deepEqual(r.headersSet, {});
+  assert.ok(!r.logs.some(l => l.includes(' timing ')));
+});
+
+test('an existing account with its subscription already read signs in without a transaction', async () => {
+  const db = injectMockDb({
+    'canonicalUids/tg_777888999': { uid: 'existingUid', telegramId: 777888999 },
+    'users/existingUid': { chatId: 777888999 },
+    'subscriptions/existingUid': { plan: 'premium', status: 'active' },
+  });
+  let transactions = 0;
+  const run = db.runTransaction;
+  db.runTransaction = (...a) => { transactions += 1; return run(...a); };
+  process.env.TELEGRAM_BOT_TOKEN = BOT_TOKEN;
+  try {
+    const handler = require('../telegram');
+    let body;
+    await handler({ method: 'POST', body: { initData: signInitData(freshFields()) } }, { status() { return this; }, json(b) { body = b; return this; } });
+    assert.deepEqual([body.uid, body.isNewUser], ['existingUid', false]);
+    assert.equal(transactions, 0);
+    assert.deepEqual(db._get('subscriptions/existingUid'), { plan: 'premium', status: 'active' });
+  } finally { delete process.env.TELEGRAM_BOT_TOKEN; teardown(); }
+});

@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  isPerfMarksEnabled, formatPerfSummary, perfMark, getPerfEntries, requestLabel, summarizeRequests,
+  isPerfMarksEnabled, formatPerfSummary, perfMark, getPerfEntries, requestLabel, summarizeRequests, classifySession,
+  startupTraceId,
 } from '../perfMarks.ts';
 import { formatStartupRun } from '../startupRunText.ts';
 
@@ -118,4 +119,58 @@ test('production builds: the switch does not exist and a stored flag is ignored'
     if (saved === undefined) delete process.env.REACT_APP_FIREBASE_PROJECT_ID; else process.env.REACT_APP_FIREBASE_PROJECT_ID = saved;
     delete (globalThis as { localStorage?: unknown }).localStorage;
   }
+});
+
+// ── sign-in breakdown (slow Telegram sign-in investigation) ─────────────────
+
+test('sign-in requests are listed one by one: the first and the second accounts:lookup are separate steps', () => {
+  const out = summarizeRequests([
+    { name: 'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=k', startTime: 300, responseEnd: 2850 },
+    { name: '/api/auth/telegram', startTime: 2900, responseEnd: 6264 },
+    { name: 'https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=k', startTime: 6300, responseEnd: 6800 },
+    { name: 'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=k', startTime: 6800, responseEnd: 7273 },
+    { name: 'https://firestore.googleapis.com/a', startTime: 7400, responseEnd: 7600 },
+    { name: 'https://firestore.googleapis.com/b', startTime: 7410, responseEnd: 7700 },
+  ]);
+  assert.deepEqual(out.map(r => [r.name, r.start, r.end, r.count]), [
+    ['auth: accounts:lookup', 300, 2850, 1],
+    ['api auth/telegram', 2900, 6264, 1],
+    ['auth: accounts:signInWithCustomToken', 6300, 6800, 1],
+    ['auth: accounts:lookup #2', 6800, 7273, 1],
+    ['firestore', 7400, 7600, 2],
+  ]);
+});
+
+test('the server\'s Server-Timing phases are kept for API calls, names and ms only', () => {
+  const [r] = summarizeRequests([{
+    name: '/api/auth/telegram', startTime: 10, responseEnd: 500,
+    serverTiming: [{ name: 'links', duration: 98.4 }, { name: 'total', duration: 201.6 }, { name: 'bad name; x', duration: 1 }],
+  }]);
+  assert.deepEqual(r.serverTiming, [{ name: 'links', dur: 98 }, { name: 'total', dur: 202 }]);
+});
+
+test('session at start: restored, rejected after Firebase checked a saved one, or none saved', () => {
+  const lookup = { name: 'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=k', startTime: 300, responseEnd: 2850 };
+  const refresh = { name: 'https://securetoken.googleapis.com/v1/token?key=k', startTime: 300, responseEnd: 900 };
+  assert.equal(classifySession(true, [lookup], 3000), 'restored');
+  assert.equal(classifySession(false, [lookup], 3000), 'rejected');
+  assert.equal(classifySession(false, [refresh], 3000), 'rejected');
+  assert.equal(classifySession(false, [], 3000), 'none');
+  // A lookup that started after the report (the one after sign-in) does not count.
+  assert.equal(classifySession(false, [{ ...lookup, startTime: 3500 }], 3000), 'none');
+});
+
+test('the run text shows the session outcome, the trace id and the server phases', () => {
+  const text = formatStartupRun({
+    recordedAt: '2026-10-23T15:10:59.729Z', navigationType: 'navigate', page: {},
+    requests: [{ name: 'api auth/telegram', start: 2900, end: 6264, count: 1, serverTiming: [{ name: 'links', dur: 98 }, { name: 'total', dur: 202 }] }],
+    marks: [], auth: { session: 'rejected', persistence: 'LOCAL', indexedDbPresent: true }, traceId: '0123456789abcdef',
+  }, 'ru');
+  assert.match(text, /^Сессия: сохранённая отклонена Firebase · хранилище: LOCAL$/m);
+  assert.match(text, /^trace: 0123456789abcdef$/m);
+  assert.match(text, /^ {4}сервер: links 98 · total 202$/m);
+});
+
+test('no trace id while diagnostics are off', () => {
+  assert.equal(startupTraceId(), null);
 });

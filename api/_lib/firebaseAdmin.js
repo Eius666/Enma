@@ -1,4 +1,8 @@
+// Start-up cost of this module (load and initialisation), reported by the
+// DEV-only timings of the first request an instance serves (serverTiming.js).
+const LOAD_T0 = process.hrtime.bigint();
 const admin = require('firebase-admin');
+const LOADED_T1 = process.hrtime.bigint();
 const { assertEnvironmentIsolation } = require('./envIsolation');
 require('./devEgressGuard'); // DEV only: restricts outbound Telegram/payment calls (no-op in production)
 
@@ -44,6 +48,10 @@ const initAdmin = () => {
 
 const firebaseAdmin = initAdmin();
 const db = firebaseAdmin.firestore();
+const initTimings = {
+  adminload: Number(LOADED_T1 - LOAD_T0) / 1e6,
+  admininit: Number(process.hrtime.bigint() - LOADED_T1) / 1e6,
+};
 
 // Lazily returns the default Storage bucket.
 // Throws a clear error if FIREBASE_STORAGE_BUCKET env var is absent.
@@ -73,4 +81,4 @@ async function getUserTimezone(userId) {
   return (typeof tz === 'string' && tz.length > 0) ? tz : DEFAULT_TZ;
 }
 
-module.exports = { admin: firebaseAdmin, db, getBucket, getUserCurrency, getUserTimezone };
+module.exports = { admin: firebaseAdmin, db, getBucket, getUserCurrency, getUserTimezone, initTimings };

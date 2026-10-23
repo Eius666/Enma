@@ -58,6 +58,7 @@ jobs:
           $T "node --test api/_lib/entities/__tests__/createEntity.integration.test.js"
           $T "node --test api/_lib/pdf/__tests__/exportFinancePdf.integration.test.js"
           $T "node --test api/payment/__tests__/trial.integration.test.js"
+          $T "node --test api/auth/__tests__/telegram.integration.test.js"
           $T "node --test api/_lib/reminders/__tests__/deliver.integration.test.js"
           $T "node --test functions/lib/__tests__/materializeHabitReminders.integration.test.js"
       - name: Production build (dummy public config, no secrets)
