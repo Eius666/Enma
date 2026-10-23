@@ -18,8 +18,7 @@ const ROOT = path.join(__dirname, '..', '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 const scripts = pkg.scripts;
 
-// Only the app's own code is listed; separate projects in the repository
-// (finance-bot) have their own tooling.
+// Only the app's own code is listed.
 const testFiles = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '--', 'api', 'src', 'scripts', 'functions/src', 'firestore-tests'], { cwd: ROOT, maxBuffer: 16 * 1024 * 1024 })
   .toString().split('\n').filter(Boolean)
   .filter(f => fs.existsSync(path.join(ROOT, f)))

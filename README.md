@@ -15,7 +15,6 @@ on Vercel and Firebase (Auth, Firestore).
 | `firestore-tests/` | rules and data-protocol tests against the Firestore emulator |
 | `scripts/` | build helpers, DEV tooling and owner-run maintenance scripts |
 | `public/` | static pages and assets (privacy, terms, partners, manifests) |
-| `finance-bot/` | a separate Express service with its own tooling — not part of the app build |
 
 ## Local development
 

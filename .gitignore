@@ -48,7 +48,6 @@ enma-4ea29-firebase-adminsdk-fbsvc-32b4b33295.json
 serviceAccountKey*.json
 
 # R1: vendored/generated artifacts that must never be tracked
-finance-bot/node_modules/
 .firebase/
 eval-report.json
 enma-migration-kit.zip
