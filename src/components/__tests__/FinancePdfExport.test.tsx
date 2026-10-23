@@ -124,6 +124,38 @@ test('Finance: the report button sits between the transaction search and the cat
   expect(follows(button, allChip)).toBe(true);
 });
 
+test('Finance: the report button is its own row under the search — the PDF icon and the label, nothing else', async () => {
+  await showFinance(paid('premium'));
+  const button = screen.getByRole('button', { name: 'Финансовый отчёт' });
+  expect(button).toHaveClass('fin-pdf__btn');
+  // The search field's wrapper closes, then the report row opens with the button.
+  expect(document.body.innerHTML).toMatch(/<div class="fin-list__search-wrap">(?:(?!<\/div>)[\s\S])*<\/div><div class="fin-pdf"><button type="button" class="fin-pdf__btn"/);
+  // Inside the button: the PDF icon (hidden from screen readers), then the label — nothing else.
+  expect(button.innerHTML).toMatch(/^<svg[^>]*class="fin-pdf__icon"[^>]*aria-hidden="true"[^>]*>[\s\S]*<\/svg><span class="fin-pdf__label">Финансовый отчёт<\/span>$/);
+});
+
+// jsdom does no layout, so the sizing rules are checked in the stylesheet
+// itself (the rendered sizes at 320/375/390 px are compared in a browser).
+test('Finance: the report button stylesheet makes it full width, at least 48px tall, without overflowing', () => {
+  const css: string = jest.requireActual<typeof import('fs')>('fs').readFileSync(
+    jest.requireActual<typeof import('path')>('path').join(__dirname, '..', 'FinancePdfExport.css'), 'utf8');
+  const rule = (selector: string): Record<string, string> => {
+    const body = new RegExp(`(?:^|\\n)${selector.replace(/[.]/g, '\\.')} \\{([^}]*)\\}`).exec(css)?.[1];
+    if (body === undefined) throw new Error(`no rule for ${selector}`);
+    return Object.fromEntries(body.split(';').map(d => d.split(':').map(s => s.trim())).filter(([k, v]) => k && v));
+  };
+  const btn = rule('.fin-pdf__btn');
+  expect(btn).toMatchObject({ display: 'flex', width: '100%', 'box-sizing': 'border-box', 'align-items': 'center', 'justify-content': 'center' });
+  expect(parseFloat(btn['min-height'])).toBeGreaterThanOrEqual(48);
+  expect(btn).not.toHaveProperty('white-space');
+  expect(btn).not.toHaveProperty('max-width');
+  expect(rule('.fin-pdf__icon')['flex-shrink']).toBe('0');
+  expect(rule('.fin-pdf__label')).toMatchObject({ 'min-width': '0', 'overflow-wrap': 'anywhere' });
+  // No fixed pixel width anywhere in the Finance tab part of the file.
+  const financePart = css.slice(0, css.indexOf('/* — Settings block — */'));
+  expect(financePart).not.toMatch(/(?:^|[\s;{])(?:min-)?width:\s*\d+px/);
+});
+
 test.each([
   ['Free (no subscription)', null],
   ['Pro', paid('pro')],

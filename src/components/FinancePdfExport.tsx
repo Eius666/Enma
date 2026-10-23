@@ -7,7 +7,7 @@ import { useFinancePdfExport } from '../hooks/useFinancePdfExport';
 import type { PdfExportPhase } from '../hooks/useFinancePdfExport';
 import './FinancePdfExport.css';
 
-// The two entry points to the finance PDF report — a compact button in the
+// The two entry points to the finance PDF report — a full-width button in the
 // Finance tab (Premium only) and a block in Settings (every plan) — on top of
 // the same export (src/lib/financePdfExport.ts, useFinancePdfExport).
 
@@ -74,7 +74,7 @@ export function FinancePdfButton({ language, user, subscription, subscriptionLoa
     <div className="fin-pdf">
       <button type="button" className="fin-pdf__btn" onClick={run} disabled={loading || exhausted} aria-busy={loading}>
         <FaFilePdf className="fin-pdf__icon" aria-hidden="true" />
-        <span>{loading ? t.generating : t.financeButton}</span>
+        <span className="fin-pdf__label">{loading ? t.generating : t.financeButton}</span>
       </button>
       {exhausted && state.phase !== 'error' && <p className="fin-pdf__note">{t.limitReached}</p>}
       {error && <p className="fin-pdf__error" role="alert">{error}</p>}
